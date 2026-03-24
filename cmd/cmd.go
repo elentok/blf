@@ -55,10 +55,14 @@ func execute(args []string, d deps) error {
 }
 
 func printUsage(w io.Writer) {
+	fmt.Fprintln(w, "blf - Blazingly Fast CLI utilities")
+	fmt.Fprintln(w)
+
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  blf tmux-links <open|copy>")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
+	fmt.Fprintln(w)
 }
 
 func runTmuxLinks(args []string, d deps) error {
