@@ -145,11 +145,11 @@ Menu details:
 
 ## Implementation Steps
 
-- [ ] Initialize Go module and base CLI skeleton (`main.go`, `cmd/cmd.go`)
-- [ ] Add command parsing for `tmux-links`, `open`, and `copy`
-- [ ] Implement `open`/`copy` actions as reusable command handlers
-- [ ] Implement pane capture + URL extraction + dedupe
-- [ ] Implement `tmux display-menu` builder and invocation
-- [ ] Add unit tests for extractor, shell escaping, and command routing
-- [ ] Run `go test ./...` and fix any failures
-- [ ] Add short README usage section for `tmux-links`
+- [x] Initialize Go module and base CLI skeleton (`main.go`, `cmd/cmd.go`)
+- [x] Add command parsing for `tmux-links`, `open`, and `copy`
+- [x] Implement `open`/`copy` actions as reusable command handlers
+- [x] Implement pane capture + URL extraction + dedupe
+- [x] Implement `tmux display-menu` builder and invocation
+- [x] Add unit tests for extractor, shell escaping, and command routing
+- [x] Run `go test ./...` and fix any failures
+- [x] Add short README usage section for `tmux-links`
