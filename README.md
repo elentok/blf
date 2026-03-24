@@ -14,3 +14,4 @@ Blazingly fast misc CLI utilities.
 - Uses tmux `-J` capture mode to join soft-wrapped lines, so wrapped URLs are preserved.
 - Extracts and deduplicates `http://` and `https://` URLs.
 - Shows up to 30 URLs in a centered menu titled `Open URL` or `Copy URL`.
+- On failure, posts a tmux status message via `tmux display-message`.

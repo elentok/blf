@@ -96,10 +96,23 @@ func TestRunMenuPropagatesMenuError(t *testing.T) {
 		return []byte("https://example.com"), nil
 	}
 	boom := errors.New("boom")
-	runCmd = func(name string, args ...string) error { return boom }
+	var calls [][]string
+	runCmd = func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		if len(calls) == 1 {
+			return boom
+		}
+		return nil
+	}
 
 	err := RunMenu(ModeOpen)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 tmux calls (menu + display-message), got %d", len(calls))
+	}
+	if len(calls[1]) < 3 || calls[1][1] != "display-message" {
+		t.Fatalf("expected second call to be display-message, got %#v", calls[1])
 	}
 }

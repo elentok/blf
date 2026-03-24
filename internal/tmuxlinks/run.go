@@ -19,6 +19,16 @@ var (
 )
 
 func RunMenu(mode string) error {
+	err := runMenu(mode)
+	if err == nil {
+		return nil
+	}
+
+	notifyFailure(err)
+	return err
+}
+
+func runMenu(mode string) error {
 	if mode != ModeOpen && mode != ModeCopy {
 		return fmt.Errorf("invalid mode %q", mode)
 	}
@@ -51,6 +61,18 @@ func RunMenu(mode string) error {
 	}
 
 	return nil
+}
+
+func notifyFailure(err error) {
+	if err == nil {
+		return
+	}
+	if os.Getenv("TMUX") == "" {
+		return
+	}
+
+	msg := "blf tmux-links: " + strings.ReplaceAll(err.Error(), "\n", " ")
+	_ = runCmd("tmux", "display-message", "-d", "5000", msg)
 }
 
 func capturePaneText() (string, error) {
