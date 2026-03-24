@@ -116,3 +116,38 @@ func TestRunMenuPropagatesMenuError(t *testing.T) {
 		t.Fatalf("expected second call to be display-message, got %#v", calls[1])
 	}
 }
+
+func TestRunMenuNoLinksReturnsNilButShowsMessage(t *testing.T) {
+	t.Setenv("TMUX", "1")
+
+	origLookPath := lookPath
+	origOutputCmd := outputCmd
+	origRunCmd := runCmd
+	t.Cleanup(func() {
+		lookPath = origLookPath
+		outputCmd = origOutputCmd
+		runCmd = origRunCmd
+	})
+
+	lookPath = func(file string) (string, error) { return "/usr/bin/tmux", nil }
+	outputCmd = func(name string, args ...string) ([]byte, error) {
+		return []byte("no urls here"), nil
+	}
+
+	var calls [][]string
+	runCmd = func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		return nil
+	}
+
+	err := RunMenu(ModeOpen)
+	if err != nil {
+		t.Fatalf("expected nil error for no-links case, got %v", err)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("expected one tmux call (display-message), got %d", len(calls))
+	}
+	if len(calls[0]) < 5 || calls[0][1] != "display-message" || calls[0][2] != "-d" || calls[0][3] != "5000" {
+		t.Fatalf("expected display-message with delay, got %#v", calls[0])
+	}
+}

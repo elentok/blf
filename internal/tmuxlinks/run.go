@@ -9,6 +9,8 @@ import (
 )
 
 var (
+	errNoLinks = errors.New("no http/https URLs found in the last 10000 pane lines")
+
 	lookPath = exec.LookPath
 	runCmd   = func(name string, args ...string) error {
 		return exec.Command(name, args...).Run()
@@ -25,6 +27,9 @@ func RunMenu(mode string) error {
 	}
 
 	notifyFailure(err)
+	if errors.Is(err, errNoLinks) {
+		return nil
+	}
 	return err
 }
 
@@ -48,7 +53,7 @@ func runMenu(mode string) error {
 
 	urls := ExtractURLs(text)
 	if len(urls) == 0 {
-		return errors.New("no http/https URLs found in the last 10000 pane lines")
+		return errNoLinks
 	}
 
 	args, err := BuildDisplayMenuArgs(mode, urls)
