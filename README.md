@@ -2,6 +2,21 @@
 
 Blazingly fast misc CLI utilities.
 
+## Install
+
+### Go
+
+```bash
+go install github.com/elentok/blf@latest
+```
+
+### Homebrew
+
+```bash
+brew tap elentok/stuff
+brew install blf
+```
+
 ## Commands
 
 - `blf open <url>`: open a URL with the system default browser.
