@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.1.1] - 2026-03-25
+
+- Fix search colors issue
+
 ## [v0.1.0] - 2026-03-25
 
 ### Added
