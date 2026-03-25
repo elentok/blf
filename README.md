@@ -23,6 +23,7 @@ brew install blf
 - `blf copy <text>`: copy text to the system clipboard.
 - `blf tmux-links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
 - `blf tmux-targets`: open a same-size tmux popup that highlights one detected target at a time.
+- `blf version`: print the current `blf` version.
 
 `tmux-links` behavior:
 

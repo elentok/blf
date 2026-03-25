@@ -50,6 +50,8 @@ func execute(args []string, d deps) error {
 		return runCopy(args[1:], d)
 	case "tmux-targets":
 		return d.runTargets(args[1:])
+	case "version", "-v", "--version":
+		return runVersion(d.stdout)
 	case "help", "-h", "--help":
 		printUsage(d.stdout)
 		return nil
@@ -68,6 +70,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf tmux-targets")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
+	fmt.Fprintln(w, "  blf version")
 	fmt.Fprintln(w)
 }
 

@@ -126,3 +126,27 @@ func TestExecuteRoutesTmuxTargets(t *testing.T) {
 		t.Fatalf("tmux-targets called with %v", got)
 	}
 }
+
+func TestExecuteRoutesVersion(t *testing.T) {
+	orig := version
+	version = "v9.9.9"
+	t.Cleanup(func() { version = orig })
+
+	out := &strings.Builder{}
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		stdout:       out,
+		stderr:       &strings.Builder{},
+	}
+
+	err := execute([]string{"version"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if out.String() != "blf v9.9.9\n" {
+		t.Fatalf("version output = %q", out.String())
+	}
+}
