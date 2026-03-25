@@ -4,17 +4,29 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/sahilm/fuzzy"
 
 	"github.com/elentok/blf/internal/platform"
 )
 
 var (
-	baseStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	targetStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("11"))
+	baseStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteText))
+	targetStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color(palettePeach))
+	selectedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(palettePeach))
+	searchTargetStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(paletteGreen))
+	searchSelectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(paletteGreen))
+	searchBoxStyle      = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(paletteGreen)).Foreground(lipgloss.Color(paletteGreen)).Width(38)
+)
+
+const (
+	paletteBase  = "#1e1e2e"
+	paletteText  = "#a6adc8"
+	palettePeach = "#fab387"
+	paletteGreen = "#a6e3a1"
 )
 
 type model struct {
@@ -22,23 +34,28 @@ type model struct {
 	targets      []target
 	selected     int
 	pendingG     bool
+	searchMode   bool
+	filterLocked bool
+	query        string
+	filteredIdx  []int
 	notify       func(string)
 	copyText     func(string) error
 	openURL      func(string) error
-	shouldQuit   bool
-	quitWithErr  error
-	lastFeedback string
 }
 
 func newModel(lines []string, targets []target, notify func(string)) model {
-	return model{
+	m := model{
 		lines:    lines,
 		targets:  targets,
-		selected: 0,
+		selected: -1,
 		notify:   notify,
 		copyText: platform.CopyText,
 		openURL:  platform.OpenURL,
 	}
+	if len(targets) > 0 {
+		m.selected = 0
+	}
+	return m
 }
 
 func (m model) Init() tea.Cmd {
@@ -49,21 +66,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch k := msg.(type) {
 	case tea.KeyMsg:
 		key := k.String()
+
+		if m.searchMode {
+			return m.updateSearchMode(k, key)
+		}
+
 		switch key {
-		case "q", "esc", "ctrl+c":
-			m.shouldQuit = true
+		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			if m.filterLocked || m.query != "" {
+				m.clearSearch()
+				return m, nil
+			}
+			return m, tea.Quit
+		case "/":
+			m.pendingG = false
+			m.searchMode = true
+			m.recomputeFilter()
+			return m, nil
 		case "j", "down", "l", "right":
 			m.pendingG = false
-			m.move(1)
+			m.moveActive(1)
 			return m, nil
 		case "k", "up", "h", "left":
 			m.pendingG = false
-			m.move(-1)
+			m.moveActive(-1)
 			return m, nil
 		case "g":
 			if m.pendingG {
-				m.selected = 0
+				m.moveToFirst()
 				m.pendingG = false
 			} else {
 				m.pendingG = true
@@ -71,38 +103,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "G":
 			m.pendingG = false
-			if len(m.targets) > 0 {
-				m.selected = len(m.targets) - 1
-			}
+			m.moveToLast()
 			return m, nil
 		case "y", "c":
 			m.pendingG = false
-			if len(m.targets) == 0 {
-				m.notify("blf tmux-targets: no targets to copy")
+			t, ok := m.selectedTarget()
+			if !ok {
+				m.notify("no targets to copy")
 				return m, nil
 			}
-			if err := m.copyText(m.current().text); err != nil {
-				m.notify("blf tmux-targets: failed to copy target")
+			if err := m.copyText(t.text); err != nil {
+				m.notify("failed to copy target")
 				return m, nil
 			}
-			m.shouldQuit = true
 			return m, tea.Quit
 		case "enter", "o":
 			m.pendingG = false
-			if len(m.targets) == 0 {
-				m.notify("blf tmux-targets: no targets to open")
+			t, ok := m.selectedTarget()
+			if !ok {
+				m.notify("no targets to open")
 				return m, nil
 			}
-			t := m.current()
 			if !t.openable {
-				m.notify("blf tmux-targets: selected target is not openable")
+				m.notify("selected target is not openable")
 				return m, nil
 			}
 			if err := m.openURL(t.openTarget); err != nil {
-				m.notify("blf tmux-targets: failed to open target")
+				m.notify("failed to open target")
 				return m, nil
 			}
-			m.shouldQuit = true
 			return m, tea.Quit
 		default:
 			m.pendingG = false
@@ -113,6 +142,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateSearchMode(k tea.KeyMsg, key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "esc":
+		m.clearSearch()
+		return m, nil
+	case "enter":
+		m.searchMode = false
+		m.filterLocked = true
+		m.recomputeFilter()
+		return m, nil
+	case "backspace", "ctrl+h":
+		m.query = trimLastRune(m.query)
+		m.recomputeFilter()
+		return m, nil
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	default:
+		if text := k.Key().Text; text != "" {
+			m.query += text
+			m.recomputeFilter()
+		}
+		return m, nil
+	}
+}
+
 func (m model) View() tea.View {
 	if len(m.lines) == 0 {
 		v := tea.NewView(baseStyle.Render(""))
@@ -121,9 +175,11 @@ func (m model) View() tea.View {
 	}
 
 	spansByLine := make(map[int][]target, len(m.targets))
+	targetIndexBySpan := make(map[string]int, len(m.targets))
 	if len(m.targets) > 0 {
-		for _, t := range m.targets {
+		for idx, t := range m.targets {
 			spansByLine[t.line] = append(spansByLine[t.line], t)
+			targetIndexBySpan[spanKey(t)] = idx
 		}
 		for line := range spansByLine {
 			sort.Slice(spansByLine[line], func(i, j int) bool {
@@ -133,10 +189,19 @@ func (m model) View() tea.View {
 	}
 
 	out := strings.Builder{}
+	selectedIdx, hasSelected := m.currentSelectedIndex()
+	filtered := m.isFilteringByQuery()
+	searchActive := m.searchMode || m.filterLocked
+	activeSet := make(map[int]struct{})
+	if filtered {
+		for _, idx := range m.activeIndexes() {
+			activeSet[idx] = struct{}{}
+		}
+	}
+
 	for i, line := range m.lines {
 		lineTargets := spansByLine[i]
 		if len(lineTargets) > 0 {
-			selected := m.current()
 			cursor := 0
 			for _, t := range lineTargets {
 				start := t.start
@@ -154,10 +219,29 @@ func (m model) View() tea.View {
 					out.WriteString(baseStyle.Render(line[cursor:start]))
 				}
 				if end > start {
-					if t.line == selected.line && t.start == selected.start && t.end == selected.end {
-						out.WriteString(selectedStyle.Render(line[start:end]))
+					idx := targetIndexBySpan[spanKey(t)]
+					if hasSelected && idx == selectedIdx {
+						if searchActive {
+							out.WriteString(searchSelectedStyle.Render(line[start:end]))
+						} else {
+							out.WriteString(selectedStyle.Render(line[start:end]))
+						}
+					} else if filtered {
+						if _, ok := activeSet[idx]; ok {
+							if searchActive {
+								out.WriteString(searchTargetStyle.Render(line[start:end]))
+							} else {
+								out.WriteString(targetStyle.Render(line[start:end]))
+							}
+						} else {
+							out.WriteString(baseStyle.Render(line[start:end]))
+						}
 					} else {
-						out.WriteString(targetStyle.Render(line[start:end]))
+						if searchActive {
+							out.WriteString(searchTargetStyle.Render(line[start:end]))
+						} else {
+							out.WriteString(targetStyle.Render(line[start:end]))
+						}
 					}
 				}
 				cursor = end
@@ -172,33 +256,225 @@ func (m model) View() tea.View {
 			out.WriteByte('\n')
 		}
 	}
-	v := tea.NewView(out.String())
+	rendered := strings.Split(out.String(), "\n")
+	if searchActive {
+		rendered = m.overlaySearchBox(rendered)
+	}
+	v := tea.NewView(strings.Join(rendered, "\n"))
 	v.AltScreen = true
 	return v
 }
 
-func (m *model) move(delta int) {
-	if len(m.targets) == 0 {
-		return
+func (m model) overlaySearchBox(lines []string) []string {
+	if len(lines) < 3 {
+		return lines
 	}
-	m.selected += delta
-	if m.selected < 0 {
-		m.selected = len(m.targets) - 1
+
+	matchCount := len(m.activeIndexes())
+	label := "SEARCH"
+	if m.filterLocked {
+		label = "FILTERED"
 	}
-	if m.selected >= len(m.targets) {
-		m.selected = 0
+	prefix := "Search: "
+	if label == "FILTERED" {
+		prefix = "Filtered: "
 	}
+	content := fmt.Sprintf("%s%s (%d/%d)", prefix, m.query, matchCount, len(m.targets))
+	content = trimToWidth(content, 38)
+	box := searchBoxStyle.Render(content)
+	boxLines := strings.Split(box, "\n")
+	if len(boxLines) != 3 {
+		return lines
+	}
+
+	width := 0
+	for _, line := range lines {
+		w := lipgloss.Width(line)
+		if w > width {
+			width = w
+		}
+	}
+	boxWidth := lipgloss.Width(boxLines[0])
+	left := 0
+	if width > boxWidth {
+		left = (width - boxWidth) / 2
+	}
+
+	y := len(lines) - 3
+	for y >= 0 && m.rowsContainTargets(y, y+2) {
+		y--
+	}
+	if y < 0 {
+		y = 0
+	}
+
+	out := append([]string(nil), lines...)
+	for i := 0; i < 3; i++ {
+		row := strings.Repeat(" ", left) + boxLines[i]
+		out[y+i] = row
+	}
+	return out
 }
 
-func (m model) current() target {
+func (m model) rowsContainTargets(start, end int) bool {
+	for _, t := range m.targets {
+		if t.line >= start && t.line <= end {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *model) moveActive(delta int) {
+	indexes := m.activeIndexes()
+	if len(indexes) == 0 {
+		m.selected = -1
+		return
+	}
+	pos := m.selectedPosition(indexes)
+	if pos == -1 {
+		m.selected = indexes[0]
+		return
+	}
+	pos += delta
+	for pos < 0 {
+		pos += len(indexes)
+	}
+	pos %= len(indexes)
+	m.selected = indexes[pos]
+}
+
+func (m *model) moveToFirst() {
+	indexes := m.activeIndexes()
+	if len(indexes) == 0 {
+		m.selected = -1
+		return
+	}
+	m.selected = indexes[0]
+}
+
+func (m *model) moveToLast() {
+	indexes := m.activeIndexes()
+	if len(indexes) == 0 {
+		m.selected = -1
+		return
+	}
+	m.selected = indexes[len(indexes)-1]
+}
+
+func (m *model) recomputeFilter() {
+	if strings.TrimSpace(m.query) == "" {
+		m.filteredIdx = nil
+		if len(m.targets) == 0 {
+			m.selected = -1
+			return
+		}
+		if m.selected < 0 || m.selected >= len(m.targets) {
+			m.selected = 0
+		}
+		return
+	}
+
+	candidates := make([]string, len(m.targets))
+	for i, t := range m.targets {
+		candidates[i] = t.text
+	}
+	matches := fuzzy.Find(m.query, candidates)
+	m.filteredIdx = make([]int, 0, len(matches))
+	for _, match := range matches {
+		m.filteredIdx = append(m.filteredIdx, match.Index)
+	}
+	if len(m.filteredIdx) == 0 {
+		m.selected = -1
+		return
+	}
+	m.selected = m.filteredIdx[0]
+}
+
+func (m *model) clearSearch() {
+	m.searchMode = false
+	m.filterLocked = false
+	m.query = ""
+	m.filteredIdx = nil
 	if len(m.targets) == 0 {
-		return target{}
+		m.selected = -1
+		return
 	}
-	idx := m.selected
-	if idx < 0 || idx >= len(m.targets) {
-		idx = 0
+	m.selected = 0
+}
+
+func (m model) isFilteringByQuery() bool {
+	return (m.searchMode || m.filterLocked) && strings.TrimSpace(m.query) != ""
+}
+
+func (m model) activeIndexes() []int {
+	if len(m.targets) == 0 {
+		return nil
 	}
-	return m.targets[idx]
+	if m.isFilteringByQuery() {
+		return append([]int(nil), m.filteredIdx...)
+	}
+	idx := make([]int, len(m.targets))
+	for i := range m.targets {
+		idx[i] = i
+	}
+	return idx
+}
+
+func (m model) selectedPosition(indexes []int) int {
+	for i, idx := range indexes {
+		if idx == m.selected {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m model) currentSelectedIndex() (int, bool) {
+	if m.selected < 0 || m.selected >= len(m.targets) {
+		return -1, false
+	}
+	indexes := m.activeIndexes()
+	for _, idx := range indexes {
+		if idx == m.selected {
+			return idx, true
+		}
+	}
+	return -1, false
+}
+
+func (m model) selectedTarget() (target, bool) {
+	idx, ok := m.currentSelectedIndex()
+	if !ok {
+		return target{}, false
+	}
+	return m.targets[idx], true
+}
+
+func trimLastRune(s string) string {
+	if s == "" {
+		return s
+	}
+	_, size := utf8.DecodeLastRuneInString(s)
+	return s[:len(s)-size]
+}
+
+func trimToWidth(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max <= 3 {
+		return string(r[:max])
+	}
+	return string(r[:max-3]) + "..."
+}
+
+func spanKey(t target) string {
+	return fmt.Sprintf("%d:%d:%d", t.line, t.start, t.end)
 }
 
 func runPopupUI(lines []string, targets []target, notify func(string)) error {

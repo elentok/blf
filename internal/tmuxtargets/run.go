@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/elentok/blf/internal/tmuxutil"
 )
 
 var (
@@ -88,7 +90,7 @@ func runPopupMode(args []string) error {
 	}
 
 	notify := func(msg string) {
-		notifyFailure(errors.New(msg))
+		notifyInfo(msg)
 	}
 	if err := runPopupUI(lines, targets, notify); err != nil {
 		return err
@@ -149,19 +151,11 @@ func captureViewport(paneID string) ([]string, error) {
 }
 
 func notifyFailure(err error) {
-	if err == nil {
-		return
-	}
-	if os.Getenv("TMUX") == "" {
-		return
-	}
-	const prefix = "blf tmux-targets: "
-	raw := strings.TrimSpace(strings.ReplaceAll(err.Error(), "\n", " "))
-	msg := raw
-	if !strings.HasPrefix(raw, prefix) {
-		msg = prefix + raw
-	}
-	_ = runCmd("tmux", "display-message", "-d", "5000", msg)
+	tmuxutil.DisplayToolError(runCmd, "tmux-targets", err)
+}
+
+func notifyInfo(msg string) {
+	tmuxutil.DisplayToolMessage(runCmd, "tmux-targets", msg)
 }
 
 func shellQuote(s string) string {

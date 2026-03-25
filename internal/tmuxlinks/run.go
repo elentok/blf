@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/elentok/blf/internal/tmuxutil"
 )
 
 var (
@@ -69,15 +71,7 @@ func runMenu(mode string) error {
 }
 
 func notifyFailure(err error) {
-	if err == nil {
-		return
-	}
-	if os.Getenv("TMUX") == "" {
-		return
-	}
-
-	msg := "blf tmux-links: " + strings.ReplaceAll(err.Error(), "\n", " ")
-	_ = runCmd("tmux", "display-message", "-d", "5000", msg)
+	tmuxutil.DisplayToolError(runCmd, "tmux-links", err)
 }
 
 func capturePaneText() (string, error) {

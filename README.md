@@ -38,4 +38,5 @@ brew install blf
 - Detects targets including URLs, file refs (`path:line[:col]`), commit hashes, emails, host:port, UUIDs, issue refs, and branch/tag-like tokens.
 - Navigation: `j/k`, arrows, `h/l`, `gg`, `G`.
 - Actions: `y` (copy + exit), `enter`/`o` (open if openable + exit), `q` (exit).
+- Search: `/` enters fuzzy search on target text, `enter` locks filtered mode, `esc` clears search.
 - Non-openable `enter`/`o` shows `tmux display-message -d 5000` and keeps the popup open.
