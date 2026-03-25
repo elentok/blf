@@ -13,7 +13,7 @@ var (
 	baseStyle           = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteText))
 	targetStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color(palettePeach))
 	selectedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(palettePeach))
-	searchTargetStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(paletteGreen))
+	searchTargetStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(paletteGreen))
 	searchSelectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(paletteBase)).Background(lipgloss.Color(paletteGreen))
 	searchBoxStyle      = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(paletteGreen)).Foreground(lipgloss.Color(paletteGreen)).Width(38)
 )
