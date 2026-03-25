@@ -178,7 +178,7 @@ Unit tests:
 - regex coverage per target type
 - overlap/precedence resolution correctness
 - stable span positions across mixed lines
-- key handling (`gg`, `G`, arrows, `hjkl`, action keys)
+- key handling (`g`, `G`, arrows, `hjkl`, action keys)
 - openability classification and normalization
 
 Integration-style tests (mocked command runners):

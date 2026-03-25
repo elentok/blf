@@ -15,6 +15,7 @@ func TestExecuteRoutesOpen(t *testing.T) {
 		},
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
 		stdout:       &strings.Builder{},
 		stderr:       &strings.Builder{},
 	}
@@ -37,6 +38,7 @@ func TestExecuteRoutesCopyWithSpaces(t *testing.T) {
 			return nil
 		},
 		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
 		stdout:       &strings.Builder{},
 		stderr:       &strings.Builder{},
 	}
@@ -59,8 +61,9 @@ func TestExecuteRoutesTmuxLinks(t *testing.T) {
 			got = mode
 			return nil
 		},
-		stdout: &strings.Builder{},
-		stderr: &strings.Builder{},
+		runTargets: func([]string) error { return nil },
+		stdout:     &strings.Builder{},
+		stderr:     &strings.Builder{},
 	}
 
 	err := execute([]string{"tmux-links", "copy"}, d)
@@ -77,6 +80,7 @@ func TestExecuteInvalidCommand(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
 		stdout:       &strings.Builder{},
 		stderr:       &strings.Builder{},
 	})
@@ -91,10 +95,34 @@ func TestExecutePropagatesActionError(t *testing.T) {
 		openURL:      func(string) error { return boom },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
 		stdout:       &strings.Builder{},
 		stderr:       &strings.Builder{},
 	})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("expected wrapped boom error, got %v", err)
+	}
+}
+
+func TestExecuteRoutesTmuxTargets(t *testing.T) {
+	var got []string
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets: func(args []string) error {
+			got = append([]string{}, args...)
+			return nil
+		},
+		stdout: &strings.Builder{},
+		stderr: &strings.Builder{},
+	}
+
+	err := execute([]string{"tmux-targets", "--popup", "--target", "%1"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if strings.Join(got, " ") != "--popup --target %1" {
+		t.Fatalf("tmux-targets called with %v", got)
 	}
 }

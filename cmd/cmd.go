@@ -8,6 +8,7 @@ import (
 
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
+	"github.com/elentok/blf/internal/tmuxtargets"
 )
 
 type deps struct {
@@ -16,6 +17,7 @@ type deps struct {
 	openURL      func(string) error
 	copyText     func(string) error
 	runTmuxLinks func(string) error
+	runTargets   func([]string) error
 }
 
 func defaultDeps() deps {
@@ -25,6 +27,7 @@ func defaultDeps() deps {
 		openURL:      platform.OpenURL,
 		copyText:     platform.CopyText,
 		runTmuxLinks: tmuxlinks.RunMenu,
+		runTargets:   tmuxtargets.Execute,
 	}
 }
 
@@ -45,6 +48,8 @@ func execute(args []string, d deps) error {
 		return runOpen(args[1:], d)
 	case "copy":
 		return runCopy(args[1:], d)
+	case "tmux-targets":
+		return d.runTargets(args[1:])
 	case "help", "-h", "--help":
 		printUsage(d.stdout)
 		return nil
@@ -60,6 +65,7 @@ func printUsage(w io.Writer) {
 
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  blf tmux-links <open|copy>")
+	fmt.Fprintln(w, "  blf tmux-targets")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w)
