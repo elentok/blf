@@ -155,7 +155,12 @@ func notifyFailure(err error) {
 	if os.Getenv("TMUX") == "" {
 		return
 	}
-	msg := "blf tmux-targets: " + strings.ReplaceAll(err.Error(), "\n", " ")
+	const prefix = "blf tmux-targets: "
+	raw := strings.TrimSpace(strings.ReplaceAll(err.Error(), "\n", " "))
+	msg := raw
+	if !strings.HasPrefix(raw, prefix) {
+		msg = prefix + raw
+	}
 	_ = runCmd("tmux", "display-message", "-d", "5000", msg)
 }
 

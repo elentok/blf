@@ -101,3 +101,24 @@ func TestParsePopupArgs(t *testing.T) {
 		t.Fatalf("expected usage error, got %v", err)
 	}
 }
+
+func TestNotifyFailureDoesNotDuplicatePrefix(t *testing.T) {
+	t.Setenv("TMUX", "1")
+
+	origRunCmd := runCmd
+	t.Cleanup(func() { runCmd = origRunCmd })
+
+	var got string
+	runCmd = func(name string, args ...string) error {
+		if len(args) >= 4 {
+			got = args[3]
+		}
+		return nil
+	}
+
+	notifyFailure(errors.New("blf tmux-targets: selected target is not openable"))
+
+	if got != "blf tmux-targets: selected target is not openable" {
+		t.Fatalf("unexpected display message: %q", got)
+	}
+}
