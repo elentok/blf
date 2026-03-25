@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.1.0] - 2026-03-25
+
+### Added
+
+- Added `blf tmux-targets` to open a same-size tmux popup over the current pane and navigate detected targets.
+- Added target detection for URLs, domains, file paths (`path:line[:col]`), commit hashes, emails, host:port, UUIDs, issue refs, and branch/tag-like tokens.
+- Added fuzzy search mode in `tmux-targets` (`/` to search, `enter` to lock filter, `esc` to clear), with in-popup search box and filtered navigation.
+- Added `blf version` (`version`, `-v`, `--version`) with build-info fallback and ldflags override support.
+
+### Changed
+
+- Extracted shared tmux status messaging into `internal/tmuxutil` and reused it across `tmux-links` and `tmux-targets`.
+
 ## [v0.0.2] - 2026-03-24
 
 ### Changed
