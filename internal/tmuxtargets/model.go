@@ -2,6 +2,7 @@ package tmuxtargets
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -11,6 +12,7 @@ import (
 
 const (
 	baseColorPrefix     = "\x1b[38;5;245m"
+	targetColorPrefix   = "\x1b[38;5;39m"
 	selectedColorPrefix = "\x1b[30;43m"
 	resetColor          = "\x1b[0m"
 )
@@ -118,32 +120,57 @@ func (m model) View() tea.View {
 		return v
 	}
 
-	spansByLine := make(map[int]target, len(m.targets))
+	spansByLine := make(map[int][]target, len(m.targets))
 	if len(m.targets) > 0 {
-		spansByLine[m.current().line] = m.current()
+		for _, t := range m.targets {
+			spansByLine[t.line] = append(spansByLine[t.line], t)
+		}
+		for line := range spansByLine {
+			sort.Slice(spansByLine[line], func(i, j int) bool {
+				return spansByLine[line][i].start < spansByLine[line][j].start
+			})
+		}
 	}
 
 	out := strings.Builder{}
 	for i, line := range m.lines {
-		if t, ok := spansByLine[i]; ok {
-			if t.start > len(line) {
-				t.start = len(line)
+		lineTargets := spansByLine[i]
+		if len(lineTargets) > 0 {
+			selected := m.current()
+			cursor := 0
+			for _, t := range lineTargets {
+				start := t.start
+				end := t.end
+				if start > len(line) {
+					start = len(line)
+				}
+				if end > len(line) {
+					end = len(line)
+				}
+				if start < cursor {
+					start = cursor
+				}
+				if start > cursor {
+					out.WriteString(baseColorPrefix)
+					out.WriteString(line[cursor:start])
+					out.WriteString(resetColor)
+				}
+				if end > start {
+					if t.line == selected.line && t.start == selected.start && t.end == selected.end {
+						out.WriteString(selectedColorPrefix)
+					} else {
+						out.WriteString(targetColorPrefix)
+					}
+					out.WriteString(line[start:end])
+					out.WriteString(resetColor)
+				}
+				cursor = end
 			}
-			if t.end > len(line) {
-				t.end = len(line)
+			if cursor < len(line) {
+				out.WriteString(baseColorPrefix)
+				out.WriteString(line[cursor:])
+				out.WriteString(resetColor)
 			}
-			left := line[:t.start]
-			mid := line[t.start:t.end]
-			right := line[t.end:]
-			out.WriteString(baseColorPrefix)
-			out.WriteString(left)
-			out.WriteString(resetColor)
-			out.WriteString(selectedColorPrefix)
-			out.WriteString(mid)
-			out.WriteString(resetColor)
-			out.WriteString(baseColorPrefix)
-			out.WriteString(right)
-			out.WriteString(resetColor)
 		} else {
 			out.WriteString(baseColorPrefix)
 			out.WriteString(line)
