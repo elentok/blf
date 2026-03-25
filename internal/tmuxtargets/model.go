@@ -75,7 +75,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected = len(m.targets) - 1
 			}
 			return m, nil
-		case "y":
+		case "y", "c":
 			m.pendingG = false
 			if len(m.targets) == 0 {
 				m.notify("blf tmux-targets: no targets to copy")
