@@ -15,10 +15,10 @@ func TestViewColorsNonSelectedTargetsBlue(t *testing.T) {
 	m := newModel(lines, targets, func(string) {})
 	v := m.View()
 
-	if !strings.Contains(v.Content, selectedColorPrefix+"https://one.test"+resetColor) {
+	if !strings.Contains(v.Content, selectedStyle.Render("https://one.test")) {
 		t.Fatalf("expected selected target styling in view content: %q", v.Content)
 	}
-	if !strings.Contains(v.Content, targetColorPrefix+"https://two.test"+resetColor) {
+	if !strings.Contains(v.Content, targetStyle.Render("https://two.test")) {
 		t.Fatalf("expected non-selected target blue styling in view content: %q", v.Content)
 	}
 }

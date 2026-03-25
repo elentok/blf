@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/elentok/blf/internal/platform"
 )
 
-const (
-	baseColorPrefix     = "\x1b[38;5;245m"
-	targetColorPrefix   = "\x1b[38;5;39m"
-	selectedColorPrefix = "\x1b[30;43m"
-	resetColor          = "\x1b[0m"
+var (
+	baseStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	targetStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("11"))
 )
 
 type model struct {
@@ -115,7 +115,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() tea.View {
 	if len(m.lines) == 0 {
-		v := tea.NewView(baseColorPrefix + "" + resetColor)
+		v := tea.NewView(baseStyle.Render(""))
 		v.AltScreen = true
 		return v
 	}
@@ -151,30 +151,22 @@ func (m model) View() tea.View {
 					start = cursor
 				}
 				if start > cursor {
-					out.WriteString(baseColorPrefix)
-					out.WriteString(line[cursor:start])
-					out.WriteString(resetColor)
+					out.WriteString(baseStyle.Render(line[cursor:start]))
 				}
 				if end > start {
 					if t.line == selected.line && t.start == selected.start && t.end == selected.end {
-						out.WriteString(selectedColorPrefix)
+						out.WriteString(selectedStyle.Render(line[start:end]))
 					} else {
-						out.WriteString(targetColorPrefix)
+						out.WriteString(targetStyle.Render(line[start:end]))
 					}
-					out.WriteString(line[start:end])
-					out.WriteString(resetColor)
 				}
 				cursor = end
 			}
 			if cursor < len(line) {
-				out.WriteString(baseColorPrefix)
-				out.WriteString(line[cursor:])
-				out.WriteString(resetColor)
+				out.WriteString(baseStyle.Render(line[cursor:]))
 			}
 		} else {
-			out.WriteString(baseColorPrefix)
-			out.WriteString(line)
-			out.WriteString(resetColor)
+			out.WriteString(baseStyle.Render(line))
 		}
 		if i < len(m.lines)-1 {
 			out.WriteByte('\n')
