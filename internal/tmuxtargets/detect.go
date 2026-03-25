@@ -49,9 +49,9 @@ type patternDef struct {
 
 var patterns = []patternDef{
 	{kind: kindURL, re: regexp.MustCompile(`https?://[^\s<>")\]}]+`), openable: true, norm: identity},
-	{kind: kindFileRef, re: regexp.MustCompile(`(?:\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+:\d+(?::\d+)?`), norm: identity},
+	{kind: kindFileRef, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+:\d+(?::\d+)?`), norm: identity},
 	{kind: kindFileRef, re: regexp.MustCompile(`[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+:\d+(?::\d+)?`), norm: identity},
-	{kind: kindFilePath, re: regexp.MustCompile(`(?:\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+`), norm: identity},
+	{kind: kindFilePath, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+`), norm: identity},
 	{kind: kindFilePath, re: regexp.MustCompile(`[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+`), norm: identity},
 	{kind: kindCommit, re: regexp.MustCompile(`\b[0-9a-f]{7,40}\b`), norm: identity},
 	{kind: kindEmail, re: regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b`), norm: identity},

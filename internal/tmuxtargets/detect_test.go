@@ -73,3 +73,18 @@ func TestDetectTargetsDeduplicatesRepeatedTargetText(t *testing.T) {
 		t.Fatalf("second target = %q", targets[1].text)
 	}
 }
+
+func TestDetectTargetsRecognizesTildePaths(t *testing.T) {
+	lines := []string{"open ~/my/path and ~/my/other/file.go:42"}
+	targets := detectTargets(lines)
+
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d (%#v)", len(targets), targets)
+	}
+	if targets[0].text != "~/my/path" {
+		t.Fatalf("first target = %q", targets[0].text)
+	}
+	if targets[1].text != "~/my/other/file.go:42" {
+		t.Fatalf("second target = %q", targets[1].text)
+	}
+}
