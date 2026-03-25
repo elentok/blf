@@ -75,9 +75,16 @@ func detectTargets(lines []string) []target {
 	}
 
 	all := make([]target, 0)
+	seen := map[string]struct{}{}
 	for lineIndex, line := range lines {
 		lineTargets := detectTargetsInLine(lineIndex, line)
-		all = append(all, lineTargets...)
+		for _, t := range lineTargets {
+			if _, exists := seen[t.text]; exists {
+				continue
+			}
+			seen[t.text] = struct{}{}
+			all = append(all, t)
+		}
 	}
 	return all
 }

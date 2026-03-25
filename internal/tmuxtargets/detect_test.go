@@ -55,3 +55,21 @@ func TestDetectTargetsPrefersURLOverBareDomainOverlap(t *testing.T) {
 		t.Fatalf("expected full url target, got %q", targets[0].text)
 	}
 }
+
+func TestDetectTargetsDeduplicatesRepeatedTargetText(t *testing.T) {
+	lines := []string{
+		"first https://example.com/path and #123",
+		"repeat https://example.com/path and #123 again",
+	}
+
+	targets := detectTargets(lines)
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 unique targets, got %d (%#v)", len(targets), targets)
+	}
+	if targets[0].text != "https://example.com/path" {
+		t.Fatalf("first target = %q", targets[0].text)
+	}
+	if targets[1].text != "#123" {
+		t.Fatalf("second target = %q", targets[1].text)
+	}
+}
