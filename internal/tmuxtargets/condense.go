@@ -28,11 +28,28 @@ func condenseViewport(lines []string, targets []target, context int) ([]string, 
 		oldToNew[i] = -1
 	}
 
+	firstKept := -1
+	lastKept := -1
+	for i, v := range keep {
+		if !v {
+			continue
+		}
+		if firstKept == -1 {
+			firstKept = i
+		}
+		lastKept = i
+	}
+	if firstKept == -1 {
+		return lines, targets
+	}
+
 	newLines := make([]string, 0, len(lines))
-	seenKept := false
-	for i := 0; i < len(lines); {
+	if firstKept > 0 {
+		newLines = append(newLines, "...")
+	}
+
+	for i := firstKept; i <= lastKept; {
 		if keep[i] {
-			seenKept = true
 			oldToNew[i] = len(newLines)
 			newLines = append(newLines, lines[i])
 			i++
@@ -40,13 +57,15 @@ func condenseViewport(lines []string, targets []target, context int) ([]string, 
 		}
 
 		j := i
-		for j < len(lines) && !keep[j] {
+		for j <= lastKept && !keep[j] {
 			j++
 		}
-		if seenKept && j < len(lines) {
-			newLines = append(newLines, "...")
-		}
+		newLines = append(newLines, "...")
 		i = j
+	}
+
+	if lastKept < len(lines)-1 {
+		newLines = append(newLines, "...")
 	}
 
 	newTargets := make([]target, 0, len(targets))

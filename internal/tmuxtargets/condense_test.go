@@ -21,7 +21,7 @@ func TestCondenseViewportKeepsContextAndFoldsGaps(t *testing.T) {
 
 	gotLines, gotTargets := condenseViewport(lines, targets, 1)
 
-	wantLines := []string{"l1", "l2 target", "l3", "...", "l5", "l6 target", "l7"}
+	wantLines := []string{"...", "l1", "l2 target", "l3", "...", "l5", "l6 target", "l7", "..."}
 	if len(gotLines) != len(wantLines) {
 		t.Fatalf("line count = %d, want %d (%#v)", len(gotLines), len(wantLines), gotLines)
 	}
@@ -34,11 +34,11 @@ func TestCondenseViewportKeepsContextAndFoldsGaps(t *testing.T) {
 	if len(gotTargets) != 2 {
 		t.Fatalf("target count = %d, want 2", len(gotTargets))
 	}
-	if gotTargets[0].line != 1 {
-		t.Fatalf("first target line = %d, want 1", gotTargets[0].line)
+	if gotTargets[0].line != 2 {
+		t.Fatalf("first target line = %d, want 2", gotTargets[0].line)
 	}
-	if gotTargets[1].line != 5 {
-		t.Fatalf("second target line = %d, want 5", gotTargets[1].line)
+	if gotTargets[1].line != 6 {
+		t.Fatalf("second target line = %d, want 6", gotTargets[1].line)
 	}
 }
 
