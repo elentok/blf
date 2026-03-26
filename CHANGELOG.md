@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.2.0] - 2026-03-26
+
+### Added
+
+- Added condensed `tmux-targets` viewport rendering that folds non-target gaps to `...` while preserving one line of context above and below each target.
+- Added in-popup bottom help/status bar for `tmux-targets`.
+- Added `?` mapping in `tmux-targets` to open an in-popup help page.
+
+### Changed
+
+- `tmux-targets` now opens as a centered `80%` x `80%` popup titled `Select a target`.
+- `tmux-targets` directional navigation is now axis-constrained and non-wrapping (`j/k` vertical only, `h/l` horizontal only).
+- `tmux-targets` notifications/errors now render in the popup bottom bar instead of using tmux status messages.
+- Updated `tmux-targets` styling to use Catppuccin palette variables, including a darker bottom-bar background.
+- Normalized specific powerline glyphs (``, ``, ``, ``) to spaces before rendering for cleaner target parsing/display.
+
 ## [v0.1.1] - 2026-03-25
 
 - Fix search colors issue
