@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.2.1] - 2026-03-26
+
+### Changed
+
+- Tightened `tmux-targets` URL/path detection to avoid false positives:
+  - Bare domain matching now requires a path segment (for example `github.com/elentok`).
+  - File matching now requires a path separator (`/`), so bare filenames are ignored while path forms (for example `src/README.md`) are still detected.
+- Condensed viewport rendering now adds `...` at the top and/or bottom when trimmed lines exist there.
+
 ## [v0.2.0] - 2026-03-26
 
 ### Added
