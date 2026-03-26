@@ -35,7 +35,9 @@ brew install blf
 
 `tmux-targets` behavior:
 
-- Captures the visible viewport of the current pane and opens a borderless popup positioned directly over the source pane.
+- Opens a popup at `80%` width/height and captures the visible viewport of the target pane.
+- Popup title is `Select a target`.
+- Condenses the viewport by folding target-free gaps to `...`, while keeping 1 line of context above and below each target.
 - Detects targets including URLs, file refs (`path:line[:col]`), commit hashes, emails, host:port, UUIDs, issue refs, and branch/tag-like tokens.
 - If a target text repeats, only the first occurrence is highlightable.
 - Navigation: `j/k`, arrows, `h/l`, `gg`, `G`.
@@ -43,3 +45,9 @@ brew install blf
 - Search: `/` enters fuzzy search on target text, `enter` locks filtered mode, `esc` clears search.
 - In search/filtered mode, targets switch to green highlighting and a rounded search box appears in the popup.
 - Non-openable `enter`/`o` shows `tmux display-message -d 5000` and keeps the popup open.
+
+tmux binding example:
+
+```tmux
+bind-key t run 'blf tmux-targets'
+```

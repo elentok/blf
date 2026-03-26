@@ -8,6 +8,7 @@ import (
 
 func TestExecuteTopLevelOpensPopup(t *testing.T) {
 	t.Setenv("TMUX", "1")
+	t.Setenv("TMUX_PANE", "%7")
 
 	origLookPath := lookPath
 	origOutputCmd := outputCmd
@@ -20,9 +21,6 @@ func TestExecuteTopLevelOpensPopup(t *testing.T) {
 
 	lookPath = func(string) (string, error) { return "/usr/bin/tmux", nil }
 	outputCmd = func(name string, args ...string) ([]byte, error) {
-		if len(args) > 0 && args[0] == "display-message" {
-			return []byte("%1 120 40 12 7"), nil
-		}
 		return nil, errors.New("unexpected output command")
 	}
 
@@ -43,10 +41,13 @@ func TestExecuteTopLevelOpensPopup(t *testing.T) {
 		t.Fatalf("expected display-popup, got %#v", calls[0])
 	}
 	joined := strings.Join(calls[0], " ")
-	for _, snippet := range []string{"-x 12", "-y 7", "-w 120", "-h 40", "-B"} {
+	for _, snippet := range []string{"-t %7", "-T Select a target | y: yank | enter/o: open | /: search | q: quit", "-x C", "-y C", "-w 80%", "-h 80%", "--target '%7'"} {
 		if !strings.Contains(joined, snippet) {
 			t.Fatalf("expected %q in popup args: %s", snippet, joined)
 		}
+	}
+	if strings.Contains(joined, "-B") {
+		t.Fatalf("did not expect borderless -B in popup args: %s", joined)
 	}
 }
 

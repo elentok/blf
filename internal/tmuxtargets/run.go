@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"github.com/elentok/blf/internal/tmuxutil"
@@ -49,18 +48,20 @@ func runTopLevel() error {
 		return errors.New("tmux binary not found in PATH")
 	}
 
-	paneID, width, height, left, top, err := readPaneInfo()
+	paneID, err := currentPaneID()
 	if err != nil {
 		return err
 	}
 
 	cmdStr := fmt.Sprintf("blf tmux-targets --popup --target %s", shellQuote(paneID))
 	if err := runCmd(
-		"tmux", "display-popup", "-B",
-		"-x", strconv.Itoa(left),
-		"-y", strconv.Itoa(top),
-		"-w", strconv.Itoa(width),
-		"-h", strconv.Itoa(height),
+		"tmux", "display-popup",
+		"-t", paneID,
+		"-T", "Select a target | y: yank | enter/o: open | /: search | q: quit",
+		"-x", "C",
+		"-y", "C",
+		"-w", "80%",
+		"-h", "80%",
 		"-E", cmdStr,
 	); err != nil {
 		return fmt.Errorf("open targets popup: %w", err)
@@ -89,6 +90,8 @@ func runPopupMode(args []string) error {
 		return errNoTargets
 	}
 
+	lines, targets = condenseViewport(lines, targets, 1)
+
 	notify := func(msg string) {
 		notifyInfo(msg)
 	}
@@ -109,32 +112,21 @@ func parsePopupArgs(args []string) (string, error) {
 	return args[1], nil
 }
 
-func readPaneInfo() (string, int, int, int, int, error) {
-	out, err := outputCmd("tmux", "display-message", "-p", "#{pane_id} #{pane_width} #{pane_height} #{pane_left} #{pane_top}")
+func currentPaneID() (string, error) {
+	if paneID := strings.TrimSpace(os.Getenv("TMUX_PANE")); paneID != "" {
+		return paneID, nil
+	}
+
+	out, err := outputCmd("tmux", "display-message", "-p", "#{pane_id}")
 	if err != nil {
-		return "", 0, 0, 0, 0, fmt.Errorf("read pane info: %w", err)
+		return "", fmt.Errorf("read pane id: %w", err)
 	}
-	fields := strings.Fields(strings.TrimSpace(string(out)))
-	if len(fields) != 5 {
-		return "", 0, 0, 0, 0, errors.New("unexpected tmux pane info format")
+
+	paneID := strings.TrimSpace(string(out))
+	if paneID == "" {
+		return "", errors.New("could not determine current pane id")
 	}
-	w, err := strconv.Atoi(fields[1])
-	if err != nil {
-		return "", 0, 0, 0, 0, fmt.Errorf("parse pane width: %w", err)
-	}
-	h, err := strconv.Atoi(fields[2])
-	if err != nil {
-		return "", 0, 0, 0, 0, fmt.Errorf("parse pane height: %w", err)
-	}
-	x, err := strconv.Atoi(fields[3])
-	if err != nil {
-		return "", 0, 0, 0, 0, fmt.Errorf("parse pane left: %w", err)
-	}
-	y, err := strconv.Atoi(fields[4])
-	if err != nil {
-		return "", 0, 0, 0, 0, fmt.Errorf("parse pane top: %w", err)
-	}
-	return fields[0], w, h, x, y, nil
+	return paneID, nil
 }
 
 func captureViewport(paneID string) ([]string, error) {
@@ -143,6 +135,10 @@ func captureViewport(paneID string) ([]string, error) {
 		return nil, fmt.Errorf("capture pane viewport: %w", err)
 	}
 	text := strings.ReplaceAll(string(out), "\r\n", "\n")
+	text = strings.ReplaceAll(text, "", " ")
+	text = strings.ReplaceAll(text, "", " ")
+	text = strings.ReplaceAll(text, "", " ")
+	text = strings.ReplaceAll(text, "", " ")
 	text = strings.TrimRight(text, "\n")
 	if text == "" {
 		return []string{}, nil
