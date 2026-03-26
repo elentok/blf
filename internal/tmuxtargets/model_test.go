@@ -53,8 +53,8 @@ func TestSearchTypingFiltersAndSelectsFirstMatch(t *testing.T) {
 
 func TestSearchEnterLocksAndNavigatesFilteredOnly(t *testing.T) {
 	m := newModel(
-		[]string{"alpha alpine beta"},
-		[]target{{text: "alpha"}, {text: "alpine"}, {text: "beta"}},
+		[]string{"alpha", "alpine", "beta"},
+		[]target{{line: 0, start: 0, text: "alpha"}, {line: 1, start: 0, text: "alpine"}, {line: 2, start: 0, text: "beta"}},
 		func(string) {},
 	)
 
@@ -74,6 +74,82 @@ func TestSearchEnterLocksAndNavigatesFilteredOnly(t *testing.T) {
 	}
 	if m.selected != 1 {
 		t.Fatalf("selected = %d, want 1", m.selected)
+	}
+}
+
+func TestVerticalMovementDoesNotWrapOrMoveHorizontally(t *testing.T) {
+	m := newModel(
+		[]string{"a b", "c"},
+		[]target{
+			{line: 0, start: 0, text: "a"},
+			{line: 0, start: 2, text: "b"},
+			{line: 1, start: 0, text: "c"},
+		},
+		func(string) {},
+	)
+
+	if m.selected != 0 {
+		t.Fatalf("initial selected = %d, want 0", m.selected)
+	}
+
+	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}))
+	m = m2.(model)
+	if m.selected != 2 {
+		t.Fatalf("selected after j = %d, want 2", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}))
+	m = m2.(model)
+	if m.selected != 2 {
+		t.Fatalf("selected after second j = %d, want 2 (no wrap)", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}))
+	m = m2.(model)
+	if m.selected != 0 {
+		t.Fatalf("selected after k = %d, want 0", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}))
+	m = m2.(model)
+	if m.selected != 0 {
+		t.Fatalf("selected after second k = %d, want 0 (no wrap)", m.selected)
+	}
+}
+
+func TestHorizontalMovementStaysOnSameLineWithoutWrapping(t *testing.T) {
+	m := newModel(
+		[]string{"a b", "c"},
+		[]target{
+			{line: 0, start: 0, text: "a"},
+			{line: 0, start: 2, text: "b"},
+			{line: 1, start: 0, text: "c"},
+		},
+		func(string) {},
+	)
+
+	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}))
+	m = m2.(model)
+	if m.selected != 1 {
+		t.Fatalf("selected after l = %d, want 1", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}))
+	m = m2.(model)
+	if m.selected != 1 {
+		t.Fatalf("selected after second l = %d, want 1 (no wrap/down)", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "h", Code: 'h'}))
+	m = m2.(model)
+	if m.selected != 0 {
+		t.Fatalf("selected after h = %d, want 0", m.selected)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Text: "h", Code: 'h'}))
+	m = m2.(model)
+	if m.selected != 0 {
+		t.Fatalf("selected after second h = %d, want 0 (no wrap/up)", m.selected)
 	}
 }
 

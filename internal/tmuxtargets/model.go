@@ -69,13 +69,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searchMode = true
 			m.recomputeFilter()
 			return m, nil
-		case "j", "down", "l", "right":
+		case "j", "down":
 			m.pendingG = false
-			m.moveActive(1)
+			m.moveVertical(1)
 			return m, nil
-		case "k", "up", "h", "left":
+		case "k", "up":
 			m.pendingG = false
-			m.moveActive(-1)
+			m.moveVertical(-1)
+			return m, nil
+		case "l", "right":
+			m.pendingG = false
+			m.moveHorizontal(1)
+			return m, nil
+		case "h", "left":
+			m.pendingG = false
+			m.moveHorizontal(-1)
 			return m, nil
 		case "g":
 			if m.pendingG {
@@ -309,23 +317,89 @@ func (m model) rowsContainTargets(start, end int) bool {
 	return false
 }
 
-func (m *model) moveActive(delta int) {
+func (m *model) moveVertical(delta int) {
 	indexes := m.activeIndexes()
 	if len(indexes) == 0 {
 		m.selected = -1
 		return
 	}
-	pos := m.selectedPosition(indexes)
-	if pos == -1 {
+	cur, ok := m.selectedTarget()
+	if !ok {
 		m.selected = indexes[0]
 		return
 	}
-	pos += delta
-	for pos < 0 {
-		pos += len(indexes)
+
+	bestIdx := -1
+	bestLineDistance := 0
+	bestColDistance := 0
+	for _, idx := range indexes {
+		cand := m.targets[idx]
+		lineDistance := cand.line - cur.line
+		if delta < 0 {
+			if lineDistance >= 0 {
+				continue
+			}
+			lineDistance = -lineDistance
+		} else {
+			if lineDistance <= 0 {
+				continue
+			}
+		}
+
+		colDistance := cand.start - cur.start
+		if colDistance < 0 {
+			colDistance = -colDistance
+		}
+
+		if bestIdx == -1 || lineDistance < bestLineDistance || (lineDistance == bestLineDistance && colDistance < bestColDistance) {
+			bestIdx = idx
+			bestLineDistance = lineDistance
+			bestColDistance = colDistance
+		}
 	}
-	pos %= len(indexes)
-	m.selected = indexes[pos]
+	if bestIdx != -1 {
+		m.selected = bestIdx
+	}
+}
+
+func (m *model) moveHorizontal(delta int) {
+	indexes := m.activeIndexes()
+	if len(indexes) == 0 {
+		m.selected = -1
+		return
+	}
+	cur, ok := m.selectedTarget()
+	if !ok {
+		m.selected = indexes[0]
+		return
+	}
+
+	bestIdx := -1
+	bestDistance := 0
+	for _, idx := range indexes {
+		cand := m.targets[idx]
+		if cand.line != cur.line {
+			continue
+		}
+		distance := cand.start - cur.start
+		if delta < 0 {
+			if distance >= 0 {
+				continue
+			}
+			distance = -distance
+		} else {
+			if distance <= 0 {
+				continue
+			}
+		}
+		if bestIdx == -1 || distance < bestDistance {
+			bestIdx = idx
+			bestDistance = distance
+		}
+	}
+	if bestIdx != -1 {
+		m.selected = bestIdx
+	}
 }
 
 func (m *model) moveToFirst() {
@@ -403,15 +477,6 @@ func (m model) activeIndexes() []int {
 		idx[i] = i
 	}
 	return idx
-}
-
-func (m model) selectedPosition(indexes []int) int {
-	for i, idx := range indexes {
-		if idx == m.selected {
-			return i
-		}
-	}
-	return -1
 }
 
 func (m model) currentSelectedIndex() (int, bool) {
