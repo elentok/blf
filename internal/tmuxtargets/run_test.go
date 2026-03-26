@@ -41,7 +41,7 @@ func TestExecuteTopLevelOpensPopup(t *testing.T) {
 		t.Fatalf("expected display-popup, got %#v", calls[0])
 	}
 	joined := strings.Join(calls[0], " ")
-	for _, snippet := range []string{"-t %7", "-T Select a target | y: yank | enter/o: open | /: search | q: quit", "-x C", "-y C", "-w 80%", "-h 80%", "--target '%7'"} {
+	for _, snippet := range []string{"-t %7", "-T Select a target", "-x C", "-y C", "-w 80%", "-h 80%", "--target '%7'"} {
 		if !strings.Contains(joined, snippet) {
 			t.Fatalf("expected %q in popup args: %s", snippet, joined)
 		}

@@ -211,6 +211,7 @@ func TestSearchModeUsesMagentaStylesAndDrawsSearchBox(t *testing.T) {
 		"row 3 no target",
 		"row 4 no target",
 		"row 5 no target",
+		"row 6 no target",
 	}
 	targets := []target{
 		{line: 1, start: 10, end: 26, text: "https://one.test", openable: true, openTarget: "https://one.test"},
@@ -229,5 +230,44 @@ func TestSearchModeUsesMagentaStylesAndDrawsSearchBox(t *testing.T) {
 	}
 	if !strings.Contains(v.Content, "╭") || !strings.Contains(v.Content, "╯") {
 		t.Fatalf("expected rounded search box border in view content: %q", v.Content)
+	}
+}
+
+func TestHelpKeyOpensAndClosesHelpView(t *testing.T) {
+	m := newModel(
+		[]string{"row with https://one.test"},
+		[]target{{line: 0, start: 9, end: 25, text: "https://one.test", openable: true, openTarget: "https://one.test"}},
+		func(string) {},
+	)
+
+	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
+	m = m2.(model)
+	if !m.helpMode {
+		t.Fatal("expected helpMode=true after ?")
+	}
+	v := m.View()
+	if !strings.Contains(v.Content, "Tmux Targets Help") {
+		t.Fatalf("expected help page content, got: %q", v.Content)
+	}
+
+	m2, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	m = m2.(model)
+	if m.helpMode {
+		t.Fatal("expected helpMode=false after esc")
+	}
+}
+
+func TestNonOpenableShowsInBottomBar(t *testing.T) {
+	m := newModel(
+		[]string{"deadbeef", "next line"},
+		[]target{{line: 0, start: 0, end: 8, text: "deadbeef", openable: false}},
+		func(string) {},
+	)
+
+	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: "o", Code: 'o'}))
+	m = m2.(model)
+	v := m.View()
+	if !strings.Contains(v.Content, "selected target is not openable") {
+		t.Fatalf("expected bottom bar notification in view content: %q", v.Content)
 	}
 }

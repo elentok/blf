@@ -43,8 +43,10 @@ brew install blf
 - Navigation: `j/k`, arrows, `h/l`, `gg`, `G`.
 - Actions: `y` or `c` (copy + exit), `enter`/`o` (open if openable + exit), `q` (exit).
 - Search: `/` enters fuzzy search on target text, `enter` locks filtered mode, `esc` clears search.
+- `?` opens an in-popup help page.
+- Bottom bar shows key help and in-popup notifications/errors.
 - In search/filtered mode, targets switch to green highlighting and a rounded search box appears in the popup.
-- Non-openable `enter`/`o` shows `tmux display-message -d 5000` and keeps the popup open.
+- Non-openable `enter`/`o` shows an in-popup notification and keeps the popup open.
 
 tmux binding example:
 

@@ -16,12 +16,16 @@ import (
 type model struct {
 	lines        []string
 	targets      []target
+	width        int
+	height       int
 	selected     int
 	pendingG     bool
 	searchMode   bool
 	filterLocked bool
+	helpMode     bool
 	query        string
 	filteredIdx  []int
+	status       string
 	notify       func(string)
 	copyText     func(string) error
 	openURL      func(string) error
@@ -51,6 +55,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		key := k.String()
 
+		if m.helpMode {
+			switch key {
+			case "?", "esc", "q":
+				m.helpMode = false
+				return m, nil
+			case "ctrl+c":
+				return m, tea.Quit
+			default:
+				return m, nil
+			}
+		}
+
 		if m.searchMode {
 			return m.updateSearchMode(k, key)
 		}
@@ -68,6 +84,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingG = false
 			m.searchMode = true
 			m.recomputeFilter()
+			return m, nil
+		case "?":
+			m.pendingG = false
+			m.helpMode = true
 			return m, nil
 		case "j", "down":
 			m.pendingG = false
@@ -101,11 +121,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingG = false
 			t, ok := m.selectedTarget()
 			if !ok {
-				m.notify("no targets to copy")
+				m.setStatus("no targets to copy")
 				return m, nil
 			}
 			if err := m.copyText(t.text); err != nil {
-				m.notify("failed to copy target")
+				m.setStatus("failed to copy target")
 				return m, nil
 			}
 			return m, tea.Quit
@@ -113,15 +133,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingG = false
 			t, ok := m.selectedTarget()
 			if !ok {
-				m.notify("no targets to open")
+				m.setStatus("no targets to open")
 				return m, nil
 			}
 			if !t.openable {
-				m.notify("selected target is not openable")
+				m.setStatus("selected target is not openable")
 				return m, nil
 			}
 			if err := m.openURL(t.openTarget); err != nil {
-				m.notify("failed to open target")
+				m.setStatus("failed to open target")
 				return m, nil
 			}
 			return m, tea.Quit
@@ -129,6 +149,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingG = false
 			return m, nil
 		}
+	}
+
+	switch s := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = s.Width
+		m.height = s.Height
+		return m, nil
 	}
 
 	return m, nil
@@ -162,6 +189,15 @@ func (m model) updateSearchMode(k tea.KeyMsg, key string) (tea.Model, tea.Cmd) {
 func (m model) View() tea.View {
 	if len(m.lines) == 0 {
 		v := tea.NewView(baseStyle.Render(""))
+		v.AltScreen = true
+		return v
+	}
+
+	if m.helpMode {
+		rendered := m.renderHelpView()
+		rendered = m.fillViewport(rendered)
+		rendered = m.overlayBottomBar(rendered)
+		v := tea.NewView(strings.Join(rendered, "\n"))
 		v.AltScreen = true
 		return v
 	}
@@ -252,13 +288,15 @@ func (m model) View() tea.View {
 	if searchActive {
 		rendered = m.overlaySearchBox(rendered)
 	}
+	rendered = m.fillViewport(rendered)
+	rendered = m.overlayBottomBar(rendered)
 	v := tea.NewView(strings.Join(rendered, "\n"))
 	v.AltScreen = true
 	return v
 }
 
 func (m model) overlaySearchBox(lines []string) []string {
-	if len(lines) < 3 {
+	if len(lines) < 4 {
 		return lines
 	}
 
@@ -292,12 +330,12 @@ func (m model) overlaySearchBox(lines []string) []string {
 		left = (width - boxWidth) / 2
 	}
 
-	y := len(lines) - 3
+	y := len(lines) - 4
 	for y >= 0 && m.rowsContainTargets(y, y+2) {
 		y--
 	}
 	if y < 0 {
-		y = 0
+		return lines
 	}
 
 	out := append([]string(nil), lines...)
@@ -306,6 +344,112 @@ func (m model) overlaySearchBox(lines []string) []string {
 		out[y+i] = row
 	}
 	return out
+}
+
+func (m model) overlayBottomBar(lines []string) []string {
+	if len(lines) < 2 {
+		return lines
+	}
+	width := m.width
+	if width <= 0 {
+		for _, line := range lines {
+			w := lipgloss.Width(line)
+			if w > width {
+				width = w
+			}
+		}
+		if width <= 0 {
+			width = 1
+		}
+		if width < 80 {
+			width = 80
+		}
+	}
+	text := m.status
+	if text == "" {
+		text = "j/k: up/down  h/l: left/right  y/c: yank  enter/o: open  /: search  ?: help  q: quit"
+	}
+	text = trimToWidth(text, width)
+	bar := helpBarStyle.Width(width).Render(text)
+
+	out := append([]string(nil), lines...)
+	out[len(out)-1] = bar
+	return out
+}
+
+func (m model) fillViewport(lines []string) []string {
+	width := m.width
+	height := m.height
+
+	if width <= 0 && height <= 0 {
+		return lines
+	}
+
+	out := make([]string, 0, maxInt(len(lines), height))
+	for _, line := range lines {
+		if width > 0 {
+			line = padLineToWidth(line, width)
+		}
+		out = append(out, line)
+	}
+
+	if height > 0 {
+		for len(out) < height {
+			empty := ""
+			if width > 0 {
+				empty = strings.Repeat(" ", width)
+			}
+			out = append(out, baseStyle.Render(empty))
+		}
+		if len(out) > height {
+			out = out[:height]
+		}
+	}
+
+	return out
+}
+
+func padLineToWidth(line string, width int) string {
+	if width <= 0 {
+		return line
+	}
+	w := lipgloss.Width(line)
+	if w >= width {
+		return line
+	}
+	return line + strings.Repeat(" ", width-w)
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func (m model) renderHelpView() []string {
+	help := []string{
+		helpTitleStyle.Render("Tmux Targets Help"),
+		baseStyle.Render(""),
+		baseStyle.Render("Navigation:"),
+		baseStyle.Render("  j / down   -> move to next target line (no wrap)"),
+		baseStyle.Render("  k / up     -> move to previous target line (no wrap)"),
+		baseStyle.Render("  l / right  -> move right on same line (no wrap)"),
+		baseStyle.Render("  h / left   -> move left on same line (no wrap)"),
+		baseStyle.Render("  gg / G     -> first / last target"),
+		baseStyle.Render(""),
+		baseStyle.Render("Actions:"),
+		baseStyle.Render("  y or c     -> yank selected target"),
+		baseStyle.Render("  enter or o -> open selected target (when openable)"),
+		baseStyle.Render(""),
+		baseStyle.Render("Search:"),
+		baseStyle.Render("  /          -> search mode"),
+		baseStyle.Render("  enter      -> lock filtered matches"),
+		baseStyle.Render("  esc        -> clear search"),
+		baseStyle.Render(""),
+		helpHintStyle.Render("Press ?, esc, or q to close help"),
+	}
+	return help
 }
 
 func (m model) rowsContainTargets(start, end int) bool {
@@ -454,6 +598,7 @@ func (m *model) clearSearch() {
 	m.filterLocked = false
 	m.query = ""
 	m.filteredIdx = nil
+	m.status = ""
 	if len(m.targets) == 0 {
 		m.selected = -1
 		return
@@ -506,6 +651,13 @@ func trimLastRune(s string) string {
 	}
 	_, size := utf8.DecodeLastRuneInString(s)
 	return s[:len(s)-size]
+}
+
+func (m *model) setStatus(msg string) {
+	m.status = msg
+	if m.notify != nil {
+		m.notify(msg)
+	}
 }
 
 func trimToWidth(s string, max int) string {

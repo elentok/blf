@@ -57,7 +57,7 @@ func runTopLevel() error {
 	if err := runCmd(
 		"tmux", "display-popup",
 		"-t", paneID,
-		"-T", "Select a target | y: yank | enter/o: open | /: search | q: quit",
+		"-T", "Select a target",
 		"-x", "C",
 		"-y", "C",
 		"-w", "80%",
@@ -92,9 +92,7 @@ func runPopupMode(args []string) error {
 
 	lines, targets = condenseViewport(lines, targets, 1)
 
-	notify := func(msg string) {
-		notifyInfo(msg)
-	}
+	notify := func(string) {}
 	if err := runPopupUI(lines, targets, notify); err != nil {
 		return err
 	}
