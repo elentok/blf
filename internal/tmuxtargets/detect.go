@@ -50,9 +50,7 @@ type patternDef struct {
 var patterns = []patternDef{
 	{kind: kindURL, re: regexp.MustCompile(`https?://[^\s<>")\]}]+`), openable: true, norm: identity},
 	{kind: kindFileRef, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+:\d+(?::\d+)?`), norm: identity},
-	{kind: kindFileRef, re: regexp.MustCompile(`[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+:\d+(?::\d+)?`), norm: identity},
 	{kind: kindFilePath, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+`), norm: identity},
-	{kind: kindFilePath, re: regexp.MustCompile(`[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+`), norm: identity},
 	{kind: kindCommit, re: regexp.MustCompile(`\b[0-9a-f]{7,40}\b`), norm: identity},
 	{kind: kindEmail, re: regexp.MustCompile(`\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b`), norm: identity},
 	{kind: kindHostPort, re: regexp.MustCompile(`\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}:\d{2,5}\b`), openable: true, norm: withHTTPS},
@@ -60,7 +58,7 @@ var patterns = []patternDef{
 	{kind: kindUUID, re: regexp.MustCompile(`\b[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}\b`), norm: identity},
 	{kind: kindIssue, re: regexp.MustCompile(`\B#\d+\b`), norm: identity},
 	{kind: kindBranchOrTag, re: regexp.MustCompile(`\b(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+|v\d+\.\d+\.\d+)\b`), norm: identity},
-	{kind: kindBareDomain, re: regexp.MustCompile(`\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*)?\b`), openable: true, norm: withHTTPS},
+	{kind: kindBareDomain, re: regexp.MustCompile(`\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}/[^\s<>")\]}]*`), openable: true, norm: withHTTPS},
 }
 
 func identity(s string) string { return s }

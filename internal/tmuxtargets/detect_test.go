@@ -88,3 +88,27 @@ func TestDetectTargetsRecognizesTildePaths(t *testing.T) {
 		t.Fatalf("second target = %q", targets[1].text)
 	}
 }
+
+func TestDetectTargetsBareDomainRequiresPath(t *testing.T) {
+	lines := []string{"README.md github.com github.com/elentok"}
+	targets := detectTargets(lines)
+
+	if len(targets) != 1 {
+		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(targets), targets)
+	}
+	if targets[0].text != "github.com/elentok" {
+		t.Fatalf("target = %q, want github.com/elentok", targets[0].text)
+	}
+}
+
+func TestDetectTargetsBareFilenameIgnoredButPathAccepted(t *testing.T) {
+	lines := []string{"README.md src/README.md"}
+	targets := detectTargets(lines)
+
+	if len(targets) != 1 {
+		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(targets), targets)
+	}
+	if targets[0].text != "src/README.md" {
+		t.Fatalf("target = %q, want src/README.md", targets[0].text)
+	}
+}
