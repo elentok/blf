@@ -1,6 +1,7 @@
 package tmuxtargets
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -254,6 +255,46 @@ func TestHelpKeyOpensAndClosesHelpView(t *testing.T) {
 	m = m2.(model)
 	if m.helpMode {
 		t.Fatal("expected helpMode=false after esc")
+	}
+}
+
+func TestEnterOnResumeTargetRunsCommandAndQuits(t *testing.T) {
+	var ran string
+	m := newModel(
+		[]string{"codex resume abc123"},
+		[]target{{line: 0, start: 0, end: 20, kind: kindResumeCommand, text: "codex resume abc123"}},
+		func(string) {},
+	)
+	m.runResumeCmd = func(command string) error {
+		ran = command
+		return nil
+	}
+
+	_, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+
+	if ran != "codex resume abc123" {
+		t.Fatalf("ran = %q", ran)
+	}
+	if cmd == nil {
+		t.Fatal("expected quit command")
+	}
+}
+
+func TestEnterOnResumeTargetShowsFailure(t *testing.T) {
+	m := newModel(
+		[]string{"codex resume abc123"},
+		[]target{{line: 0, start: 0, end: 20, kind: kindResumeCommand, text: "codex resume abc123"}},
+		func(string) {},
+	)
+	m.runResumeCmd = func(string) error {
+		return errors.New("boom")
+	}
+
+	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	m = m2.(model)
+
+	if m.status != "failed to run resume command" {
+		t.Fatalf("status = %q", m.status)
 	}
 }
 

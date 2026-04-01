@@ -29,6 +29,7 @@ type model struct {
 	notify       func(string)
 	copyText     func(string) error
 	openURL      func(string) error
+	runResumeCmd func(string) error
 }
 
 func newModel(lines []string, targets []target, notify func(string)) model {
@@ -136,12 +137,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no targets to open")
 				return m, nil
 			}
-			if !t.openable {
-				m.setStatus("selected target is not openable")
-				return m, nil
-			}
-			if err := m.openURL(t.openTarget); err != nil {
-				m.setStatus("failed to open target")
+			if err := m.openTarget(t); err != nil {
+				m.setStatus(err.Error())
 				return m, nil
 			}
 			return m, tea.Quit
@@ -660,6 +657,27 @@ func (m *model) setStatus(msg string) {
 	}
 }
 
+func (m model) openTarget(t target) error {
+	switch t.kind {
+	case kindResumeCommand:
+		if m.runResumeCmd == nil {
+			return fmt.Errorf("failed to run resume command (missing)")
+		}
+		if err := m.runResumeCmd(t.text); err != nil {
+			return fmt.Errorf("failed to run resume command")
+		}
+		return nil
+	default:
+		if !t.openable {
+			return fmt.Errorf("selected target is not openable")
+		}
+		if err := m.openURL(t.openTarget); err != nil {
+			return fmt.Errorf("failed to open target")
+		}
+		return nil
+	}
+}
+
 func trimToWidth(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -678,8 +696,9 @@ func spanKey(t target) string {
 	return fmt.Sprintf("%d:%d:%d", t.line, t.start, t.end)
 }
 
-func runPopupUI(lines []string, targets []target, notify func(string)) error {
+func runPopupUI(lines []string, targets []target, notify func(string), runResumeCmd func(string) error) error {
 	m := newModel(lines, targets, notify)
+	m.runResumeCmd = runResumeCmd
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("run popup ui: %w", err)

@@ -123,3 +123,28 @@ func TestNotifyFailureDoesNotDuplicatePrefix(t *testing.T) {
 		t.Fatalf("unexpected display message: %q", got)
 	}
 }
+
+func TestRunResumeCommandInPaneSendsCommandAndEnter(t *testing.T) {
+	origRunCmd := runCmd
+	t.Cleanup(func() { runCmd = origRunCmd })
+
+	var calls [][]string
+	runCmd = func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		return nil
+	}
+
+	if err := runResumeCommandInPane("%7", "codex resume abc123"); err != nil {
+		t.Fatalf("runResumeCommandInPane returned error: %v", err)
+	}
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 tmux calls, got %d", len(calls))
+	}
+	if got := strings.Join(calls[0], " "); got != "tmux send-keys -t %7 -l codex resume abc123" {
+		t.Fatalf("first call = %q", got)
+	}
+	if got := strings.Join(calls[1], " "); got != "tmux send-keys -t %7 Enter" {
+		t.Fatalf("second call = %q", got)
+	}
+}

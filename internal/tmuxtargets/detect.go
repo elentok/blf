@@ -10,6 +10,7 @@ type targetKind int
 
 const (
 	kindURL targetKind = iota
+	kindResumeCommand
 	kindFileRef
 	kindFilePath
 	kindCommit
@@ -35,6 +36,7 @@ type target struct {
 	line       int
 	start      int
 	end        int
+	kind       targetKind
 	text       string
 	openable   bool
 	openTarget string
@@ -49,6 +51,7 @@ type patternDef struct {
 
 var patterns = []patternDef{
 	{kind: kindURL, re: regexp.MustCompile(`https?://[^\s<>")\]}]+`), openable: true, norm: identity},
+	{kind: kindResumeCommand, re: regexp.MustCompile(`\b(?:codex resume|opencode -s|claude --resume|agent --resume|cursor-agent --resume) [A-Za-z0-9_-]+\b`), norm: identity},
 	{kind: kindFileRef, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+:\d+(?::\d+)?`), norm: identity},
 	{kind: kindFilePath, re: regexp.MustCompile(`(?:~(?:/)?|\.{1,2}/|/)?[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)+`), norm: identity},
 	{kind: kindCommit, re: regexp.MustCompile(`\b[0-9a-f]{7,40}\b`), norm: identity},
@@ -143,6 +146,7 @@ func detectTargetsInLine(lineIndex int, line string) []target {
 			line:       c.line,
 			start:      c.start,
 			end:        c.end,
+			kind:       c.kind,
 			text:       c.text,
 			openable:   c.openable,
 			openTarget: c.openTarget,

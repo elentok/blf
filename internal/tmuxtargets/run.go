@@ -93,7 +93,9 @@ func runPopupMode(args []string) error {
 	lines, targets = condenseViewport(lines, targets, 1)
 
 	notify := func(string) {}
-	if err := runPopupUI(lines, targets, notify); err != nil {
+	if err := runPopupUI(lines, targets, notify, func(command string) error {
+		return runResumeCommandInPane(targetPane, command)
+	}); err != nil {
 		return err
 	}
 
@@ -150,6 +152,16 @@ func notifyFailure(err error) {
 
 func notifyInfo(msg string) {
 	tmuxutil.DisplayToolMessage(runCmd, "tmux-targets", msg)
+}
+
+func runResumeCommandInPane(paneID, command string) error {
+	if err := runCmd("tmux", "send-keys", "-t", paneID, "-l", command); err != nil {
+		return fmt.Errorf("send resume command to pane: %w", err)
+	}
+	if err := runCmd("tmux", "send-keys", "-t", paneID, "Enter"); err != nil {
+		return fmt.Errorf("submit resume command in pane: %w", err)
+	}
+	return nil
 }
 
 func shellQuote(s string) string {

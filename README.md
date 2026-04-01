@@ -38,12 +38,12 @@ brew install blf
 - Opens a popup at `80%` width/height and captures the visible viewport of the target pane.
 - Popup title is `Select a target`.
 - Condenses the viewport by folding target-free gaps to `...`, while keeping 1 line of context above and below each target (including top/bottom `...` when trimmed).
-- Detects targets including URLs, file refs (`path:line[:col]`), commit hashes, emails, host:port, UUIDs, issue refs, and branch/tag-like tokens.
+- Detects targets including URLs, AI agent resume commands (`codex resume <id>`, `opencode -s <id>`, `claude --resume <id>`, `agent --resume <id>`, `cursor-agent --resume <id>`), file refs (`path:line[:col]`), commit hashes, emails, host:port, UUIDs, issue refs, and branch/tag-like tokens.
 - Schema-less URL matching requires a path (for example `github.com/elentok`), and bare domain-only strings are ignored.
 - File detection requires a path separator (`/`), so `README.md` is ignored while `src/README.md` is detected.
 - If a target text repeats, only the first occurrence is highlightable.
 - Navigation: `j/k` or `up/down` move vertically only; `h/l` or `left/right` move horizontally only (no wrapping).
-- Actions: `y` or `c` (copy + exit), `enter`/`o` (open if openable + exit), `q` (exit).
+- Actions: `y` or `c` (copy + exit), `enter`/`o` (open URLs, or run AI resume commands in the original pane, then exit), `q` (exit).
 - Search: `/` enters fuzzy search on target text, `enter` locks filtered mode, `esc` clears search.
 - `?` opens an in-popup help page.
 - Bottom bar shows key help and in-popup notifications/errors.

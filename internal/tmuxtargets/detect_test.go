@@ -10,6 +10,11 @@ func TestDetectTargetsFindsRequestedPatterns(t *testing.T) {
 		"visit hello.com/world and https://example.com/path and ticket #123",
 		"path src/main.go:12:5 email me@example.com hash deadbeef uuid 550e8400-e29b-41d4-a716-446655440000",
 		"host api.example.com:443 branch feature/tmux-targets",
+		"agent codex resume abc123_def-456",
+		"tool opencode -s ses_2b871e869fferrNuTKf7FV4oXf",
+		"cli claude --resume 0bf7fab1-358e-49a0-95fd-fd7cede8baac",
+		"worker agent --resume thread_123",
+		"cursor cursor-agent --resume thread-456",
 	}
 
 	targets := detectTargets(lines)
@@ -28,6 +33,11 @@ func TestDetectTargetsFindsRequestedPatterns(t *testing.T) {
 		"550e8400-e29b-41d4-a716-446655440000",
 		"api.example.com:443",
 		"feature/tmux-targets",
+		"codex resume abc123_def-456",
+		"opencode -s ses_2b871e869fferrNuTKf7FV4oXf",
+		"claude --resume 0bf7fab1-358e-49a0-95fd-fd7cede8baac",
+		"agent --resume thread_123",
+		"cursor-agent --resume thread-456",
 	}
 	if !reflect.DeepEqual(gotTexts, wantTexts) {
 		t.Fatalf("target texts = %#v, want %#v", gotTexts, wantTexts)
@@ -42,6 +52,36 @@ func TestDetectTargetsFindsRequestedPatterns(t *testing.T) {
 	}
 	if !hasOpenable {
 		t.Fatal("expected at least one openable target")
+	}
+}
+
+func TestDetectTargetsRecognizesResumeCommandAsSingleTarget(t *testing.T) {
+	lines := []string{
+		"resume with codex resume abc123_def-456 now",
+		"tool opencode -s ses_2b871e869fferrNuTKf7FV4oXf",
+		"cli claude --resume 0bf7fab1-358e-49a0-95fd-fd7cede8baac",
+		"worker agent --resume thread_123",
+		"cursor cursor-agent --resume thread-456",
+	}
+	targets := detectTargets(lines)
+
+	want := []string{
+		"codex resume abc123_def-456",
+		"opencode -s ses_2b871e869fferrNuTKf7FV4oXf",
+		"claude --resume 0bf7fab1-358e-49a0-95fd-fd7cede8baac",
+		"agent --resume thread_123",
+		"cursor-agent --resume thread-456",
+	}
+	if len(targets) != len(want) {
+		t.Fatalf("expected %d targets, got %d (%#v)", len(want), len(targets), targets)
+	}
+	for i, text := range want {
+		if targets[i].text != text {
+			t.Fatalf("target %d = %q, want %q", i, targets[i].text, text)
+		}
+		if targets[i].openable {
+			t.Fatalf("target %q should not be openable", targets[i].text)
+		}
 	}
 }
 
