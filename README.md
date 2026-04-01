@@ -43,7 +43,7 @@ brew install blf
 - File detection requires a path separator (`/`), so `README.md` is ignored while `src/README.md` is detected.
 - If a target text repeats, only the first occurrence is highlightable.
 - Navigation: `j/k` or `up/down` move vertically only; `h/l` or `left/right` move horizontally only (no wrapping).
-- Actions: `y` or `c` (copy + exit), `enter`/`o` (open URLs, or run AI resume commands in the original pane, then exit), `q` (exit).
+- Actions: `y` or `c` (copy + exit), `enter`/`o` (open URLs, or run AI resume commands in the active pane, then exit), `q` (exit).
 - Search: `/` enters fuzzy search on target text, `enter` locks filtered mode, `esc` clears search.
 - `?` opens an in-popup help page.
 - Bottom bar shows key help and in-popup notifications/errors.

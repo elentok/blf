@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.2.2] - 2026-04-01
+
+### Added
+
+- Added `tmux-targets` detection for AI resume commands:
+  - `codex resume <id>`
+  - `opencode -s <id>`
+  - `claude --resume <id>`
+  - `agent --resume <id>`
+  - `cursor-agent --resume <id>`
+
+### Changed
+
+- `tmux-targets` now runs the selected AI resume command in the active tmux pane when pressing `enter` or `o`.
+- URL targets keep their existing open behavior, while other non-openable targets still show the in-popup notification.
+
 ## [v0.2.1] - 2026-03-26
 
 ### Changed
