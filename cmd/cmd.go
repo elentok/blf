@@ -18,6 +18,8 @@ type deps struct {
 	copyText     func(string) error
 	runTmuxLinks func(string) error
 	runTargets   func([]string) error
+	fileExists   func(string) (bool, error)
+	readFile     func(string) ([]byte, error)
 }
 
 func defaultDeps() deps {
@@ -28,6 +30,8 @@ func defaultDeps() deps {
 		copyText:     platform.CopyText,
 		runTmuxLinks: tmuxlinks.RunMenu,
 		runTargets:   tmuxtargets.Execute,
+		fileExists:   fileExists,
+		readFile:     os.ReadFile,
 	}
 }
 
@@ -50,6 +54,8 @@ func execute(args []string, d deps) error {
 		return runCopy(args[1:], d)
 	case "tmux-targets":
 		return d.runTargets(args[1:])
+	case "npm-scripts":
+		return runNPMScripts(d)
 	case "version", "-v", "--version":
 		return runVersion(d.stdout)
 	case "help", "-h", "--help":
@@ -68,6 +74,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  blf tmux-links <open|copy>")
 	fmt.Fprintln(w, "  blf tmux-targets")
+	fmt.Fprintln(w, "  blf npm-scripts")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")
@@ -104,4 +111,15 @@ func runCopy(args []string, d deps) error {
 		return fmt.Errorf("copy text: %w", err)
 	}
 	return nil
+}
+
+func fileExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return !info.IsDir(), nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
