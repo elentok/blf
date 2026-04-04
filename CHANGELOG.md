@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.2.3] - 2026-04-04
+
+### Added
+
+- Added `blf npm-scripts` to print `package.json` scripts in declaration order with aligned green names.
+
 ## [v0.2.2] - 2026-04-01
 
 ### Added
