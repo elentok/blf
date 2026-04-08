@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
@@ -21,6 +22,7 @@ type deps struct {
 	runTargets   func([]string) error
 	fileExists   func(string) (bool, error)
 	readFile     func(string) ([]byte, error)
+	now          func() time.Time
 }
 
 func defaultDeps() deps {
@@ -34,6 +36,7 @@ func defaultDeps() deps {
 		runTargets:   tmuxtargets.Execute,
 		fileExists:   fileExists,
 		readFile:     os.ReadFile,
+		now:          time.Now,
 	}
 }
 
@@ -60,6 +63,8 @@ func execute(args []string, d deps) error {
 		return runNPMScripts(d)
 	case "querystring", "qs":
 		return runQueryString(args[1:], d)
+	case "cal":
+		return runCal(args[1:], d)
 	case "version", "-v", "--version":
 		return runVersion(d.stdout)
 	case "help", "-h", "--help":
@@ -81,6 +86,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf npm-scripts")
 	fmt.Fprintln(w, "  blf querystring <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
+	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")

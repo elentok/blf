@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExecuteRoutesOpen(t *testing.T) {
@@ -189,6 +190,32 @@ func TestExecuteRoutesQueryStringAliases(t *testing.T) {
 				t.Fatalf("querystring output = %q", out.String())
 			}
 		})
+	}
+}
+
+func TestExecuteRoutesCal(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		fileExists:   func(string) (bool, error) { return false, nil },
+		readFile:     func(string) ([]byte, error) { return nil, nil },
+		stdout:       out,
+		stderr:       &strings.Builder{},
+		stdin:        strings.NewReader(""),
+		now: func() time.Time {
+			return time.Date(2026, time.April, 8, 12, 0, 0, 0, time.Local)
+		},
+	}
+
+	err := execute([]string{"cal", "2026-04-08"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if !strings.Contains(out.String(), "         Apr 2026          ") {
+		t.Fatalf("cal output = %q", out.String())
 	}
 }
 
