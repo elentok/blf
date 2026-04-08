@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.2.4] - 2026-04-08
+
+### Added
+
+- Added `blf querystring` and `blf qs` to parse query string params from a raw query string, full URL, or stdin via `-`.
+
 ## [v0.2.3] - 2026-04-04
 
 ### Added

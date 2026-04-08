@@ -14,6 +14,7 @@ import (
 type deps struct {
 	stdout       io.Writer
 	stderr       io.Writer
+	stdin        io.Reader
 	openURL      func(string) error
 	copyText     func(string) error
 	runTmuxLinks func(string) error
@@ -26,6 +27,7 @@ func defaultDeps() deps {
 	return deps{
 		stdout:       os.Stdout,
 		stderr:       os.Stderr,
+		stdin:        os.Stdin,
 		openURL:      platform.OpenURL,
 		copyText:     platform.CopyText,
 		runTmuxLinks: tmuxlinks.RunMenu,
@@ -56,6 +58,8 @@ func execute(args []string, d deps) error {
 		return d.runTargets(args[1:])
 	case "npm-scripts":
 		return runNPMScripts(d)
+	case "querystring", "qs":
+		return runQueryString(args[1:], d)
 	case "version", "-v", "--version":
 		return runVersion(d.stdout)
 	case "help", "-h", "--help":
@@ -75,6 +79,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf tmux-links <open|copy>")
 	fmt.Fprintln(w, "  blf tmux-targets")
 	fmt.Fprintln(w, "  blf npm-scripts")
+	fmt.Fprintln(w, "  blf querystring <querystring|-> [key]")
+	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")
