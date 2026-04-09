@@ -219,6 +219,30 @@ func TestExecuteRoutesCal(t *testing.T) {
 	}
 }
 
+func TestExecuteRoutesSum(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		fileExists:   func(string) (bool, error) { return false, nil },
+		readFile:     func(string) ([]byte, error) { return nil, nil },
+		stdout:       out,
+		stderr:       &strings.Builder{},
+		stdin:        strings.NewReader("1 apple\n2 banana\n"),
+		now:          time.Now,
+	}
+
+	err := execute([]string{"sum"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if out.String() != "= 3\n" {
+		t.Fatalf("sum output = %q", out.String())
+	}
+}
+
 func TestExecuteRoutesNPMScripts(t *testing.T) {
 	out := &strings.Builder{}
 	d := deps{

@@ -26,6 +26,7 @@ brew install blf
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
+- `blf sum [-e|--echo]`: sum the first space-delimited value from each stdin line.
 - `blf version`: print the current `blf` version.
 
 `tmux-links` behavior:

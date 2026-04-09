@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+- Added `blf sum` to sum the first space-delimited token from each stdin line, with optional input echoing.
+
 ## [v0.2.4] - 2026-04-08
 
 ### Added

@@ -65,6 +65,8 @@ func execute(args []string, d deps) error {
 		return runQueryString(args[1:], d)
 	case "cal":
 		return runCal(args[1:], d)
+	case "sum":
+		return runSum(args[1:], d)
 	case "version", "-v", "--version":
 		return runVersion(d.stdout)
 	case "help", "-h", "--help":
@@ -87,6 +89,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf querystring <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
+	fmt.Fprintln(w, "  blf sum [-e|--echo]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")
