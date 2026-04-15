@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ type deps struct {
 	copyText     func(string) error
 	runTmuxLinks func(string) error
 	runTargets   func([]string) error
+	runCommand   func(string, ...string) ([]byte, error)
 	fileExists   func(string) (bool, error)
 	readFile     func(string) ([]byte, error)
 	now          func() time.Time
@@ -34,9 +36,12 @@ func defaultDeps() deps {
 		copyText:     platform.CopyText,
 		runTmuxLinks: tmuxlinks.RunMenu,
 		runTargets:   tmuxtargets.Execute,
-		fileExists:   fileExists,
-		readFile:     os.ReadFile,
-		now:          time.Now,
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			return exec.Command(name, args...).Output()
+		},
+		fileExists: fileExists,
+		readFile:   os.ReadFile,
+		now:        time.Now,
 	}
 }
 
@@ -67,6 +72,8 @@ func execute(args []string, d deps) error {
 		return runCal(args[1:], d)
 	case "sum":
 		return runSum(args[1:], d)
+	case "kitty":
+		return runKitty(args[1:], d)
 	case "version", "-v", "--version":
 		return runVersion(d.stdout)
 	case "help", "-h", "--help":
@@ -90,6 +97,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
+	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")

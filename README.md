@@ -23,6 +23,8 @@ brew install blf
 - `blf copy <text>`: copy text to the system clipboard.
 - `blf tmux-links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
 - `blf tmux-targets`: open an interactive popup to navigate and act on detected targets.
+- `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
+- `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.

@@ -243,6 +243,34 @@ func TestExecuteRoutesSum(t *testing.T) {
 	}
 }
 
+func TestExecuteRoutesKitty(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			if name != "kitty" || strings.Join(args, " ") != "@ ls" {
+				t.Fatalf("unexpected command: %s %v", name, args)
+			}
+			return []byte(`[{"id":9,"is_active":false,"last_focused":true,"tabs":[{"title":"editor"}]}]`), nil
+		},
+		fileExists: func(string) (bool, error) { return false, nil },
+		readFile:   func(string) ([]byte, error) { return nil, nil },
+		stdout:     out,
+		stderr:     &strings.Builder{},
+	}
+
+	err := execute([]string{"kitty", "list-os-windows"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if out.String() != "\x1b[38;5;214m9: editor\x1b[m\n" {
+		t.Fatalf("kitty output = %q", out.String())
+	}
+}
+
 func TestExecuteRoutesNPMScripts(t *testing.T) {
 	out := &strings.Builder{}
 	d := deps{
