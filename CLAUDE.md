@@ -1,1 +1,1 @@
-See .ai/index.md
+/Users/david/dev/blf/.ai/index.md
