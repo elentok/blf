@@ -2,9 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## [v0.2.5] - 2026-04-16
 
 - Added `blf sum` to sum the first space-delimited token from each stdin line, with optional input echoing.
+- Added `blf kitty list-os-windows` and `blf kitty goto-os-window [id]` for listing and focusing kitty OS windows.
 
 ## [v0.2.4] - 2026-04-08
 
