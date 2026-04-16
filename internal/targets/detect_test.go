@@ -129,6 +129,21 @@ func TestDetectTargetsRecognizesTildePaths(t *testing.T) {
 	}
 }
 
+func TestDetectTargetsRecognizesEnvVarPaths(t *testing.T) {
+	lines := []string{"open $HOME/my/path and $HOME/my/other/file.go:42"}
+	tgts := DetectTargets(lines)
+
+	if len(tgts) != 2 {
+		t.Fatalf("expected 2 targets, got %d (%#v)", len(tgts), tgts)
+	}
+	if tgts[0].Text != "$HOME/my/path" {
+		t.Fatalf("first target = %q", tgts[0].Text)
+	}
+	if tgts[1].Text != "$HOME/my/other/file.go:42" {
+		t.Fatalf("second target = %q", tgts[1].Text)
+	}
+}
+
 func TestDetectTargetsBareDomainRequiresPath(t *testing.T) {
 	lines := []string{"README.md github.com github.com/elentok"}
 	tgts := DetectTargets(lines)

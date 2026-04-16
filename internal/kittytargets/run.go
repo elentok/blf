@@ -135,12 +135,7 @@ func captureViewport(windowID string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture kitty window viewport: %w", err)
 	}
-
-	text := strings.ReplaceAll(string(out), "\r\n", "\n")
-	if text == "" {
-		return []string{}, nil
-	}
-	return strings.Split(text, "\n"), nil
+	return targets.NormalizeViewportText(string(out)), nil
 }
 
 func notifyFailure(err error) error {

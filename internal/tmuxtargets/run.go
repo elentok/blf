@@ -135,16 +135,7 @@ func captureViewport(paneID string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("capture pane viewport: %w", err)
 	}
-	text := strings.ReplaceAll(string(out), "\r\n", "\n")
-	text = strings.ReplaceAll(text, "", " ")
-	text = strings.ReplaceAll(text, "", " ")
-	text = strings.ReplaceAll(text, "", " ")
-	text = strings.ReplaceAll(text, "", " ")
-	text = strings.TrimRight(text, "\n")
-	if text == "" {
-		return []string{}, nil
-	}
-	return strings.Split(text, "\n"), nil
+	return targets.NormalizeViewportText(string(out)), nil
 }
 
 func notifyFailure(err error) {

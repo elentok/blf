@@ -25,6 +25,7 @@ brew install blf
 - `blf tmux-targets`: open an interactive popup to navigate and act on detected targets.
 - `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
+- `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -60,4 +61,18 @@ tmux binding example:
 
 ```tmux
 bind-key t run 'blf tmux-targets'
+```
+
+`kitty targets` behavior:
+
+- Captures the visible viewport of the current Kitty window and detects the same targets as `tmux-targets`.
+- Opens a Kitty overlay only when at least one target is found.
+- Reuses the shared targets UI for navigation, search, copy, open, and resume-command actions.
+- Sends AI resume commands back to the original Kitty window with `kitty @ send-text`.
+- If no targets are found, prints an error and also attempts to show a Kitty error notification.
+
+kitty binding example:
+
+```conf
+map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf kitty targets"
 ```
