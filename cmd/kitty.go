@@ -56,7 +56,7 @@ type kittyRawTab struct {
 
 func runKitty(args []string, d deps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: blf kitty <list-os-windows|goto-os-window> [id]")
+		return fmt.Errorf("usage: blf kitty <list-os-windows|goto-os-window|targets> [id]")
 	}
 
 	switch args[0] {
@@ -64,6 +64,11 @@ func runKitty(args []string, d deps) error {
 		return runKittyListOSWindows(d)
 	case kittyGotoOSWindowCmd:
 		return runKittyGotoOSWindow(args[1:], d)
+	case "targets":
+		if d.runKittyTargets == nil {
+			return fmt.Errorf("kitty targets runner is not configured")
+		}
+		return d.runKittyTargets(args[1:])
 	default:
 		return fmt.Errorf("unknown kitty command %q", args[0])
 	}

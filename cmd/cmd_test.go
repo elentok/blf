@@ -271,6 +271,32 @@ func TestExecuteRoutesKitty(t *testing.T) {
 	}
 }
 
+func TestExecuteRoutesKittyTargets(t *testing.T) {
+	var got []string
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		runKittyTargets: func(args []string) error {
+			got = append([]string{}, args...)
+			return nil
+		},
+		fileExists: func(string) (bool, error) { return false, nil },
+		readFile:   func(string) ([]byte, error) { return nil, nil },
+		stdout:     &strings.Builder{},
+		stderr:     &strings.Builder{},
+	}
+
+	err := execute([]string{"kitty", "targets", "--overlay", "--target", "17"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if strings.Join(got, " ") != "--overlay --target 17" {
+		t.Fatalf("kitty targets called with %v", got)
+	}
+}
+
 func TestExecuteRoutesNPMScripts(t *testing.T) {
 	out := &strings.Builder{}
 	d := deps{

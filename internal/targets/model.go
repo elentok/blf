@@ -1,4 +1,4 @@
-package tmuxtargets
+package targets
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 
 type model struct {
 	lines        []string
-	targets      []target
+	targets      []Target
 	width        int
 	height       int
 	selected     int
@@ -26,22 +26,24 @@ type model struct {
 	query        string
 	filteredIdx  []int
 	status       string
+	title        string
 	notify       func(string)
 	copyText     func(string) error
 	openURL      func(string) error
 	runResumeCmd func(string) error
 }
 
-func newModel(lines []string, targets []target, notify func(string)) model {
+func newModel(lines []string, tgts []Target, title string, notify func(string)) model {
 	m := model{
 		lines:    lines,
-		targets:  targets,
+		targets:  tgts,
 		selected: -1,
+		title:    title,
 		notify:   notify,
 		copyText: platform.CopyText,
 		openURL:  platform.OpenURL,
 	}
-	if len(targets) > 0 {
+	if len(tgts) > 0 {
 		m.selected = 0
 	}
 	return m
@@ -125,7 +127,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setStatus("no targets to copy")
 				return m, nil
 			}
-			if err := m.copyText(t.text); err != nil {
+			if err := m.copyText(t.Text); err != nil {
 				m.setStatus("failed to copy target")
 				return m, nil
 			}
@@ -199,16 +201,16 @@ func (m model) View() tea.View {
 		return v
 	}
 
-	spansByLine := make(map[int][]target, len(m.targets))
+	spansByLine := make(map[int][]Target, len(m.targets))
 	targetIndexBySpan := make(map[string]int, len(m.targets))
 	if len(m.targets) > 0 {
 		for idx, t := range m.targets {
-			spansByLine[t.line] = append(spansByLine[t.line], t)
+			spansByLine[t.Line] = append(spansByLine[t.Line], t)
 			targetIndexBySpan[spanKey(t)] = idx
 		}
 		for line := range spansByLine {
 			sort.Slice(spansByLine[line], func(i, j int) bool {
-				return spansByLine[line][i].start < spansByLine[line][j].start
+				return spansByLine[line][i].Start < spansByLine[line][j].Start
 			})
 		}
 	}
@@ -229,8 +231,8 @@ func (m model) View() tea.View {
 		if len(lineTargets) > 0 {
 			cursor := 0
 			for _, t := range lineTargets {
-				start := t.start
-				end := t.end
+				start := t.Start
+				end := t.End
 				if start > len(line) {
 					start = len(line)
 				}
@@ -298,12 +300,8 @@ func (m model) overlaySearchBox(lines []string) []string {
 	}
 
 	matchCount := len(m.activeIndexes())
-	label := "SEARCH"
-	if m.filterLocked {
-		label = "FILTERED"
-	}
 	prefix := "Search: "
-	if label == "FILTERED" {
+	if m.filterLocked {
 		prefix = "Filtered: "
 	}
 	content := fmt.Sprintf("%s%s (%d/%d)", prefix, m.query, matchCount, len(m.targets))
@@ -425,8 +423,12 @@ func maxInt(a, b int) int {
 }
 
 func (m model) renderHelpView() []string {
+	title := m.title
+	if title == "" {
+		title = "Targets"
+	}
 	help := []string{
-		helpTitleStyle.Render("Tmux Targets Help"),
+		helpTitleStyle.Render(title + " Help"),
 		baseStyle.Render(""),
 		baseStyle.Render("Navigation:"),
 		baseStyle.Render("  j / down   -> move to next target line (no wrap)"),
@@ -451,7 +453,7 @@ func (m model) renderHelpView() []string {
 
 func (m model) rowsContainTargets(start, end int) bool {
 	for _, t := range m.targets {
-		if t.line >= start && t.line <= end {
+		if t.Line >= start && t.Line <= end {
 			return true
 		}
 	}
@@ -475,7 +477,7 @@ func (m *model) moveVertical(delta int) {
 	bestColDistance := 0
 	for _, idx := range indexes {
 		cand := m.targets[idx]
-		lineDistance := cand.line - cur.line
+		lineDistance := cand.Line - cur.Line
 		if delta < 0 {
 			if lineDistance >= 0 {
 				continue
@@ -487,7 +489,7 @@ func (m *model) moveVertical(delta int) {
 			}
 		}
 
-		colDistance := cand.start - cur.start
+		colDistance := cand.Start - cur.Start
 		if colDistance < 0 {
 			colDistance = -colDistance
 		}
@@ -519,10 +521,10 @@ func (m *model) moveHorizontal(delta int) {
 	bestDistance := 0
 	for _, idx := range indexes {
 		cand := m.targets[idx]
-		if cand.line != cur.line {
+		if cand.Line != cur.Line {
 			continue
 		}
-		distance := cand.start - cur.start
+		distance := cand.Start - cur.Start
 		if delta < 0 {
 			if distance >= 0 {
 				continue
@@ -576,7 +578,7 @@ func (m *model) recomputeFilter() {
 
 	candidates := make([]string, len(m.targets))
 	for i, t := range m.targets {
-		candidates[i] = t.text
+		candidates[i] = t.Text
 	}
 	matches := fuzzy.Find(m.query, candidates)
 	m.filteredIdx = make([]int, 0, len(matches))
@@ -634,10 +636,10 @@ func (m model) currentSelectedIndex() (int, bool) {
 	return -1, false
 }
 
-func (m model) selectedTarget() (target, bool) {
+func (m model) selectedTarget() (Target, bool) {
 	idx, ok := m.currentSelectedIndex()
 	if !ok {
-		return target{}, false
+		return Target{}, false
 	}
 	return m.targets[idx], true
 }
@@ -657,21 +659,21 @@ func (m *model) setStatus(msg string) {
 	}
 }
 
-func (m model) openTarget(t target) error {
-	switch t.kind {
-	case kindResumeCommand:
+func (m model) openTarget(t Target) error {
+	switch t.Kind {
+	case KindResumeCommand:
 		if m.runResumeCmd == nil {
 			return fmt.Errorf("failed to run resume command (missing)")
 		}
-		if err := m.runResumeCmd(t.text); err != nil {
+		if err := m.runResumeCmd(t.Text); err != nil {
 			return fmt.Errorf("failed to run resume command")
 		}
 		return nil
 	default:
-		if !t.openable {
+		if !t.Openable {
 			return fmt.Errorf("selected target is not openable")
 		}
-		if err := m.openURL(t.openTarget); err != nil {
+		if err := m.openURL(t.OpenTarget); err != nil {
 			return fmt.Errorf("failed to open target")
 		}
 		return nil
@@ -692,12 +694,15 @@ func trimToWidth(s string, max int) string {
 	return string(r[:max-3]) + "..."
 }
 
-func spanKey(t target) string {
-	return fmt.Sprintf("%d:%d:%d", t.line, t.start, t.end)
+func spanKey(t Target) string {
+	return fmt.Sprintf("%d:%d:%d", t.Line, t.Start, t.End)
 }
 
-func runPopupUI(lines []string, targets []target, notify func(string), runResumeCmd func(string) error) error {
-	m := newModel(lines, targets, notify)
+// RunPopupUI runs the interactive target selection UI. notify receives
+// status messages (may be nil). runResumeCmd is called when a resume-command
+// target is activated (may be nil).
+func RunPopupUI(lines []string, tgts []Target, title string, notify func(string), runResumeCmd func(string) error) error {
+	m := newModel(lines, tgts, title, notify)
 	m.runResumeCmd = runResumeCmd
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {

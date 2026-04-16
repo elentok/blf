@@ -1,20 +1,23 @@
-package tmuxtargets
+package targets
 
-func condenseViewport(lines []string, targets []target, context int) ([]string, []target) {
-	if len(lines) == 0 || len(targets) == 0 {
-		return lines, targets
+// CondenseViewport collapses lines that contain no targets, keeping `context`
+// lines of surrounding context around each target line and inserting "..."
+// separators in place of collapsed ranges.
+func CondenseViewport(lines []string, tgts []Target, context int) ([]string, []Target) {
+	if len(lines) == 0 || len(tgts) == 0 {
+		return lines, tgts
 	}
 	if context < 0 {
 		context = 0
 	}
 
 	keep := make([]bool, len(lines))
-	for _, t := range targets {
-		start := t.line - context
+	for _, t := range tgts {
+		start := t.Line - context
 		if start < 0 {
 			start = 0
 		}
-		end := t.line + context
+		end := t.Line + context
 		if end >= len(lines) {
 			end = len(lines) - 1
 		}
@@ -40,7 +43,7 @@ func condenseViewport(lines []string, targets []target, context int) ([]string, 
 		lastKept = i
 	}
 	if firstKept == -1 {
-		return lines, targets
+		return lines, tgts
 	}
 
 	newLines := make([]string, 0, len(lines))
@@ -68,16 +71,16 @@ func condenseViewport(lines []string, targets []target, context int) ([]string, 
 		newLines = append(newLines, "...")
 	}
 
-	newTargets := make([]target, 0, len(targets))
-	for _, t := range targets {
-		if t.line < 0 || t.line >= len(oldToNew) {
+	newTargets := make([]Target, 0, len(tgts))
+	for _, t := range tgts {
+		if t.Line < 0 || t.Line >= len(oldToNew) {
 			continue
 		}
-		mapped := oldToNew[t.line]
+		mapped := oldToNew[t.Line]
 		if mapped < 0 {
 			continue
 		}
-		t.line = mapped
+		t.Line = mapped
 		newTargets = append(newTargets, t)
 	}
 

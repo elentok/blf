@@ -8,34 +8,37 @@ import (
 	"strings"
 	"time"
 
+	"github.com/elentok/blf/internal/kittytargets"
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
 	"github.com/elentok/blf/internal/tmuxtargets"
 )
 
 type deps struct {
-	stdout       io.Writer
-	stderr       io.Writer
-	stdin        io.Reader
-	openURL      func(string) error
-	copyText     func(string) error
-	runTmuxLinks func(string) error
-	runTargets   func([]string) error
-	runCommand   func(string, ...string) ([]byte, error)
-	fileExists   func(string) (bool, error)
-	readFile     func(string) ([]byte, error)
-	now          func() time.Time
+	stdout          io.Writer
+	stderr          io.Writer
+	stdin           io.Reader
+	openURL         func(string) error
+	copyText        func(string) error
+	runTmuxLinks    func(string) error
+	runTargets      func([]string) error
+	runKittyTargets func([]string) error
+	runCommand      func(string, ...string) ([]byte, error)
+	fileExists      func(string) (bool, error)
+	readFile        func(string) ([]byte, error)
+	now             func() time.Time
 }
 
 func defaultDeps() deps {
 	return deps{
-		stdout:       os.Stdout,
-		stderr:       os.Stderr,
-		stdin:        os.Stdin,
-		openURL:      platform.OpenURL,
-		copyText:     platform.CopyText,
-		runTmuxLinks: tmuxlinks.RunMenu,
-		runTargets:   tmuxtargets.Execute,
+		stdout:          os.Stdout,
+		stderr:          os.Stderr,
+		stdin:           os.Stdin,
+		openURL:         platform.OpenURL,
+		copyText:        platform.CopyText,
+		runTmuxLinks:    tmuxlinks.RunMenu,
+		runTargets:      tmuxtargets.Execute,
+		runKittyTargets: kittytargets.Execute,
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},
@@ -97,7 +100,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
-	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window> [id]")
+	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")

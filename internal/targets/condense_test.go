@@ -1,4 +1,4 @@
-package tmuxtargets
+package targets
 
 import "testing"
 
@@ -14,12 +14,12 @@ func TestCondenseViewportKeepsContextAndFoldsGaps(t *testing.T) {
 		"l7",
 		"l8",
 	}
-	targets := []target{
-		{line: 2, start: 3, end: 9, text: "target-a"},
-		{line: 6, start: 3, end: 9, text: "target-b"},
+	tgts := []Target{
+		{Line: 2, Start: 3, End: 9, Text: "target-a"},
+		{Line: 6, Start: 3, End: 9, Text: "target-b"},
 	}
 
-	gotLines, gotTargets := condenseViewport(lines, targets, 1)
+	gotLines, gotTargets := CondenseViewport(lines, tgts, 1)
 
 	wantLines := []string{"...", "l1", "l2 target", "l3", "...", "l5", "l6 target", "l7", "..."}
 	if len(gotLines) != len(wantLines) {
@@ -34,17 +34,17 @@ func TestCondenseViewportKeepsContextAndFoldsGaps(t *testing.T) {
 	if len(gotTargets) != 2 {
 		t.Fatalf("target count = %d, want 2", len(gotTargets))
 	}
-	if gotTargets[0].line != 2 {
-		t.Fatalf("first target line = %d, want 2", gotTargets[0].line)
+	if gotTargets[0].Line != 2 {
+		t.Fatalf("first target line = %d, want 2", gotTargets[0].Line)
 	}
-	if gotTargets[1].line != 6 {
-		t.Fatalf("second target line = %d, want 6", gotTargets[1].line)
+	if gotTargets[1].Line != 6 {
+		t.Fatalf("second target line = %d, want 6", gotTargets[1].Line)
 	}
 }
 
 func TestCondenseViewportNoTargetsNoChange(t *testing.T) {
 	lines := []string{"a", "b"}
-	gotLines, gotTargets := condenseViewport(lines, nil, 1)
+	gotLines, gotTargets := CondenseViewport(lines, nil, 1)
 	if len(gotLines) != 2 || gotLines[0] != "a" || gotLines[1] != "b" {
 		t.Fatalf("unexpected lines: %#v", gotLines)
 	}

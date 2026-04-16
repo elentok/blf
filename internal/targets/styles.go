@@ -1,4 +1,4 @@
-package tmuxtargets
+package targets
 
 import "charm.land/lipgloss/v2"
 

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/elentok/blf/internal/targets"
 	"github.com/elentok/blf/internal/tmuxutil"
 )
 
@@ -85,15 +86,15 @@ func runPopupMode(args []string) error {
 		return err
 	}
 
-	targets := detectTargets(lines)
-	if len(targets) == 0 {
+	detected := targets.DetectTargets(lines)
+	if len(detected) == 0 {
 		return errNoTargets
 	}
 
-	lines, targets = condenseViewport(lines, targets, 1)
+	lines, detected = targets.CondenseViewport(lines, detected, 1)
 
 	notify := func(string) {}
-	if err := runPopupUI(lines, targets, notify, func(command string) error {
+	if err := targets.RunPopupUI(lines, detected, "Tmux Targets", notify, func(command string) error {
 		return runResumeCommandInPane(targetPane, command)
 	}); err != nil {
 		return err

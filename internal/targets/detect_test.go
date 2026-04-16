@@ -1,4 +1,4 @@
-package tmuxtargets
+package targets
 
 import (
 	"reflect"
@@ -17,11 +17,11 @@ func TestDetectTargetsFindsRequestedPatterns(t *testing.T) {
 		"cursor cursor-agent --resume thread-456",
 	}
 
-	targets := detectTargets(lines)
+	tgts := DetectTargets(lines)
 
-	gotTexts := make([]string, 0, len(targets))
-	for _, tr := range targets {
-		gotTexts = append(gotTexts, tr.text)
+	gotTexts := make([]string, 0, len(tgts))
+	for _, tr := range tgts {
+		gotTexts = append(gotTexts, tr.Text)
 	}
 	wantTexts := []string{
 		"hello.com/world",
@@ -44,8 +44,8 @@ func TestDetectTargetsFindsRequestedPatterns(t *testing.T) {
 	}
 
 	var hasOpenable bool
-	for _, tr := range targets {
-		if tr.openable {
+	for _, tr := range tgts {
+		if tr.Openable {
 			hasOpenable = true
 			break
 		}
@@ -63,7 +63,7 @@ func TestDetectTargetsRecognizesResumeCommandAsSingleTarget(t *testing.T) {
 		"worker agent --resume thread_123",
 		"cursor cursor-agent --resume thread-456",
 	}
-	targets := detectTargets(lines)
+	tgts := DetectTargets(lines)
 
 	want := []string{
 		"codex resume abc123_def-456",
@@ -72,27 +72,27 @@ func TestDetectTargetsRecognizesResumeCommandAsSingleTarget(t *testing.T) {
 		"agent --resume thread_123",
 		"cursor-agent --resume thread-456",
 	}
-	if len(targets) != len(want) {
-		t.Fatalf("expected %d targets, got %d (%#v)", len(want), len(targets), targets)
+	if len(tgts) != len(want) {
+		t.Fatalf("expected %d targets, got %d (%#v)", len(want), len(tgts), tgts)
 	}
 	for i, text := range want {
-		if targets[i].text != text {
-			t.Fatalf("target %d = %q, want %q", i, targets[i].text, text)
+		if tgts[i].Text != text {
+			t.Fatalf("target %d = %q, want %q", i, tgts[i].Text, text)
 		}
-		if targets[i].openable {
-			t.Fatalf("target %q should not be openable", targets[i].text)
+		if tgts[i].Openable {
+			t.Fatalf("target %q should not be openable", tgts[i].Text)
 		}
 	}
 }
 
 func TestDetectTargetsPrefersURLOverBareDomainOverlap(t *testing.T) {
 	line := []string{"check https://example.com/path now"}
-	targets := detectTargets(line)
-	if len(targets) == 0 {
+	tgts := DetectTargets(line)
+	if len(tgts) == 0 {
 		t.Fatal("expected target")
 	}
-	if targets[0].text != "https://example.com/path" {
-		t.Fatalf("expected full url target, got %q", targets[0].text)
+	if tgts[0].Text != "https://example.com/path" {
+		t.Fatalf("expected full url target, got %q", tgts[0].Text)
 	}
 }
 
@@ -102,53 +102,53 @@ func TestDetectTargetsDeduplicatesRepeatedTargetText(t *testing.T) {
 		"repeat https://example.com/path and #123 again",
 	}
 
-	targets := detectTargets(lines)
-	if len(targets) != 2 {
-		t.Fatalf("expected 2 unique targets, got %d (%#v)", len(targets), targets)
+	tgts := DetectTargets(lines)
+	if len(tgts) != 2 {
+		t.Fatalf("expected 2 unique targets, got %d (%#v)", len(tgts), tgts)
 	}
-	if targets[0].text != "https://example.com/path" {
-		t.Fatalf("first target = %q", targets[0].text)
+	if tgts[0].Text != "https://example.com/path" {
+		t.Fatalf("first target = %q", tgts[0].Text)
 	}
-	if targets[1].text != "#123" {
-		t.Fatalf("second target = %q", targets[1].text)
+	if tgts[1].Text != "#123" {
+		t.Fatalf("second target = %q", tgts[1].Text)
 	}
 }
 
 func TestDetectTargetsRecognizesTildePaths(t *testing.T) {
 	lines := []string{"open ~/my/path and ~/my/other/file.go:42"}
-	targets := detectTargets(lines)
+	tgts := DetectTargets(lines)
 
-	if len(targets) != 2 {
-		t.Fatalf("expected 2 targets, got %d (%#v)", len(targets), targets)
+	if len(tgts) != 2 {
+		t.Fatalf("expected 2 targets, got %d (%#v)", len(tgts), tgts)
 	}
-	if targets[0].text != "~/my/path" {
-		t.Fatalf("first target = %q", targets[0].text)
+	if tgts[0].Text != "~/my/path" {
+		t.Fatalf("first target = %q", tgts[0].Text)
 	}
-	if targets[1].text != "~/my/other/file.go:42" {
-		t.Fatalf("second target = %q", targets[1].text)
+	if tgts[1].Text != "~/my/other/file.go:42" {
+		t.Fatalf("second target = %q", tgts[1].Text)
 	}
 }
 
 func TestDetectTargetsBareDomainRequiresPath(t *testing.T) {
 	lines := []string{"README.md github.com github.com/elentok"}
-	targets := detectTargets(lines)
+	tgts := DetectTargets(lines)
 
-	if len(targets) != 1 {
-		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(targets), targets)
+	if len(tgts) != 1 {
+		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(tgts), tgts)
 	}
-	if targets[0].text != "github.com/elentok" {
-		t.Fatalf("target = %q, want github.com/elentok", targets[0].text)
+	if tgts[0].Text != "github.com/elentok" {
+		t.Fatalf("target = %q, want github.com/elentok", tgts[0].Text)
 	}
 }
 
 func TestDetectTargetsBareFilenameIgnoredButPathAccepted(t *testing.T) {
 	lines := []string{"README.md src/README.md"}
-	targets := detectTargets(lines)
+	tgts := DetectTargets(lines)
 
-	if len(targets) != 1 {
-		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(targets), targets)
+	if len(tgts) != 1 {
+		t.Fatalf("expected exactly 1 target, got %d (%#v)", len(tgts), tgts)
 	}
-	if targets[0].text != "src/README.md" {
-		t.Fatalf("target = %q, want src/README.md", targets[0].text)
+	if tgts[0].Text != "src/README.md" {
+		t.Fatalf("target = %q, want src/README.md", tgts[0].Text)
 	}
 }

@@ -1,4 +1,4 @@
-package tmuxtargets
+package targets
 
 import (
 	"errors"
@@ -10,12 +10,12 @@ import (
 
 func TestViewColorsNonSelectedTargetsBlue(t *testing.T) {
 	lines := []string{"a https://one.test b https://two.test"}
-	targets := []target{
-		{line: 0, start: 2, end: 18, text: "https://one.test", openable: true, openTarget: "https://one.test"},
-		{line: 0, start: 21, end: 37, text: "https://two.test", openable: true, openTarget: "https://two.test"},
+	tgts := []Target{
+		{Line: 0, Start: 2, End: 18, Text: "https://one.test", Openable: true, OpenTarget: "https://one.test"},
+		{Line: 0, Start: 21, End: 37, Text: "https://two.test", Openable: true, OpenTarget: "https://two.test"},
 	}
 
-	m := newModel(lines, targets, func(string) {})
+	m := newModel(lines, tgts, "Test", func(string) {})
 	v := m.View()
 
 	if !strings.Contains(v.Content, selectedStyle.Render("https://one.test")) {
@@ -29,7 +29,8 @@ func TestViewColorsNonSelectedTargetsBlue(t *testing.T) {
 func TestSearchTypingFiltersAndSelectsFirstMatch(t *testing.T) {
 	m := newModel(
 		[]string{"alpha beta gamma"},
-		[]target{{text: "alpha"}, {text: "beta"}, {text: "gamma"}},
+		[]Target{{Text: "alpha"}, {Text: "beta"}, {Text: "gamma"}},
+		"Test",
 		func(string) {},
 	)
 
@@ -55,7 +56,8 @@ func TestSearchTypingFiltersAndSelectsFirstMatch(t *testing.T) {
 func TestSearchEnterLocksAndNavigatesFilteredOnly(t *testing.T) {
 	m := newModel(
 		[]string{"alpha", "alpine", "beta"},
-		[]target{{line: 0, start: 0, text: "alpha"}, {line: 1, start: 0, text: "alpine"}, {line: 2, start: 0, text: "beta"}},
+		[]Target{{Line: 0, Start: 0, Text: "alpha"}, {Line: 1, Start: 0, Text: "alpine"}, {Line: 2, Start: 0, Text: "beta"}},
+		"Test",
 		func(string) {},
 	)
 
@@ -81,11 +83,12 @@ func TestSearchEnterLocksAndNavigatesFilteredOnly(t *testing.T) {
 func TestVerticalMovementDoesNotWrapOrMoveHorizontally(t *testing.T) {
 	m := newModel(
 		[]string{"a b", "c"},
-		[]target{
-			{line: 0, start: 0, text: "a"},
-			{line: 0, start: 2, text: "b"},
-			{line: 1, start: 0, text: "c"},
+		[]Target{
+			{Line: 0, Start: 0, Text: "a"},
+			{Line: 0, Start: 2, Text: "b"},
+			{Line: 1, Start: 0, Text: "c"},
 		},
+		"Test",
 		func(string) {},
 	)
 
@@ -121,11 +124,12 @@ func TestVerticalMovementDoesNotWrapOrMoveHorizontally(t *testing.T) {
 func TestHorizontalMovementStaysOnSameLineWithoutWrapping(t *testing.T) {
 	m := newModel(
 		[]string{"a b", "c"},
-		[]target{
-			{line: 0, start: 0, text: "a"},
-			{line: 0, start: 2, text: "b"},
-			{line: 1, start: 0, text: "c"},
+		[]Target{
+			{Line: 0, Start: 0, Text: "a"},
+			{Line: 0, Start: 2, Text: "b"},
+			{Line: 1, Start: 0, Text: "c"},
 		},
+		"Test",
 		func(string) {},
 	)
 
@@ -157,7 +161,8 @@ func TestHorizontalMovementStaysOnSameLineWithoutWrapping(t *testing.T) {
 func TestSearchEscClearsFilter(t *testing.T) {
 	m := newModel(
 		[]string{"alpha beta"},
-		[]target{{text: "alpha"}, {text: "beta"}},
+		[]Target{{Text: "alpha"}, {Text: "beta"}},
+		"Test",
 		func(string) {},
 	)
 
@@ -182,7 +187,8 @@ func TestSearchNoMatchesClearsSelectionAndCopyNoops(t *testing.T) {
 	var notes []string
 	m := newModel(
 		[]string{"alpha beta"},
-		[]target{{text: "alpha"}, {text: "beta"}},
+		[]Target{{Text: "alpha"}, {Text: "beta"}},
+		"Test",
 		func(msg string) { notes = append(notes, msg) },
 	)
 
@@ -214,11 +220,11 @@ func TestSearchModeUsesMagentaStylesAndDrawsSearchBox(t *testing.T) {
 		"row 5 no target",
 		"row 6 no target",
 	}
-	targets := []target{
-		{line: 1, start: 10, end: 26, text: "https://one.test", openable: true, openTarget: "https://one.test"},
-		{line: 2, start: 10, end: 26, text: "https://two.test", openable: true, openTarget: "https://two.test"},
+	tgts := []Target{
+		{Line: 1, Start: 10, End: 26, Text: "https://one.test", Openable: true, OpenTarget: "https://one.test"},
+		{Line: 2, Start: 10, End: 26, Text: "https://two.test", Openable: true, OpenTarget: "https://two.test"},
 	}
-	m := newModel(lines, targets, func(string) {})
+	m := newModel(lines, tgts, "Test", func(string) {})
 	m2, _ := m.Update(tea.KeyPressMsg(tea.Key{Text: "/", Code: '/'}))
 	m = m2.(model)
 	v := m.View()
@@ -237,7 +243,8 @@ func TestSearchModeUsesMagentaStylesAndDrawsSearchBox(t *testing.T) {
 func TestHelpKeyOpensAndClosesHelpView(t *testing.T) {
 	m := newModel(
 		[]string{"row with https://one.test"},
-		[]target{{line: 0, start: 9, end: 25, text: "https://one.test", openable: true, openTarget: "https://one.test"}},
+		[]Target{{Line: 0, Start: 9, End: 25, Text: "https://one.test", Openable: true, OpenTarget: "https://one.test"}},
+		"Test",
 		func(string) {},
 	)
 
@@ -247,7 +254,7 @@ func TestHelpKeyOpensAndClosesHelpView(t *testing.T) {
 		t.Fatal("expected helpMode=true after ?")
 	}
 	v := m.View()
-	if !strings.Contains(v.Content, "Tmux Targets Help") {
+	if !strings.Contains(v.Content, "Test Help") {
 		t.Fatalf("expected help page content, got: %q", v.Content)
 	}
 
@@ -262,7 +269,8 @@ func TestEnterOnResumeTargetRunsCommandAndQuits(t *testing.T) {
 	var ran string
 	m := newModel(
 		[]string{"codex resume abc123"},
-		[]target{{line: 0, start: 0, end: 20, kind: kindResumeCommand, text: "codex resume abc123"}},
+		[]Target{{Line: 0, Start: 0, End: 20, Kind: KindResumeCommand, Text: "codex resume abc123"}},
+		"Test",
 		func(string) {},
 	)
 	m.runResumeCmd = func(command string) error {
@@ -283,7 +291,8 @@ func TestEnterOnResumeTargetRunsCommandAndQuits(t *testing.T) {
 func TestEnterOnResumeTargetShowsFailure(t *testing.T) {
 	m := newModel(
 		[]string{"codex resume abc123"},
-		[]target{{line: 0, start: 0, end: 20, kind: kindResumeCommand, text: "codex resume abc123"}},
+		[]Target{{Line: 0, Start: 0, End: 20, Kind: KindResumeCommand, Text: "codex resume abc123"}},
+		"Test",
 		func(string) {},
 	)
 	m.runResumeCmd = func(string) error {
@@ -301,7 +310,8 @@ func TestEnterOnResumeTargetShowsFailure(t *testing.T) {
 func TestNonOpenableShowsInBottomBar(t *testing.T) {
 	m := newModel(
 		[]string{"deadbeef", "next line"},
-		[]target{{line: 0, start: 0, end: 8, text: "deadbeef", openable: false}},
+		[]Target{{Line: 0, Start: 0, End: 8, Text: "deadbeef", Openable: false}},
+		"Test",
 		func(string) {},
 	)
 
