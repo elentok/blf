@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.3.0] - 2026-04-16
+
+- Added `blf kitty targets` to open an interactive Kitty overlay for navigating
+  and acting on detected targets from the current window.
+
+- Target detection:
+  - Recognizes env-var-prefixed file paths such as `$HOME/path/file.txt`.
+  - "Cleans" the viewport by replaceing prompt glyphs such as `` with spaces.
+  - Extracted the shared code between kitty and tmux targets detection.
+
 ## [v0.2.5] - 2026-04-16
 
 - Added `blf sum` to sum the first space-delimited token from each stdin line, with optional input echoing.
