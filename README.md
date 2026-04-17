@@ -26,8 +26,9 @@ brew install blf
 - `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
-- `blf kitty new-session`: prompt for a session name in a Kitty overlay, create `~/.local/share/kitty/sessions/<name>.kitty-session`, and switch to it.
+- `blf kitty new-session`: prompt for a session name in a Kitty overlay, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
 - `blf kitty sessions`: open a Kitty overlay, list active session files detected in `~/.local/share/kitty/sessions/`, show tab counts, and switch to the selected session.
+- `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -82,10 +83,9 @@ map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf
 `kitty sessions` behavior:
 
 - Uses `~/.local/share/kitty/sessions/` as the session-file directory.
-- `new-session` opens an overlay prompt for the session name, writes a minimal session file with the current working directory, then runs `kitten @ action goto_session <path>`.
+- `new-session` opens an overlay prompt for the session name; if a session with that name is still live it switches to it, otherwise it writes or rewrites the session file and switches to it.
 - `sessions` opens an overlay and uses `fzf` to pick from active session files only.
-- Active sessions are discovered by scanning the session directory and asking Kitty which session files currently have matching tabs.
-- Session picker rows include the current number of tabs in each active session.
+- Session files with `0 tabs` are treated as inactive/non-existing for the picker and for deciding whether `new-session` should recreate the file.
 
 kitty session binding examples:
 

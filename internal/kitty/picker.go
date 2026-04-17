@@ -12,7 +12,7 @@ import (
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func pickSession(sessions []Session, d Deps) (string, error) {
-	cmd := exec.Command("fzf", "--delimiter", "\t", "--with-nth", "2,3")
+	cmd := exec.Command("fzf", "--layout=reverse", "--delimiter", "\t", "--with-nth", "2")
 	cmd.Stdin = strings.NewReader(formatSessionChoices(sessions))
 	cmd.Stderr = d.Stderr
 
@@ -49,7 +49,7 @@ func parseSessionSelection(line string) (string, error) {
 }
 
 func pickOSWindow(windows []OSWindow, d Deps) (string, error) {
-	cmd := exec.Command("fzf", "--ansi")
+	cmd := exec.Command("fzf", "--layout=reverse", "--ansi")
 	cmd.Stdin = strings.NewReader(FormatOSWindows(windows))
 	cmd.Stderr = d.Stderr
 

@@ -18,6 +18,7 @@ type deps struct {
 	stdout          io.Writer
 	stderr          io.Writer
 	stdin           io.Reader
+	lookupEnv       func(string) (string, bool)
 	openURL         func(string) error
 	copyText        func(string) error
 	runTmuxLinks    func(string) error
@@ -40,6 +41,7 @@ func defaultDeps() deps {
 		stdout:          os.Stdout,
 		stderr:          os.Stderr,
 		stdin:           os.Stdin,
+		lookupEnv:       os.LookupEnv,
 		openURL:         platform.OpenURL,
 		copyText:        platform.CopyText,
 		runTmuxLinks:    tmuxlinks.RunMenu,
@@ -112,7 +114,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
-	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions> [id]")
+	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|doctor> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")

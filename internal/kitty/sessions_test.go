@@ -1,6 +1,7 @@
 package kitty
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -87,7 +88,8 @@ func TestCreateSessionFile(t *testing.T) {
 	}
 }
 
-func TestListActiveSessions(t *testing.T) {
+func TestListSessions(t *testing.T) {
+	var matchExprs []string
 	d := Deps{
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
 		ReadDir: func(path string) ([]os.DirEntry, error) {
@@ -105,13 +107,73 @@ func TestListActiveSessions(t *testing.T) {
 			if name != "kitty" || len(args) != 4 || args[0] != "@" || args[1] != "ls" || args[2] != "--match-tab" {
 				t.Fatalf("unexpected command: %s %v", name, args)
 			}
+			matchExprs = append(matchExprs, args[3])
 			switch args[3] {
 			case `session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^alpha\.kitty-session$`:
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"},{"id":11,"title":"two"}]}]`), nil
 			case `session:^/Users/test/\.local/share/kitty/sessions/beta\.kitty-session$`:
-				return []byte(`[]`), nil
+				return nil, errors.New("exit status 1")
+			case `session:^beta\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^beta$`:
+				return nil, errors.New("exit status 1")
 			default:
 				t.Fatalf("unexpected match expr: %q", args[3])
+				return nil, nil
+			}
+		},
+	}
+
+	got, err := ListSessions(d)
+	if err != nil {
+		t.Fatalf("ListSessions returned error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("sessions = %#v", got)
+	}
+	if got[0].Name != "alpha" || got[0].TabCount != 2 {
+		t.Fatalf("first session = %#v", got[0])
+	}
+	if got[0].Path != "/Users/test/.local/share/kitty/sessions/alpha.kitty-session" {
+		t.Fatalf("path = %q", got[0].Path)
+	}
+	if got[1].Name != "beta" || got[1].TabCount != 0 {
+		t.Fatalf("second session = %#v", got[1])
+	}
+	gotExprs := strings.Join(matchExprs, "\n")
+	if !strings.Contains(gotExprs, "session:^/Users/test/\\.local/share/kitty/sessions/alpha\\.kitty-session$") {
+		t.Fatalf("match exprs = %v", matchExprs)
+	}
+	if !strings.Contains(gotExprs, "session:^alpha\\.kitty-session$") {
+		t.Fatalf("match exprs = %v", matchExprs)
+	}
+}
+
+func TestListActiveSessionsFiltersZeroTabSessions(t *testing.T) {
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		ReadDir: func(path string) ([]os.DirEntry, error) {
+			return []os.DirEntry{
+				fakeDirEntry{name: "beta.kitty-session"},
+				fakeDirEntry{name: "alpha.kitty-session"},
+			}, nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			switch args[3] {
+			case `session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^alpha\.kitty-session$`:
+				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"}]}]`), nil
+			case `session:^/Users/test/\.local/share/kitty/sessions/beta\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^beta\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^beta$`:
+				return nil, errors.New("exit status 1")
+			default:
+				t.Fatalf("unexpected args: %v", args)
 				return nil, nil
 			}
 		},
@@ -121,14 +183,44 @@ func TestListActiveSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListActiveSessions returned error: %v", err)
 	}
-	if len(got) != 1 {
+	if len(got) != 1 || got[0].Name != "alpha" {
 		t.Fatalf("sessions = %#v", got)
 	}
-	if got[0].Name != "alpha" || got[0].TabCount != 2 {
-		t.Fatalf("session = %#v", got[0])
+}
+
+func TestCreateSessionFileReturnsExistingActiveSessionPath(t *testing.T) {
+	var writeInvoked bool
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		MkdirAll:    func(string, os.FileMode) error { return nil },
+		FileExists:  func(string) (bool, error) { return true, nil },
+		Getwd:       func() (string, error) { return "/work tree", nil },
+		WriteFile: func(string, []byte, os.FileMode) error {
+			writeInvoked = true
+			return nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			switch args[3] {
+			case `session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `session:^proj\.kitty-session$`:
+				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"}]}]`), nil
+			default:
+				t.Fatalf("unexpected args: %v", args)
+				return nil, nil
+			}
+		},
 	}
-	if got[0].Path != "/Users/test/.local/share/kitty/sessions/alpha.kitty-session" {
-		t.Fatalf("path = %q", got[0].Path)
+
+	got, err := createSessionFile("proj", d)
+	if err != nil {
+		t.Fatalf("createSessionFile returned error: %v", err)
+	}
+	if got != "/Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+		t.Fatalf("path = %q", got)
+	}
+	if writeInvoked {
+		t.Fatal("expected active session file to be reused without rewriting")
 	}
 }
 
@@ -139,7 +231,20 @@ func TestSessionHelpers(t *testing.T) {
 	if trimSessionExtension("proj.session") != "proj" {
 		t.Fatalf("trimmed = %q", trimSessionExtension("proj.session"))
 	}
-	if got := formatSessionChoices([]Session{{Path: filepath.Join("/tmp", "proj.kitty-session"), Name: "proj", TabCount: 1}}); got != "/tmp/proj.kitty-session\tproj\t1 tab\n" {
+	session := Session{Path: filepath.Join("/tmp", "proj.kitty-session"), Name: "proj", TabCount: 1}
+	if got := formatSessionLabel(session); got != "proj (1 tab)" {
+		t.Fatalf("label = %q", got)
+	}
+	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\tproj (1 tab)\n" {
 		t.Fatalf("choices = %q", got)
+	}
+	exprs := sessionMatchExprs("/tmp/proj.kitty-session")
+	wantExprs := []string{
+		`session:^/tmp/proj\.kitty-session$`,
+		`session:^proj\.kitty-session$`,
+		`session:^proj$`,
+	}
+	if strings.Join(exprs, "\n") != strings.Join(wantExprs, "\n") {
+		t.Fatalf("exprs = %v", exprs)
 	}
 }

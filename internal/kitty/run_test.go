@@ -1,6 +1,7 @@
 package kitty
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -109,6 +110,96 @@ func TestNewSessionOverlayCreatesAndSwitches(t *testing.T) {
 	}
 	want := "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session"
 	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
+	var (
+		commands     []string
+		writeInvoked bool
+	)
+	d := Deps{
+		Stdin:       strings.NewReader("proj\n"),
+		Stdout:      &strings.Builder{},
+		Stderr:      &strings.Builder{},
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		MkdirAll:    func(string, os.FileMode) error { return nil },
+		FileExists:  func(string) (bool, error) { return true, nil },
+		Getwd:       func() (string, error) { return "/work", nil },
+		WriteFile: func(string, []byte, os.FileMode) error {
+			writeInvoked = true
+			return nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			switch strings.Join(append([]string{name}, args...), " ") {
+			case `kitty @ ls --match-tab session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `kitty @ ls --match-tab session:^proj\.kitty-session$`:
+				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"}]}]`), nil
+			case "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session":
+				return []byte{}, nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return nil, nil
+			}
+		},
+	}
+
+	if err := NewSession([]string{"--overlay"}, d); err != nil {
+		t.Fatalf("NewSession returned error: %v", err)
+	}
+	if writeInvoked {
+		t.Fatal("expected existing active session to skip file rewrite")
+	}
+	if strings.Join(commands, "\n") != "kitty @ ls --match-tab session:^/Users/test/\\.local/share/kitty/sessions/proj\\.kitty-session$\nkitty @ ls --match-tab session:^proj\\.kitty-session$\nkitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestNewSessionOverlayRecreatesExistingZeroTabSession(t *testing.T) {
+	var (
+		commands     []string
+		writeInvoked bool
+	)
+	d := Deps{
+		Stdin:       strings.NewReader("proj\n"),
+		Stdout:      &strings.Builder{},
+		Stderr:      &strings.Builder{},
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		MkdirAll:    func(string, os.FileMode) error { return nil },
+		FileExists:  func(string) (bool, error) { return true, nil },
+		Getwd:       func() (string, error) { return "/work", nil },
+		WriteFile: func(string, []byte, os.FileMode) error {
+			writeInvoked = true
+			return nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			switch strings.Join(append([]string{name}, args...), " ") {
+			case `kitty @ ls --match-tab session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `kitty @ ls --match-tab session:^proj\.kitty-session$`:
+				return nil, errors.New("exit status 1")
+			case `kitty @ ls --match-tab session:^proj$`:
+				return nil, errors.New("exit status 1")
+			case "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session":
+				return []byte{}, nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return nil, nil
+			}
+		},
+	}
+
+	if err := NewSession([]string{"--overlay"}, d); err != nil {
+		t.Fatalf("NewSession returned error: %v", err)
+	}
+	if !writeInvoked {
+		t.Fatal("expected zero-tab session to be rewritten")
+	}
+	if commands[len(commands)-1] != "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session" {
 		t.Fatalf("commands = %v", commands)
 	}
 }

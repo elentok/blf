@@ -9,6 +9,7 @@ type Deps struct {
 	Stdin          io.Reader
 	Stdout         io.Writer
 	Stderr         io.Writer
+	LookupEnv      func(string) (string, bool)
 	RunCommand     func(string, ...string) ([]byte, error)
 	FileExists     func(string) (bool, error)
 	ReadDir        func(string) ([]os.DirEntry, error)
