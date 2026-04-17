@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.0] - 2026-04-17
+
+Add kitty session manager:
+
+- Added `blf kitty new-session` to create or reuse named Kitty session files and switch to them from an overlay.
+- Added `blf kitty sessions` to browse Kitty session files in an overlay with `fzf`.
+  - previews sessions with live-tab awareness
+  - supports `ctrl-d` to delete inactive session files and reload the picker in place (only sessions with no live tabs).
+  - preview moves below the list automatically when the picker is narrower than `70` columns.
+- Added `blf kitty doctor` to print Kitty session diagnostics including environment, session files, and session match counts.
+- Added `blf kitty delete-session` to remove inactive Kitty session files from an overlay picker.
+  - only remove sessions with no live tabs.
+
 ## [v0.3.0] - 2026-04-16
 
 - Added `blf kitty targets` to open an interactive Kitty overlay for navigating
