@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -134,14 +135,9 @@ func deleteSessionFile(path string, d Deps) error {
 		return errors.New("remove file helper is not configured")
 	}
 
-	sessionDir, err := SessionsDir(d)
+	cleanPath, err := validateSessionPath(path, d)
 	if err != nil {
 		return err
-	}
-
-	cleanPath := filepath.Clean(path)
-	if filepath.Dir(cleanPath) != sessionDir || !isSessionFilename(filepath.Base(cleanPath)) {
-		return fmt.Errorf("invalid kitty session path %q", path)
 	}
 
 	tabCount, err := sessionTabCount(cleanPath, d)
@@ -157,6 +153,32 @@ func deleteSessionFile(path string, d Deps) error {
 			return nil
 		}
 		return fmt.Errorf("delete kitty session file %q: %w", cleanPath, err)
+	}
+
+	return nil
+}
+
+func editSessionFile(path string, d Deps) error {
+	if d.LookupEnv == nil {
+		return errors.New("environment lookup helper is not configured")
+	}
+
+	cleanPath, err := validateSessionPath(path, d)
+	if err != nil {
+		return err
+	}
+
+	editor, ok := d.LookupEnv("EDITOR")
+	if !ok || strings.TrimSpace(editor) == "" {
+		return errors.New("EDITOR environment variable is not set")
+	}
+
+	cmd := exec.Command("sh", "-lc", editor+" \"$1\"", "sh", cleanPath)
+	cmd.Stdin = d.Stdin
+	cmd.Stdout = d.Stdout
+	cmd.Stderr = d.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("edit kitty session file %q: %w", cleanPath, err)
 	}
 
 	return nil
@@ -301,4 +323,18 @@ func sessionStem(path string) string {
 
 func sessionMatchExpr(path string) string {
 	return matchSessionExpr(sessionStem(path))
+}
+
+func validateSessionPath(path string, d Deps) (string, error) {
+	sessionDir, err := SessionsDir(d)
+	if err != nil {
+		return "", err
+	}
+
+	cleanPath := filepath.Clean(path)
+	if filepath.Dir(cleanPath) != sessionDir || !isSessionFilename(filepath.Base(cleanPath)) {
+		return "", fmt.Errorf("invalid kitty session path %q", path)
+	}
+
+	return cleanPath, nil
 }

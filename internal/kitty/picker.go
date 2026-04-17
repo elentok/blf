@@ -13,7 +13,7 @@ var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 const sessionPreviewWindow = "right,60%,wrap,<70(down,50%,wrap)"
 const fzfNavigationBind = "ctrl-j:down,ctrl-k:up"
-const sessionFooter = "ctrl-d: delete"
+const sessionFooter = "ctrl-d: delete, ctrl-o: edit"
 
 func pickSession(sessions []Session, d Deps) (string, error) {
 	previewCmd, err := sessionPreviewCommand(d)
@@ -21,6 +21,10 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 		return "", err
 	}
 	deleteCmd, err := sessionDeleteCommand(d)
+	if err != nil {
+		return "", err
+	}
+	editCmd, err := sessionEditCommand(d)
 	if err != nil {
 		return "", err
 	}
@@ -39,6 +43,7 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 		"--preview", previewCmd,
 		"--preview-window", sessionPreviewWindow,
 		"--bind", "ctrl-d:execute-silent("+deleteCmd+")+reload("+reloadCmd+")",
+		"--bind", "ctrl-o:execute("+editCmd+")",
 	)
 	cmd.Stdin = strings.NewReader(formatSessionChoices(sessions))
 	cmd.Stderr = d.Stderr
@@ -68,6 +73,10 @@ func sessionChoicesCommand(d Deps) (string, error) {
 
 func sessionDeleteCommand(d Deps) (string, error) {
 	return sessionSubcommand(d, DeleteSessionFileCmd+" {1}")
+}
+
+func sessionEditCommand(d Deps) (string, error) {
+	return sessionSubcommand(d, EditSessionFileCmd+" {1}")
 }
 
 func sessionSubcommand(d Deps, args string) (string, error) {

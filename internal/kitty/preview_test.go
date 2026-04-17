@@ -146,6 +146,18 @@ func TestSessionDeleteCommand(t *testing.T) {
 	}
 }
 
+func TestSessionEditCommand(t *testing.T) {
+	got, err := sessionEditCommand(Deps{
+		ExecutablePath: func() (string, error) { return "/tmp/blf binary", nil },
+	})
+	if err != nil {
+		t.Fatalf("sessionEditCommand returned error: %v", err)
+	}
+	if got != "'/tmp/blf binary' kitty __edit-session-file {1}" {
+		t.Fatalf("command = %q", got)
+	}
+}
+
 func TestSessionPreviewWindowLayout(t *testing.T) {
 	if sessionPreviewWindow != "right,60%,wrap,<70(down,50%,wrap)" {
 		t.Fatalf("layout = %q", sessionPreviewWindow)
@@ -159,7 +171,7 @@ func TestFZFNavigationBind(t *testing.T) {
 }
 
 func TestSessionFooter(t *testing.T) {
-	if sessionFooter != "ctrl-d: delete" {
+	if sessionFooter != "ctrl-d: delete, ctrl-o: edit" {
 		t.Fatalf("footer = %q", sessionFooter)
 	}
 }

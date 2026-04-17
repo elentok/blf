@@ -312,3 +312,29 @@ func TestListSessionChoicesWritesChoices(t *testing.T) {
 		t.Fatalf("output = %q", out.String())
 	}
 }
+
+func TestEditSessionFileUsesEditor(t *testing.T) {
+	d := Deps{
+		Stdin:       strings.NewReader(""),
+		Stdout:      &strings.Builder{},
+		Stderr:      &strings.Builder{},
+		LookupEnv:   func(key string) (string, bool) { return "true", key == "EDITOR" },
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+	}
+
+	if err := EditSessionFile([]string{"/Users/test/.local/share/kitty/sessions/proj.kitty-session"}, d); err != nil {
+		t.Fatalf("EditSessionFile returned error: %v", err)
+	}
+}
+
+func TestEditSessionFileRequiresEditor(t *testing.T) {
+	d := Deps{
+		LookupEnv:   func(string) (string, bool) { return "", false },
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+	}
+
+	err := EditSessionFile([]string{"/Users/test/.local/share/kitty/sessions/proj.kitty-session"}, d)
+	if err == nil || !strings.Contains(err.Error(), "EDITOR environment variable is not set") {
+		t.Fatalf("error = %v", err)
+	}
+}

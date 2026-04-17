@@ -15,6 +15,7 @@ const (
 	PreviewSessionCmd     = "__preview-session"
 	ListSessionChoicesCmd = "__list-session-choices"
 	DeleteSessionFileCmd  = "__delete-session-file"
+	EditSessionFileCmd    = "__edit-session-file"
 )
 
 func ListOSWindowsCommand(d Deps) error {
@@ -139,6 +140,14 @@ func DeleteSessionFile(args []string, d Deps) error {
 	}
 
 	return deleteSessionFile(args[0], d)
+}
+
+func EditSessionFile(args []string, d Deps) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: blf kitty %s <path>", EditSessionFileCmd)
+	}
+
+	return editSessionFile(args[0], d)
 }
 
 func runNewSessionOverlay(d Deps) error {

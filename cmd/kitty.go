@@ -30,6 +30,8 @@ func runKitty(args []string, d deps) error {
 		return internalkitty.ListSessionChoices(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.DeleteSessionFileCmd:
 		return internalkitty.DeleteSessionFile(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.EditSessionFileCmd:
+		return internalkitty.EditSessionFile(args[1:], kittyDepsFromCmd(d))
 	case "targets":
 		if d.runKittyTargets == nil {
 			return fmt.Errorf("kitty targets runner is not configured")
