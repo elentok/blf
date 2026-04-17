@@ -158,14 +158,9 @@ func ListSessions(d Deps) ([]Session, error) {
 		}
 
 		path := filepath.Join(sessionDir, name)
-		tabCount, err := sessionTabCount(path, d)
-		if err != nil {
-			return nil, err
-		}
 		sessions = append(sessions, Session{
-			Name:     trimSessionExtension(name),
-			Path:     path,
-			TabCount: tabCount,
+			Name: trimSessionExtension(name),
+			Path: path,
 		})
 	}
 
@@ -180,11 +175,16 @@ func ListActiveSessions(d Deps) ([]Session, error) {
 		return nil, err
 	}
 
-	active := sessions[:0]
+	active := make([]Session, 0, len(sessions))
 	for _, session := range sessions {
-		if session.TabCount == 0 {
+		tabCount, err := sessionTabCount(session.Path, d)
+		if err != nil {
+			return nil, err
+		}
+		if tabCount == 0 {
 			continue
 		}
+		session.TabCount = tabCount
 		active = append(active, session)
 	}
 	return active, nil
@@ -253,14 +253,7 @@ func formatSessionChoices(sessions []Session) string {
 }
 
 func formatSessionLabel(session Session) string {
-	return fmt.Sprintf("%s (%s)", session.Name, formatTabCount(session.TabCount))
-}
-
-func formatTabCount(n int) string {
-	if n == 1 {
-		return "1 tab"
-	}
-	return fmt.Sprintf("%d tabs", n)
+	return session.Name
 }
 
 func sortSessionsByName(sessions []Session) {

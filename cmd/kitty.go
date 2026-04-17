@@ -22,6 +22,8 @@ func runKitty(args []string, d deps) error {
 		return internalkitty.SessionsCommand(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.DoctorCmd:
 		return internalkitty.Doctor(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.PreviewSessionCmd:
+		return internalkitty.PreviewSession(args[1:], kittyDepsFromCmd(d))
 	case "targets":
 		if d.runKittyTargets == nil {
 			return fmt.Errorf("kitty targets runner is not configured")
@@ -40,6 +42,7 @@ func kittyDepsFromCmd(d deps) internalkitty.Deps {
 		LookupEnv:      d.lookupEnv,
 		RunCommand:     d.runCommand,
 		FileExists:     d.fileExists,
+		ReadFile:       d.readFile,
 		ReadDir:        d.readDir,
 		WriteFile:      d.writeFile,
 		MkdirAll:       d.mkdirAll,

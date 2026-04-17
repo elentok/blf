@@ -11,15 +11,29 @@ import (
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
+const sessionPreviewWindow = "right,60%,wrap,<70(down,50%,wrap)"
+
 func pickSession(sessions []Session, d Deps) (string, error) {
-	cmd := exec.Command("fzf", "--layout=reverse", "--delimiter", "\t", "--with-nth", "2")
+	previewCmd, err := sessionPreviewCommand(d)
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(
+		"fzf",
+		"--layout=reverse",
+		"--delimiter", "\t",
+		"--with-nth", "2",
+		"--preview", previewCmd,
+		"--preview-window", sessionPreviewWindow,
+	)
 	cmd.Stdin = strings.NewReader(formatSessionChoices(sessions))
 	cmd.Stderr = d.Stderr
 
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && (exitErr.ExitCode() == 1 || exitErr.ExitCode() == 130) {
@@ -29,6 +43,19 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 	}
 
 	return parseSessionSelection(stdout.String())
+}
+
+func sessionPreviewCommand(d Deps) (string, error) {
+	if d.ExecutablePath == nil {
+		return "", errors.New("executable path resolver is not configured")
+	}
+
+	exe, err := d.ExecutablePath()
+	if err != nil {
+		return "", fmt.Errorf("resolve executable path: %w", err)
+	}
+
+	return shellQuote(exe) + " kitty " + PreviewSessionCmd + " {1}", nil
 }
 
 func parseSessionSelection(line string) (string, error) {
@@ -85,4 +112,8 @@ func parseOSWindowID(line string) (string, error) {
 	}
 
 	return id, nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

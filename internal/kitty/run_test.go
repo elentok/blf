@@ -221,7 +221,7 @@ func TestSessionsCommandLaunchesOverlay(t *testing.T) {
 	}
 }
 
-func TestSessionsOverlayShowsErrorWhenNoActiveSessions(t *testing.T) {
+func TestSessionsOverlayShowsErrorWhenNoSessions(t *testing.T) {
 	var commands []string
 	d := Deps{
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
@@ -238,7 +238,7 @@ func TestSessionsOverlayShowsErrorWhenNoActiveSessions(t *testing.T) {
 		t.Fatalf("SessionsCommand returned error: %v", err)
 	}
 
-	want := `kitten @ action show_error "blf kitty sessions" "No active kitty sessions"`
+	want := `kitten @ action show_error "blf kitty sessions" "No kitty sessions"`
 	if strings.Join(commands, "\n") != want {
 		t.Fatalf("commands = %v", commands)
 	}

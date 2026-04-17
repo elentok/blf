@@ -27,7 +27,7 @@ brew install blf
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
 - `blf kitty new-session`: prompt for a session name in a Kitty overlay, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
-- `blf kitty sessions`: open a Kitty overlay, list active session files detected in `~/.local/share/kitty/sessions/`, show tab counts, and switch to the selected session.
+- `blf kitty sessions`: open a Kitty overlay, list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
@@ -84,8 +84,9 @@ map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf
 
 - Uses `~/.local/share/kitty/sessions/` as the session-file directory.
 - `new-session` opens an overlay prompt for the session name; if a session with that name is still live it switches to it, otherwise it writes or rewrites the session file and switches to it.
-- `sessions` opens an overlay and uses `fzf` to pick from active session files only.
-- Session files with `0 tabs` are treated as inactive/non-existing for the picker and for deciding whether `new-session` should recreate the file.
+- `sessions` opens an overlay and uses `fzf` to pick from all session files, even if they currently have `0 tabs`.
+- The picker no longer probes Kitty for tab counts; `fzf` preview renders the session file as a simple tab/window tree instead.
+- `new-session` still treats a same-name file with `0 tabs` as inactive and rewrites it before switching.
 
 kitty session binding examples:
 

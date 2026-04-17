@@ -12,6 +12,7 @@ type Deps struct {
 	LookupEnv      func(string) (string, bool)
 	RunCommand     func(string, ...string) ([]byte, error)
 	FileExists     func(string) (bool, error)
+	ReadFile       func(string) ([]byte, error)
 	ReadDir        func(string) ([]os.DirEntry, error)
 	WriteFile      func(string, []byte, os.FileMode) error
 	MkdirAll       func(string, os.FileMode) error

@@ -89,7 +89,6 @@ func TestCreateSessionFile(t *testing.T) {
 }
 
 func TestListSessions(t *testing.T) {
-	var matchExprs []string
 	d := Deps{
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
 		ReadDir: func(path string) ([]os.DirEntry, error) {
@@ -103,21 +102,6 @@ func TestListSessions(t *testing.T) {
 				fakeDirEntry{name: "nested", isDir: true},
 			}, nil
 		},
-		RunCommand: func(name string, args ...string) ([]byte, error) {
-			if name != "kitty" || len(args) != 4 || args[0] != "@" || args[1] != "ls" || args[2] != "--match-tab" {
-				t.Fatalf("unexpected command: %s %v", name, args)
-			}
-			matchExprs = append(matchExprs, args[3])
-			switch args[3] {
-			case `session:^alpha$`:
-				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"},{"id":11,"title":"two"}]}]`), nil
-			case `session:^beta$`:
-				return nil, errors.New("exit status 1")
-			default:
-				t.Fatalf("unexpected match expr: %q", args[3])
-				return nil, nil
-			}
-		},
 	}
 
 	got, err := ListSessions(d)
@@ -127,7 +111,7 @@ func TestListSessions(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("sessions = %#v", got)
 	}
-	if got[0].Name != "alpha" || got[0].TabCount != 2 {
+	if got[0].Name != "alpha" || got[0].TabCount != 0 {
 		t.Fatalf("first session = %#v", got[0])
 	}
 	if got[0].Path != "/Users/test/.local/share/kitty/sessions/alpha.kitty-session" {
@@ -135,13 +119,6 @@ func TestListSessions(t *testing.T) {
 	}
 	if got[1].Name != "beta" || got[1].TabCount != 0 {
 		t.Fatalf("second session = %#v", got[1])
-	}
-	gotExprs := strings.Join(matchExprs, "\n")
-	if !strings.Contains(gotExprs, "session:^alpha$") {
-		t.Fatalf("match exprs = %v", matchExprs)
-	}
-	if !strings.Contains(gotExprs, "session:^beta$") {
-		t.Fatalf("match exprs = %v", matchExprs)
 	}
 }
 
@@ -218,10 +195,10 @@ func TestSessionHelpers(t *testing.T) {
 		t.Fatalf("trimmed = %q", trimSessionExtension("proj.session"))
 	}
 	session := Session{Path: filepath.Join("/tmp", "proj.kitty-session"), Name: "proj", TabCount: 1}
-	if got := formatSessionLabel(session); got != "proj (1 tab)" {
+	if got := formatSessionLabel(session); got != "proj" {
 		t.Fatalf("label = %q", got)
 	}
-	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\tproj (1 tab)\n" {
+	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\tproj\n" {
 		t.Fatalf("choices = %q", got)
 	}
 	if got := sessionStem("/tmp/proj.kitty-session"); got != "proj" {

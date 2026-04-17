@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	ListOSWindowsCmd = "list-os-windows"
-	GotoOSWindowCmd  = "goto-os-window"
-	NewSessionCmd    = "new-session"
-	SessionsCmd      = "sessions"
+	ListOSWindowsCmd  = "list-os-windows"
+	GotoOSWindowCmd   = "goto-os-window"
+	NewSessionCmd     = "new-session"
+	SessionsCmd       = "sessions"
+	PreviewSessionCmd = "__preview-session"
 )
 
 func ListOSWindowsCommand(d Deps) error {
@@ -90,6 +91,20 @@ func SessionsCommand(args []string, d Deps) error {
 	}
 }
 
+func PreviewSession(args []string, d Deps) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: blf kitty %s <path>", PreviewSessionCmd)
+	}
+
+	preview, err := RenderSessionPreview(args[0], d)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(d.Stdout, preview)
+	return err
+}
+
 func runNewSessionOverlay(d Deps) error {
 	name, err := promptSessionName(d.Stdin, d.Stdout)
 	if err != nil {
@@ -105,12 +120,12 @@ func runNewSessionOverlay(d Deps) error {
 }
 
 func runSessionsOverlay(d Deps) error {
-	sessions, err := ListActiveSessions(d)
+	sessions, err := ListSessions(d)
 	if err != nil {
 		return err
 	}
 	if len(sessions) == 0 {
-		return ShowError(d, "blf kitty sessions", "No active kitty sessions")
+		return ShowError(d, "blf kitty sessions", "No kitty sessions")
 	}
 
 	path, err := pickSession(sessions, d)
