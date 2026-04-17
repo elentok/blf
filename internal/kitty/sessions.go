@@ -195,27 +195,20 @@ func sessionTabCount(path string, d Deps) (int, error) {
 		return 0, errors.New("kitty command runner is not configured")
 	}
 
-	for _, expr := range sessionMatchExprs(path) {
-		output, err := d.RunCommand("kitty", "@", "ls", "--match-tab", expr)
-		if err != nil {
-			if isKittyNoMatchError(err) {
-				continue
-			}
-			return 0, fmt.Errorf("list kitty tabs for session %q: %w", path, err)
+	output, err := d.RunCommand("kitty", "@", "ls", "--match-tab", sessionMatchExpr(path))
+	if err != nil {
+		if isKittyNoMatchError(err) {
+			return 0, nil
 		}
-
-		windows, err := ParseOSWindows(output)
-		if err != nil {
-			return 0, fmt.Errorf("parse kitty tabs for session %q: %w", path, err)
-		}
-
-		count := countTabs(windows)
-		if count > 0 {
-			return count, nil
-		}
+		return 0, fmt.Errorf("list kitty tabs for session %q: %w", path, err)
 	}
 
-	return 0, nil
+	windows, err := ParseOSWindows(output)
+	if err != nil {
+		return 0, fmt.Errorf("parse kitty tabs for session %q: %w", path, err)
+	}
+
+	return countTabs(windows), nil
 }
 
 func isKittyNoMatchError(err error) bool {
@@ -276,22 +269,10 @@ func sortSessionsByName(sessions []Session) {
 	})
 }
 
-func sessionMatchExprs(path string) []string {
-	base := filepath.Base(path)
-	stem := trimSessionExtension(base)
+func sessionStem(path string) string {
+	return trimSessionExtension(filepath.Base(path))
+}
 
-	seen := map[string]struct{}{}
-	exprs := make([]string, 0, 3)
-	for _, candidate := range []string{path, base, stem} {
-		if candidate == "" {
-			continue
-		}
-		expr := matchSessionExpr(candidate)
-		if _, ok := seen[expr]; ok {
-			continue
-		}
-		seen[expr] = struct{}{}
-		exprs = append(exprs, expr)
-	}
-	return exprs
+func sessionMatchExpr(path string) string {
+	return matchSessionExpr(sessionStem(path))
 }

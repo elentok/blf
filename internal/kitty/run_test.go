@@ -134,9 +134,7 @@ func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
 		RunCommand: func(name string, args ...string) ([]byte, error) {
 			commands = append(commands, name+" "+strings.Join(args, " "))
 			switch strings.Join(append([]string{name}, args...), " ") {
-			case `kitty @ ls --match-tab session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `kitty @ ls --match-tab session:^proj\.kitty-session$`:
+			case `kitty @ ls --match-tab session:^proj$`:
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"}]}]`), nil
 			case "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session":
 				return []byte{}, nil
@@ -153,7 +151,7 @@ func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
 	if writeInvoked {
 		t.Fatal("expected existing active session to skip file rewrite")
 	}
-	if strings.Join(commands, "\n") != "kitty @ ls --match-tab session:^/Users/test/\\.local/share/kitty/sessions/proj\\.kitty-session$\nkitty @ ls --match-tab session:^proj\\.kitty-session$\nkitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+	if strings.Join(commands, "\n") != "kitty @ ls --match-tab session:^proj$\nkitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session" {
 		t.Fatalf("commands = %v", commands)
 	}
 }
@@ -178,10 +176,6 @@ func TestNewSessionOverlayRecreatesExistingZeroTabSession(t *testing.T) {
 		RunCommand: func(name string, args ...string) ([]byte, error) {
 			commands = append(commands, name+" "+strings.Join(args, " "))
 			switch strings.Join(append([]string{name}, args...), " ") {
-			case `kitty @ ls --match-tab session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `kitty @ ls --match-tab session:^proj\.kitty-session$`:
-				return nil, errors.New("exit status 1")
 			case `kitty @ ls --match-tab session:^proj$`:
 				return nil, errors.New("exit status 1")
 			case "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session":

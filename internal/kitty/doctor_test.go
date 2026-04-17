@@ -1,7 +1,6 @@
 package kitty
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"strings"
@@ -48,12 +47,8 @@ func TestDoctorPrintsSessionDiagnostics(t *testing.T) {
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"}]}]`), nil
 			case "kitty @ ls --match-tab session:^$":
 				return []byte(`[]`), nil
-			case `kitty @ ls --match-tab session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `kitty @ ls --match-tab session:^alpha\.kitty-session$`:
-				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"},{"id":11,"title":"logs"}]}]`), nil
 			case `kitty @ ls --match-tab session:^alpha$`:
-				return nil, errors.New("exit status 1")
+				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"},{"id":11,"title":"logs"}]}]`), nil
 			default:
 				t.Fatalf("unexpected command: %s", joined)
 				return nil, nil
@@ -76,7 +71,8 @@ func TestDoctorPrintsSessionDiagnostics(t *testing.T) {
 		"session:~ -> tabs=1",
 		"[session dir]",
 		"- alpha.kitty-session",
-		"session:^alpha\\.kitty-session$ -> tabs=2",
+		"stem=alpha",
+		"session:^alpha$ -> tabs=2",
 		"[active sessions]",
 		"- alpha (2 tabs) -> /Users/test/.local/share/kitty/sessions/alpha.kitty-session",
 	} {

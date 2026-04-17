@@ -109,14 +109,8 @@ func TestListSessions(t *testing.T) {
 			}
 			matchExprs = append(matchExprs, args[3])
 			switch args[3] {
-			case `session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `session:^alpha\.kitty-session$`:
+			case `session:^alpha$`:
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"},{"id":11,"title":"two"}]}]`), nil
-			case `session:^/Users/test/\.local/share/kitty/sessions/beta\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `session:^beta\.kitty-session$`:
-				return nil, errors.New("exit status 1")
 			case `session:^beta$`:
 				return nil, errors.New("exit status 1")
 			default:
@@ -143,10 +137,10 @@ func TestListSessions(t *testing.T) {
 		t.Fatalf("second session = %#v", got[1])
 	}
 	gotExprs := strings.Join(matchExprs, "\n")
-	if !strings.Contains(gotExprs, "session:^/Users/test/\\.local/share/kitty/sessions/alpha\\.kitty-session$") {
+	if !strings.Contains(gotExprs, "session:^alpha$") {
 		t.Fatalf("match exprs = %v", matchExprs)
 	}
-	if !strings.Contains(gotExprs, "session:^alpha\\.kitty-session$") {
+	if !strings.Contains(gotExprs, "session:^beta$") {
 		t.Fatalf("match exprs = %v", matchExprs)
 	}
 }
@@ -162,14 +156,8 @@ func TestListActiveSessionsFiltersZeroTabSessions(t *testing.T) {
 		},
 		RunCommand: func(name string, args ...string) ([]byte, error) {
 			switch args[3] {
-			case `session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `session:^alpha\.kitty-session$`:
+			case `session:^alpha$`:
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"}]}]`), nil
-			case `session:^/Users/test/\.local/share/kitty/sessions/beta\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `session:^beta\.kitty-session$`:
-				return nil, errors.New("exit status 1")
 			case `session:^beta$`:
 				return nil, errors.New("exit status 1")
 			default:
@@ -201,9 +189,7 @@ func TestCreateSessionFileReturnsExistingActiveSessionPath(t *testing.T) {
 		},
 		RunCommand: func(name string, args ...string) ([]byte, error) {
 			switch args[3] {
-			case `session:^/Users/test/\.local/share/kitty/sessions/proj\.kitty-session$`:
-				return nil, errors.New("exit status 1")
-			case `session:^proj\.kitty-session$`:
+			case `session:^proj$`:
 				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"}]}]`), nil
 			default:
 				t.Fatalf("unexpected args: %v", args)
@@ -238,13 +224,10 @@ func TestSessionHelpers(t *testing.T) {
 	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\tproj (1 tab)\n" {
 		t.Fatalf("choices = %q", got)
 	}
-	exprs := sessionMatchExprs("/tmp/proj.kitty-session")
-	wantExprs := []string{
-		`session:^/tmp/proj\.kitty-session$`,
-		`session:^proj\.kitty-session$`,
-		`session:^proj$`,
+	if got := sessionStem("/tmp/proj.kitty-session"); got != "proj" {
+		t.Fatalf("stem = %q", got)
 	}
-	if strings.Join(exprs, "\n") != strings.Join(wantExprs, "\n") {
-		t.Fatalf("exprs = %v", exprs)
+	if got := sessionMatchExpr("/tmp/proj.kitty-session"); got != `session:^proj$` {
+		t.Fatalf("expr = %q", got)
 	}
 }

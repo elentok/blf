@@ -107,17 +107,19 @@ func writeDoctorReport(d Deps) error {
 		if err := writeLine("- %s", entry); err != nil {
 			return err
 		}
-		for _, expr := range sessionMatchExprs(path) {
-			count, err := doctorTabCount(expr, d)
-			if err != nil {
-				if err := writeLine("  %s -> ERROR: %v", expr, err); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := writeLine("  %s -> tabs=%d", expr, count); err != nil {
+		if err := writeLine("  stem=%s", sessionStem(path)); err != nil {
+			return err
+		}
+		expr := sessionMatchExpr(path)
+		count, err := doctorTabCount(expr, d)
+		if err != nil {
+			if err := writeLine("  %s -> ERROR: %v", expr, err); err != nil {
 				return err
 			}
+			continue
+		}
+		if err := writeLine("  %s -> tabs=%d", expr, count); err != nil {
+			return err
 		}
 	}
 
