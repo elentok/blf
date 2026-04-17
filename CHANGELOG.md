@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.1] - 2026-04-17
+
+### Changed
+
+- `blf kitty new-session` no longer writes the session name into `new_tab`, so new Kitty sessions do not get a hardcoded tab title.
+
 ## [v0.4.0] - 2026-04-17
 
 Add kitty session manager:
