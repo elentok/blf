@@ -1,0 +1,88 @@
+package kitty
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"os/exec"
+	"regexp"
+	"strings"
+)
+
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func pickSession(sessions []Session, d Deps) (string, error) {
+	cmd := exec.Command("fzf", "--delimiter", "\t", "--with-nth", "2,3")
+	cmd.Stdin = strings.NewReader(formatSessionChoices(sessions))
+	cmd.Stderr = d.Stderr
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && (exitErr.ExitCode() == 1 || exitErr.ExitCode() == 130) {
+			return "", nil
+		}
+		return "", fmt.Errorf("run fzf: %w", err)
+	}
+
+	return parseSessionSelection(stdout.String())
+}
+
+func parseSessionSelection(line string) (string, error) {
+	plain := strings.TrimSpace(line)
+	if plain == "" {
+		return "", nil
+	}
+
+	path, _, found := strings.Cut(plain, "\t")
+	if !found {
+		return "", fmt.Errorf("invalid kitty session selection %q", plain)
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("invalid kitty session selection %q", plain)
+	}
+	return path, nil
+}
+
+func pickOSWindow(windows []OSWindow, d Deps) (string, error) {
+	cmd := exec.Command("fzf", "--ansi")
+	cmd.Stdin = strings.NewReader(FormatOSWindows(windows))
+	cmd.Stderr = d.Stderr
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && (exitErr.ExitCode() == 1 || exitErr.ExitCode() == 130) {
+			return "", nil
+		}
+		return "", fmt.Errorf("run fzf: %w", err)
+	}
+
+	return parseOSWindowID(stdout.String())
+}
+
+func parseOSWindowID(line string) (string, error) {
+	plain := ansiPattern.ReplaceAllString(strings.TrimSpace(line), "")
+	if plain == "" {
+		return "", nil
+	}
+
+	id, _, found := strings.Cut(plain, ":")
+	if !found {
+		return "", fmt.Errorf("invalid kitty os window selection %q", plain)
+	}
+
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("invalid kitty os window selection %q", plain)
+	}
+
+	return id, nil
+}
