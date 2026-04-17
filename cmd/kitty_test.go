@@ -2,9 +2,22 @@ package cmd
 
 import (
 	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type fakeDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (f fakeDirEntry) Name() string               { return f.name }
+func (f fakeDirEntry) IsDir() bool                { return f.isDir }
+func (f fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (f fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 func TestParseKittyOSWindowsSupportsTabsKeyVariants(t *testing.T) {
 	t.Run("tabs", func(t *testing.T) {
@@ -92,6 +105,137 @@ func TestParseKittyOSWindowIDRejectsInvalidSelection(t *testing.T) {
 	}
 }
 
+func TestFormatKittySessionFile(t *testing.T) {
+	got := formatKittySessionFile("proj", "/tmp/work tree")
+	want := "new_tab \"proj\"\ncd \"/tmp/work tree\"\nlaunch\n"
+	if got != want {
+		t.Fatalf("session file = %q, want %q", got, want)
+	}
+}
+
+func TestPromptKittySessionNameRejectsSeparators(t *testing.T) {
+	_, err := promptKittySessionName(strings.NewReader("a/b\n"), &strings.Builder{})
+	if err == nil || !strings.Contains(err.Error(), "cannot contain path separators") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestCreateKittySessionFile(t *testing.T) {
+	var (
+		gotDir     string
+		gotPath    string
+		gotPerm    os.FileMode
+		gotContent string
+	)
+	d := deps{
+		userHomeDir: func() (string, error) { return "/Users/test", nil },
+		mkdirAll: func(path string, perm os.FileMode) error {
+			gotDir = path
+			if perm != 0o755 {
+				t.Fatalf("mkdir perm = %v", perm)
+			}
+			return nil
+		},
+		fileExists: func(path string) (bool, error) {
+			if path != "/Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+				t.Fatalf("exists path = %q", path)
+			}
+			return false, nil
+		},
+		getwd: func() (string, error) { return "/work tree", nil },
+		writeFile: func(path string, data []byte, perm os.FileMode) error {
+			gotPath = path
+			gotPerm = perm
+			gotContent = string(data)
+			return nil
+		},
+	}
+
+	got, err := createKittySessionFile("proj", d)
+	if err != nil {
+		t.Fatalf("createKittySessionFile returned error: %v", err)
+	}
+
+	if got != "/Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+		t.Fatalf("path = %q", got)
+	}
+	if gotDir != "/Users/test/.local/share/kitty/sessions" {
+		t.Fatalf("mkdir path = %q", gotDir)
+	}
+	if gotPath != got {
+		t.Fatalf("write path = %q", gotPath)
+	}
+	if gotPerm != 0o644 {
+		t.Fatalf("write perm = %v", gotPerm)
+	}
+	wantContent := "new_tab \"proj\"\ncd \"/work tree\"\nlaunch\n"
+	if gotContent != wantContent {
+		t.Fatalf("content = %q, want %q", gotContent, wantContent)
+	}
+}
+
+func TestListKittyActiveSessions(t *testing.T) {
+	d := deps{
+		userHomeDir: func() (string, error) { return "/Users/test", nil },
+		readDir: func(path string) ([]os.DirEntry, error) {
+			if path != "/Users/test/.local/share/kitty/sessions" {
+				t.Fatalf("readDir path = %q", path)
+			}
+			return []os.DirEntry{
+				fakeDirEntry{name: "beta.kitty-session"},
+				fakeDirEntry{name: "alpha.kitty-session"},
+				fakeDirEntry{name: "notes.txt"},
+				fakeDirEntry{name: "nested", isDir: true},
+			}, nil
+		},
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			if name != "kitty" || len(args) != 4 || args[0] != "@" || args[1] != "ls" || args[2] != "--match-tab" {
+				t.Fatalf("unexpected command: %s %v", name, args)
+			}
+			switch args[3] {
+			case `session:^/Users/test/\.local/share/kitty/sessions/alpha\.kitty-session$`:
+				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"},{"id":11,"title":"two"}]}]`), nil
+			case `session:^/Users/test/\.local/share/kitty/sessions/beta\.kitty-session$`:
+				return []byte(`[]`), nil
+			default:
+				t.Fatalf("unexpected match expr: %q", args[3])
+				return nil, nil
+			}
+		},
+	}
+
+	got, err := listKittyActiveSessions(d)
+	if err != nil {
+		t.Fatalf("listKittyActiveSessions returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("sessions = %#v", got)
+	}
+	if got[0].Name != "alpha" || got[0].TabCount != 2 {
+		t.Fatalf("session = %#v", got[0])
+	}
+	if got[0].Path != "/Users/test/.local/share/kitty/sessions/alpha.kitty-session" {
+		t.Fatalf("path = %q", got[0].Path)
+	}
+}
+
+func TestParseKittySessionSelection(t *testing.T) {
+	got, err := parseKittySessionSelection("/tmp/proj.kitty-session\tproj\t2 tabs")
+	if err != nil {
+		t.Fatalf("parseKittySessionSelection returned error: %v", err)
+	}
+	if got != "/tmp/proj.kitty-session" {
+		t.Fatalf("path = %q", got)
+	}
+}
+
+func TestParseKittySessionSelectionRejectsInvalidLine(t *testing.T) {
+	_, err := parseKittySessionSelection("proj only")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestRunKittyListOSWindows(t *testing.T) {
 	out := &strings.Builder{}
 	d := deps{
@@ -162,6 +306,106 @@ func TestRunKittyTargetsRoutesToDependency(t *testing.T) {
 	}
 	if strings.Join(got, " ") != "--overlay --target 17" {
 		t.Fatalf("kitty targets called with %v", got)
+	}
+}
+
+func TestRunKittyNewSessionLaunchesOverlay(t *testing.T) {
+	var commands []string
+	d := deps{
+		executablePath: func() (string, error) { return "/tmp/blf", nil },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		stdin:  strings.NewReader(""),
+		stdout: &strings.Builder{},
+		stderr: &strings.Builder{},
+	}
+
+	if err := runKitty([]string{"new-session"}, d); err != nil {
+		t.Fatalf("runKitty returned error: %v", err)
+	}
+
+	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty new-session --overlay"
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestRunKittyNewSessionOverlayCreatesAndSwitches(t *testing.T) {
+	var commands []string
+	out := &strings.Builder{}
+	d := deps{
+		stdin:       strings.NewReader("proj\n"),
+		stdout:      out,
+		stderr:      &strings.Builder{},
+		userHomeDir: func() (string, error) { return "/Users/test", nil },
+		mkdirAll:    func(string, os.FileMode) error { return nil },
+		fileExists:  func(string) (bool, error) { return false, nil },
+		getwd:       func() (string, error) { return "/work", nil },
+		writeFile:   func(string, []byte, os.FileMode) error { return nil },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+	}
+
+	if err := runKitty([]string{"new-session", "--overlay"}, d); err != nil {
+		t.Fatalf("runKitty returned error: %v", err)
+	}
+
+	if got := out.String(); got != "Session name: " {
+		t.Fatalf("prompt = %q", got)
+	}
+	want := "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session"
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestRunKittySessionsLaunchesOverlay(t *testing.T) {
+	var commands []string
+	d := deps{
+		executablePath: func() (string, error) { return "/tmp/blf", nil },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		stdin:  strings.NewReader(""),
+		stdout: &strings.Builder{},
+		stderr: &strings.Builder{},
+	}
+
+	if err := runKitty([]string{"sessions"}, d); err != nil {
+		t.Fatalf("runKitty returned error: %v", err)
+	}
+
+	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty sessions --overlay"
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestRunKittySessionsOverlayShowsErrorWhenNoActiveSessions(t *testing.T) {
+	var commands []string
+	d := deps{
+		userHomeDir: func() (string, error) { return "/Users/test", nil },
+		readDir:     func(string) ([]os.DirEntry, error) { return nil, os.ErrNotExist },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		stdout: &strings.Builder{},
+		stderr: &strings.Builder{},
+	}
+
+	if err := runKitty([]string{"sessions", "--overlay"}, d); err != nil {
+		t.Fatalf("runKitty returned error: %v", err)
+	}
+
+	want := `kitten @ action show_error "blf kitty sessions" "No active kitty sessions"`
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
 	}
 }
 
@@ -253,5 +497,17 @@ func TestListKittyOSWindowsWrapsCommandErrors(t *testing.T) {
 	err := runKitty([]string{"list-os-windows"}, d)
 	if err == nil || !strings.Contains(err.Error(), "run `kitty @ ls`") {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestKittySessionHelpers(t *testing.T) {
+	if !isKittySessionFilename("proj.kitty_session") {
+		t.Fatal("expected kitty session filename to be recognized")
+	}
+	if trimKittySessionExtension("proj.session") != "proj" {
+		t.Fatalf("trimmed = %q", trimKittySessionExtension("proj.session"))
+	}
+	if got := formatKittySessionChoices([]kittySession{{Path: filepath.Join("/tmp", "proj.kitty-session"), Name: "proj", TabCount: 1}}); got != "/tmp/proj.kitty-session\tproj\t1 tab\n" {
+		t.Fatalf("choices = %q", got)
 	}
 }

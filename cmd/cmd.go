@@ -26,6 +26,12 @@ type deps struct {
 	runCommand      func(string, ...string) ([]byte, error)
 	fileExists      func(string) (bool, error)
 	readFile        func(string) ([]byte, error)
+	readDir         func(string) ([]os.DirEntry, error)
+	writeFile       func(string, []byte, os.FileMode) error
+	mkdirAll        func(string, os.FileMode) error
+	executablePath  func() (string, error)
+	getwd           func() (string, error)
+	userHomeDir     func() (string, error)
 	now             func() time.Time
 }
 
@@ -42,9 +48,15 @@ func defaultDeps() deps {
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},
-		fileExists: fileExists,
-		readFile:   os.ReadFile,
-		now:        time.Now,
+		fileExists:     fileExists,
+		readFile:       os.ReadFile,
+		readDir:        os.ReadDir,
+		writeFile:      os.WriteFile,
+		mkdirAll:       os.MkdirAll,
+		executablePath: os.Executable,
+		getwd:          os.Getwd,
+		userHomeDir:    os.UserHomeDir,
+		now:            time.Now,
 	}
 }
 
@@ -100,7 +112,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
-	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets> [id]")
+	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")
