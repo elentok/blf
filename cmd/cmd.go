@@ -26,6 +26,7 @@ type deps struct {
 	runKittyTargets func([]string) error
 	runCommand      func(string, ...string) ([]byte, error)
 	fileExists      func(string) (bool, error)
+	removeFile      func(string) error
 	readFile        func(string) ([]byte, error)
 	readDir         func(string) ([]os.DirEntry, error)
 	writeFile       func(string, []byte, os.FileMode) error
@@ -51,6 +52,7 @@ func defaultDeps() deps {
 			return exec.Command(name, args...).Output()
 		},
 		fileExists:     fileExists,
+		removeFile:     os.Remove,
 		readFile:       os.ReadFile,
 		readDir:        os.ReadDir,
 		writeFile:      os.WriteFile,
@@ -114,7 +116,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
-	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|doctor> [id]")
+	fmt.Fprintln(w, "  blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
 	fmt.Fprintln(w, "  blf version")

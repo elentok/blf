@@ -12,9 +12,19 @@ import (
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 const sessionPreviewWindow = "right,60%,wrap,<70(down,50%,wrap)"
+const fzfNavigationBind = "ctrl-j:down,ctrl-k:up"
+const sessionFooter = "ctrl-d: delete"
 
 func pickSession(sessions []Session, d Deps) (string, error) {
 	previewCmd, err := sessionPreviewCommand(d)
+	if err != nil {
+		return "", err
+	}
+	deleteCmd, err := sessionDeleteCommand(d)
+	if err != nil {
+		return "", err
+	}
+	reloadCmd, err := sessionChoicesCommand(d)
 	if err != nil {
 		return "", err
 	}
@@ -22,10 +32,13 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 	cmd := exec.Command(
 		"fzf",
 		"--layout=reverse",
+		"--bind", fzfNavigationBind,
 		"--delimiter", "\t",
 		"--with-nth", "2",
+		"--footer", sessionFooter,
 		"--preview", previewCmd,
 		"--preview-window", sessionPreviewWindow,
+		"--bind", "ctrl-d:execute-silent("+deleteCmd+")+reload("+reloadCmd+")",
 	)
 	cmd.Stdin = strings.NewReader(formatSessionChoices(sessions))
 	cmd.Stderr = d.Stderr
@@ -46,6 +59,18 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 }
 
 func sessionPreviewCommand(d Deps) (string, error) {
+	return sessionSubcommand(d, PreviewSessionCmd+" {1}")
+}
+
+func sessionChoicesCommand(d Deps) (string, error) {
+	return sessionSubcommand(d, ListSessionChoicesCmd)
+}
+
+func sessionDeleteCommand(d Deps) (string, error) {
+	return sessionSubcommand(d, DeleteSessionFileCmd+" {1}")
+}
+
+func sessionSubcommand(d Deps, args string) (string, error) {
 	if d.ExecutablePath == nil {
 		return "", errors.New("executable path resolver is not configured")
 	}
@@ -55,7 +80,7 @@ func sessionPreviewCommand(d Deps) (string, error) {
 		return "", fmt.Errorf("resolve executable path: %w", err)
 	}
 
-	return shellQuote(exe) + " kitty " + PreviewSessionCmd + " {1}", nil
+	return shellQuote(exe) + " kitty " + args, nil
 }
 
 func parseSessionSelection(line string) (string, error) {
@@ -76,7 +101,7 @@ func parseSessionSelection(line string) (string, error) {
 }
 
 func pickOSWindow(windows []OSWindow, d Deps) (string, error) {
-	cmd := exec.Command("fzf", "--layout=reverse", "--ansi")
+	cmd := exec.Command("fzf", "--layout=reverse", "--bind", fzfNavigationBind, "--ansi")
 	cmd.Stdin = strings.NewReader(FormatOSWindows(windows))
 	cmd.Stderr = d.Stderr
 

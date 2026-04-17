@@ -221,6 +221,29 @@ func TestSessionsCommandLaunchesOverlay(t *testing.T) {
 	}
 }
 
+func TestDeleteSessionLaunchesOverlay(t *testing.T) {
+	var commands []string
+	d := Deps{
+		ExecutablePath: func() (string, error) { return "/tmp/blf", nil },
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		Stdin:  strings.NewReader(""),
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+
+	if err := DeleteSession(nil, d); err != nil {
+		t.Fatalf("DeleteSession returned error: %v", err)
+	}
+
+	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty delete-session --overlay"
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
 func TestSessionsOverlayShowsErrorWhenNoSessions(t *testing.T) {
 	var commands []string
 	d := Deps{
@@ -241,5 +264,51 @@ func TestSessionsOverlayShowsErrorWhenNoSessions(t *testing.T) {
 	want := `kitten @ action show_error "blf kitty sessions" "No kitty sessions"`
 	if strings.Join(commands, "\n") != want {
 		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestDeleteSessionOverlayShowsErrorWhenNoSessions(t *testing.T) {
+	var commands []string
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		ReadDir:     func(string) ([]os.DirEntry, error) { return nil, os.ErrNotExist },
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+
+	if err := DeleteSession([]string{"--overlay"}, d); err != nil {
+		t.Fatalf("DeleteSession returned error: %v", err)
+	}
+
+	want := `kitten @ action show_error "blf kitty delete-session" "No kitty sessions"`
+	if strings.Join(commands, "\n") != want {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
+func TestListSessionChoicesWritesChoices(t *testing.T) {
+	out := &strings.Builder{}
+	d := Deps{
+		Stdout:      out,
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		ReadDir: func(string) ([]os.DirEntry, error) {
+			return []os.DirEntry{
+				fakeDirEntry{name: "alpha.kitty-session"},
+				fakeDirEntry{name: "beta.kitty-session"},
+			}, nil
+		},
+	}
+
+	if err := ListSessionChoices(nil, d); err != nil {
+		t.Fatalf("ListSessionChoices returned error: %v", err)
+	}
+
+	want := "/Users/test/.local/share/kitty/sessions/alpha.kitty-session\talpha\n/Users/test/.local/share/kitty/sessions/beta.kitty-session\tbeta\n"
+	if out.String() != want {
+		t.Fatalf("output = %q", out.String())
 	}
 }

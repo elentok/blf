@@ -8,7 +8,7 @@ import (
 
 func runKitty(args []string, d deps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|doctor> [id]")
+		return fmt.Errorf("usage: blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
 	}
 
 	switch args[0] {
@@ -20,10 +20,16 @@ func runKitty(args []string, d deps) error {
 		return internalkitty.NewSession(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.SessionsCmd:
 		return internalkitty.SessionsCommand(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.DeleteSessionCmd:
+		return internalkitty.DeleteSession(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.DoctorCmd:
 		return internalkitty.Doctor(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.PreviewSessionCmd:
 		return internalkitty.PreviewSession(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.ListSessionChoicesCmd:
+		return internalkitty.ListSessionChoices(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.DeleteSessionFileCmd:
+		return internalkitty.DeleteSessionFile(args[1:], kittyDepsFromCmd(d))
 	case "targets":
 		if d.runKittyTargets == nil {
 			return fmt.Errorf("kitty targets runner is not configured")
@@ -42,6 +48,7 @@ func kittyDepsFromCmd(d deps) internalkitty.Deps {
 		LookupEnv:      d.lookupEnv,
 		RunCommand:     d.runCommand,
 		FileExists:     d.fileExists,
+		RemoveFile:     d.removeFile,
 		ReadFile:       d.readFile,
 		ReadDir:        d.readDir,
 		WriteFile:      d.writeFile,

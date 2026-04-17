@@ -187,6 +187,82 @@ func TestCreateSessionFileReturnsExistingActiveSessionPath(t *testing.T) {
 	}
 }
 
+func TestDeleteSessionFile(t *testing.T) {
+	var removed string
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		RunCommand: func(string, ...string) ([]byte, error) {
+			return nil, errors.New("exit status 1")
+		},
+		RemoveFile: func(path string) error {
+			removed = path
+			return nil
+		},
+	}
+
+	err := deleteSessionFile("/Users/test/.local/share/kitty/sessions/proj.kitty-session", d)
+	if err != nil {
+		t.Fatalf("deleteSessionFile returned error: %v", err)
+	}
+	if removed != "/Users/test/.local/share/kitty/sessions/proj.kitty-session" {
+		t.Fatalf("removed = %q", removed)
+	}
+}
+
+func TestDeleteSessionFileRejectsOutsidePath(t *testing.T) {
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		RunCommand:  func(string, ...string) ([]byte, error) { return nil, nil },
+		RemoveFile:  func(string) error { return nil },
+	}
+
+	err := deleteSessionFile("/tmp/proj.kitty-session", d)
+	if err == nil || !strings.Contains(err.Error(), "invalid kitty session path") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestDeleteSessionFileIgnoresMissingFile(t *testing.T) {
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		RunCommand: func(string, ...string) ([]byte, error) {
+			return nil, errors.New("exit status 1")
+		},
+		RemoveFile: func(string) error {
+			return os.ErrNotExist
+		},
+	}
+
+	if err := deleteSessionFile("/Users/test/.local/share/kitty/sessions/proj.kitty-session", d); err != nil {
+		t.Fatalf("deleteSessionFile returned error: %v", err)
+	}
+}
+
+func TestDeleteSessionFileRejectsActiveSession(t *testing.T) {
+	var removed bool
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			if name != "kitty" || strings.Join(args, " ") != "@ ls --match-tab session:^proj$" {
+				t.Fatalf("unexpected command: %s %v", name, args)
+			}
+			return []byte(`[{"id":1,"tabs":[{"id":10,"title":"one"}]}]`), nil
+		},
+		RemoveFile: func(string) error {
+			removed = true
+			return nil
+		},
+	}
+
+	err := deleteSessionFile("/Users/test/.local/share/kitty/sessions/proj.kitty-session", d)
+	if err == nil || !strings.Contains(err.Error(), "cannot delete active kitty session") {
+		t.Fatalf("error = %v", err)
+	}
+	if removed {
+		t.Fatal("expected active session to skip file removal")
+	}
+}
+
 func TestSessionHelpers(t *testing.T) {
 	if !isSessionFilename("proj.kitty_session") {
 		t.Fatal("expected kitty session filename to be recognized")

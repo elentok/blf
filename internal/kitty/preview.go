@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"charm.land/lipgloss/v2"
 )
 
 type sessionPreview struct {
@@ -22,18 +24,69 @@ type sessionPreviewTab struct {
 	Windows []string
 }
 
+var (
+	liveTabsStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	savedTabsStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	tabLineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+)
+
 func RenderSessionPreview(path string, d Deps) (string, error) {
-	if d.ReadFile == nil {
+	savedPreview, savedErr := readSavedSessionPreview(path, d)
+	if savedErr != nil && !errors.Is(savedErr, errNoSavedSessionPreview) {
+		return "", savedErr
+	}
+
+	livePreview, active, err := renderLiveSessionPreview(path, d)
+	if err != nil {
+		return "", err
+	}
+	if active {
+		return formatLiveSessionPreview(path, livePreview, savedPreview), nil
+	}
+
+	if errors.Is(savedErr, errNoSavedSessionPreview) {
 		return "", errors.New("read file helper is not configured")
+	}
+	return formatSavedSessionPreview(savedPreview), nil
+}
+
+func renderLiveSessionPreview(path string, d Deps) ([]OSWindow, bool, error) {
+	if d.RunCommand == nil {
+		return nil, false, nil
+	}
+
+	output, err := d.RunCommand("kitty", "@", "ls", "--match-tab", sessionMatchExpr(path))
+	if err != nil {
+		if isKittyNoMatchError(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("list kitty tabs for session %q: %w", path, err)
+	}
+
+	windows, err := ParseOSWindows(output)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse kitty tabs for session %q: %w", path, err)
+	}
+	if countTabs(windows) == 0 {
+		return nil, false, nil
+	}
+
+	return windows, true, nil
+}
+
+var errNoSavedSessionPreview = errors.New("saved session preview unavailable")
+
+func readSavedSessionPreview(path string, d Deps) (sessionPreview, error) {
+	if d.ReadFile == nil {
+		return sessionPreview{}, errNoSavedSessionPreview
 	}
 
 	content, err := d.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read kitty session file %q: %w", path, err)
+		return sessionPreview{}, fmt.Errorf("read kitty session file %q: %w", path, err)
 	}
 
-	preview := parseSessionPreview(path, string(content))
-	return formatSessionPreview(preview), nil
+	return parseSessionPreview(path, string(content)), nil
 }
 
 func parseSessionPreview(path, content string) sessionPreview {
@@ -116,10 +169,15 @@ func previewLaunchLabel(raw string) string {
 	return raw
 }
 
-func formatSessionPreview(preview sessionPreview) string {
+func formatSavedSessionPreview(preview sessionPreview) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Session: %s\n", preview.Name)
+	b.WriteString("\n")
 	fmt.Fprintf(&b, "Path: %s\n", preview.Path)
+	b.WriteString("State: inactive\n")
+	b.WriteString("\n")
+	b.WriteString(savedTabsStyle.Render("No live tabs, saved session:"))
+	b.WriteString("\n")
 
 	if len(preview.Tabs) == 0 {
 		b.WriteString("\n(empty session file)\n")
@@ -128,25 +186,60 @@ func formatSessionPreview(preview sessionPreview) string {
 
 	for i, tab := range preview.Tabs {
 		b.WriteString("\n")
-		fmt.Fprintf(&b, "Tab %d: %s\n", i+1, tab.Name)
-		if tab.Cwd != "" {
-			fmt.Fprintf(&b, "|- cd: %s\n", tab.Cwd)
-		}
-		if tab.Layout != "" {
-			fmt.Fprintf(&b, "|- layout: %s\n", tab.Layout)
-		}
-		if len(tab.Windows) == 0 {
-			b.WriteString("`- windows: none\n")
-			continue
-		}
-		for windowIndex, window := range tab.Windows {
-			prefix := "|-"
-			if windowIndex == len(tab.Windows)-1 {
-				prefix = "`-"
-			}
-			fmt.Fprintf(&b, "%s window %d: %s\n", prefix, windowIndex+1, window)
-		}
+		writePreviewTab(&b, i, tab.Name, tab)
 	}
 
 	return b.String()
+}
+
+func formatLiveSessionPreview(path string, windows []OSWindow, saved sessionPreview) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Session: %s\n", sessionStem(path))
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "Path: %s\n", path)
+	b.WriteString("State: active\n")
+	b.WriteString("\n")
+	b.WriteString(liveTabsStyle.Render("Live tabs:"))
+	b.WriteString("\n")
+
+	liveTabs := flattenTabs(windows)
+	for i, tab := range liveTabs {
+		b.WriteString("\n")
+		savedTab := sessionPreviewTab{}
+		if i < len(saved.Tabs) {
+			savedTab = saved.Tabs[i]
+		}
+		writePreviewTab(&b, i, tab.Title, savedTab)
+	}
+
+	return b.String()
+}
+
+func flattenTabs(windows []OSWindow) []Tab {
+	var tabs []Tab
+	for _, window := range windows {
+		tabs = append(tabs, window.Tabs...)
+	}
+	return tabs
+}
+
+func writePreviewTab(b *strings.Builder, index int, title string, details sessionPreviewTab) {
+	fmt.Fprintln(b, tabLineStyle.Render(fmt.Sprintf("Tab %d: %s", index+1, title)))
+	if details.Cwd != "" {
+		fmt.Fprintf(b, "|- cd: %s\n", details.Cwd)
+	}
+	if details.Layout != "" {
+		fmt.Fprintf(b, "|- layout: %s\n", details.Layout)
+	}
+	if len(details.Windows) == 0 {
+		b.WriteString("`- windows: none\n")
+		return
+	}
+	for windowIndex, window := range details.Windows {
+		prefix := "|-"
+		if windowIndex == len(details.Windows)-1 {
+			prefix = "`-"
+		}
+		fmt.Fprintf(b, "%s window %d: %s\n", prefix, windowIndex+1, window)
+	}
 }

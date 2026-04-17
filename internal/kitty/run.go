@@ -7,11 +7,14 @@ import (
 )
 
 const (
-	ListOSWindowsCmd  = "list-os-windows"
-	GotoOSWindowCmd   = "goto-os-window"
-	NewSessionCmd     = "new-session"
-	SessionsCmd       = "sessions"
-	PreviewSessionCmd = "__preview-session"
+	ListOSWindowsCmd      = "list-os-windows"
+	GotoOSWindowCmd       = "goto-os-window"
+	NewSessionCmd         = "new-session"
+	SessionsCmd           = "sessions"
+	DeleteSessionCmd      = "delete-session"
+	PreviewSessionCmd     = "__preview-session"
+	ListSessionChoicesCmd = "__list-session-choices"
+	DeleteSessionFileCmd  = "__delete-session-file"
 )
 
 func ListOSWindowsCommand(d Deps) error {
@@ -91,6 +94,17 @@ func SessionsCommand(args []string, d Deps) error {
 	}
 }
 
+func DeleteSession(args []string, d Deps) error {
+	switch {
+	case len(args) == 0:
+		return LaunchOverlay(DeleteSessionCmd, d)
+	case len(args) == 1 && args[0] == "--overlay":
+		return runDeleteSessionOverlay(d)
+	default:
+		return fmt.Errorf("usage: blf kitty delete-session")
+	}
+}
+
 func PreviewSession(args []string, d Deps) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: blf kitty %s <path>", PreviewSessionCmd)
@@ -103,6 +117,28 @@ func PreviewSession(args []string, d Deps) error {
 
 	_, err = io.WriteString(d.Stdout, preview)
 	return err
+}
+
+func ListSessionChoices(args []string, d Deps) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: blf kitty %s", ListSessionChoicesCmd)
+	}
+
+	sessions, err := ListSessions(d)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(d.Stdout, formatSessionChoices(sessions))
+	return err
+}
+
+func DeleteSessionFile(args []string, d Deps) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: blf kitty %s <path>", DeleteSessionFileCmd)
+	}
+
+	return deleteSessionFile(args[0], d)
 }
 
 func runNewSessionOverlay(d Deps) error {
@@ -137,4 +173,24 @@ func runSessionsOverlay(d Deps) error {
 	}
 
 	return gotoSession(path, d)
+}
+
+func runDeleteSessionOverlay(d Deps) error {
+	sessions, err := ListSessions(d)
+	if err != nil {
+		return err
+	}
+	if len(sessions) == 0 {
+		return ShowError(d, "blf kitty delete-session", "No kitty sessions")
+	}
+
+	path, err := pickSession(sessions, d)
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		return nil
+	}
+
+	return deleteSessionFile(path, d)
 }

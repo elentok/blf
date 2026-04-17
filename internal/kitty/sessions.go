@@ -129,6 +129,39 @@ func gotoSession(path string, d Deps) error {
 	return nil
 }
 
+func deleteSessionFile(path string, d Deps) error {
+	if d.RemoveFile == nil {
+		return errors.New("remove file helper is not configured")
+	}
+
+	sessionDir, err := SessionsDir(d)
+	if err != nil {
+		return err
+	}
+
+	cleanPath := filepath.Clean(path)
+	if filepath.Dir(cleanPath) != sessionDir || !isSessionFilename(filepath.Base(cleanPath)) {
+		return fmt.Errorf("invalid kitty session path %q", path)
+	}
+
+	tabCount, err := sessionTabCount(cleanPath, d)
+	if err != nil {
+		return err
+	}
+	if tabCount > 0 {
+		return fmt.Errorf("cannot delete active kitty session %q", cleanPath)
+	}
+
+	if err := d.RemoveFile(cleanPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("delete kitty session file %q: %w", cleanPath, err)
+	}
+
+	return nil
+}
+
 func ListSessions(d Deps) ([]Session, error) {
 	if d.ReadDir == nil {
 		return nil, errors.New("read dir helper is not configured")
