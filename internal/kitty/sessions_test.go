@@ -21,7 +21,7 @@ func (f fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 func TestFormatSessionFile(t *testing.T) {
 	got := formatSessionFile("proj", "/tmp/work tree")
-	want := "new_tab \"proj\"\ncd \"/tmp/work tree\"\nlaunch\n"
+	want := "new_tab\ncd \"/tmp/work tree\"\nlaunch\n"
 	if got != want {
 		t.Fatalf("session file = %q, want %q", got, want)
 	}
@@ -82,7 +82,7 @@ func TestCreateSessionFile(t *testing.T) {
 	if gotPerm != 0o644 {
 		t.Fatalf("write perm = %v", gotPerm)
 	}
-	wantContent := "new_tab \"proj\"\ncd \"/work tree\"\nlaunch\n"
+	wantContent := "new_tab\ncd \"/work tree\"\nlaunch\n"
 	if gotContent != wantContent {
 		t.Fatalf("content = %q, want %q", gotContent, wantContent)
 	}

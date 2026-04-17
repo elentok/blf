@@ -96,7 +96,7 @@ func createSessionFile(name string, d Deps) (string, error) {
 
 func formatSessionFile(name, cwd string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "new_tab %s\n", quote(name))
+	b.WriteString("new_tab\n")
 	fmt.Fprintf(&b, "cd %s\n", quote(cwd))
 	b.WriteString("launch\n")
 	return b.String()
