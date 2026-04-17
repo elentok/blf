@@ -88,6 +88,7 @@ map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf
 - `sessions` opens an overlay and uses `fzf` to pick from all session files, even if they currently have `0 tabs`.
 - The picker no longer probes Kitty for tab counts; `fzf` preview renders the session file as a simple tab/window tree instead.
 - `ctrl-d` inside the `sessions` picker deletes the selected session file and reloads the list in place.
+- `ctrl-o` inside the `sessions` picker opens the selected session file in the editor from `$EDITOR`.
 - `delete-session` opens the same session picker but deletes the selected session instead of switching to it.
 - `new-session` still treats a same-name file with `0 tabs` as inactive and rewrites it before switching.
 

@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.2] - 2026-04-17
+
+### Changed
+
+- `blf kitty sessions` now maps `ctrl-o` to open the selected session file in the editor from `$EDITOR`.
+
 ## [v0.4.1] - 2026-04-17
 
 ### Changed
