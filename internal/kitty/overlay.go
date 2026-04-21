@@ -20,6 +20,8 @@ func LaunchOverlay(subcommand string, d Deps) error {
 
 	if _, err := d.RunCommand(
 		"kitty", "@", "launch",
+		"--match", "state:focused",
+		"--source-window", "state:focused",
 		"--type=overlay",
 		"--copy-env",
 		"--cwd=current",

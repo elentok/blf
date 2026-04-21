@@ -60,30 +60,7 @@ func TestGotoOSWindowWithExplicitID(t *testing.T) {
 	}
 }
 
-func TestNewSessionLaunchesOverlay(t *testing.T) {
-	var commands []string
-	d := Deps{
-		ExecutablePath: func() (string, error) { return "/tmp/blf", nil },
-		RunCommand: func(name string, args ...string) ([]byte, error) {
-			commands = append(commands, name+" "+strings.Join(args, " "))
-			return []byte{}, nil
-		},
-		Stdin:  strings.NewReader(""),
-		Stdout: &strings.Builder{},
-		Stderr: &strings.Builder{},
-	}
-
-	if err := NewSession(nil, d); err != nil {
-		t.Fatalf("NewSession returned error: %v", err)
-	}
-
-	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty new-session --overlay"
-	if strings.Join(commands, "\n") != want {
-		t.Fatalf("commands = %v", commands)
-	}
-}
-
-func TestNewSessionOverlayCreatesAndSwitches(t *testing.T) {
+func TestNewSessionCreatesAndSwitches(t *testing.T) {
 	var commands []string
 	out := &strings.Builder{}
 	d := Deps{
@@ -101,7 +78,7 @@ func TestNewSessionOverlayCreatesAndSwitches(t *testing.T) {
 		},
 	}
 
-	if err := NewSession([]string{"--overlay"}, d); err != nil {
+	if err := NewSession(nil, d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 
@@ -114,7 +91,7 @@ func TestNewSessionOverlayCreatesAndSwitches(t *testing.T) {
 	}
 }
 
-func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
+func TestNewSessionSwitchesToExistingActiveSession(t *testing.T) {
 	var (
 		commands     []string
 		writeInvoked bool
@@ -145,7 +122,7 @@ func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
 		},
 	}
 
-	if err := NewSession([]string{"--overlay"}, d); err != nil {
+	if err := NewSession(nil, d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 	if writeInvoked {
@@ -156,7 +133,7 @@ func TestNewSessionOverlaySwitchesToExistingActiveSession(t *testing.T) {
 	}
 }
 
-func TestNewSessionOverlayRecreatesExistingZeroTabSession(t *testing.T) {
+func TestNewSessionRecreatesExistingZeroTabSession(t *testing.T) {
 	var (
 		commands     []string
 		writeInvoked bool
@@ -187,36 +164,13 @@ func TestNewSessionOverlayRecreatesExistingZeroTabSession(t *testing.T) {
 		},
 	}
 
-	if err := NewSession([]string{"--overlay"}, d); err != nil {
+	if err := NewSession(nil, d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 	if !writeInvoked {
 		t.Fatal("expected zero-tab session to be rewritten")
 	}
 	if commands[len(commands)-1] != "kitten @ action goto_session /Users/test/.local/share/kitty/sessions/proj.kitty-session" {
-		t.Fatalf("commands = %v", commands)
-	}
-}
-
-func TestSessionsCommandLaunchesOverlay(t *testing.T) {
-	var commands []string
-	d := Deps{
-		ExecutablePath: func() (string, error) { return "/tmp/blf", nil },
-		RunCommand: func(name string, args ...string) ([]byte, error) {
-			commands = append(commands, name+" "+strings.Join(args, " "))
-			return []byte{}, nil
-		},
-		Stdin:  strings.NewReader(""),
-		Stdout: &strings.Builder{},
-		Stderr: &strings.Builder{},
-	}
-
-	if err := SessionsCommand(nil, d); err != nil {
-		t.Fatalf("SessionsCommand returned error: %v", err)
-	}
-
-	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty sessions --overlay"
-	if strings.Join(commands, "\n") != want {
 		t.Fatalf("commands = %v", commands)
 	}
 }
@@ -238,13 +192,13 @@ func TestDeleteSessionLaunchesOverlay(t *testing.T) {
 		t.Fatalf("DeleteSession returned error: %v", err)
 	}
 
-	want := "kitty @ launch --type=overlay --copy-env --cwd=current -- /tmp/blf kitty delete-session --overlay"
+	want := "kitty @ launch --match state:focused --source-window state:focused --type=overlay --copy-env --cwd=current -- /tmp/blf kitty delete-session --overlay"
 	if strings.Join(commands, "\n") != want {
 		t.Fatalf("commands = %v", commands)
 	}
 }
 
-func TestSessionsOverlayShowsErrorWhenNoSessions(t *testing.T) {
+func TestSessionsCommandShowsErrorWhenNoSessions(t *testing.T) {
 	var commands []string
 	d := Deps{
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
@@ -257,7 +211,7 @@ func TestSessionsOverlayShowsErrorWhenNoSessions(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	if err := SessionsCommand([]string{"--overlay"}, d); err != nil {
+	if err := SessionsCommand(nil, d); err != nil {
 		t.Fatalf("SessionsCommand returned error: %v", err)
 	}
 

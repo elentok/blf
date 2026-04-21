@@ -26,8 +26,8 @@ brew install blf
 - `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
-- `blf kitty new-session`: prompt for a session name in a Kitty overlay, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
-- `blf kitty sessions`: open a Kitty overlay, list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
+- `blf kitty new-session`: prompt for a session name, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
+- `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
@@ -84,8 +84,8 @@ map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf
 `kitty sessions` behavior:
 
 - Uses `~/.local/share/kitty/sessions/` as the session-file directory.
-- `new-session` opens an overlay prompt for the session name; if a session with that name is still live it switches to it, otherwise it writes or rewrites the session file and switches to it.
-- `sessions` opens an overlay and uses `fzf` to pick from all session files, even if they currently have `0 tabs`.
+- `new-session` runs directly in the current terminal; Kitty placement is controlled by your mapping. If a session with that name is still live it switches to it, otherwise it writes or rewrites the session file and switches to it.
+- `sessions` runs directly in the current terminal; Kitty placement is controlled by your mapping. It uses `fzf` to pick from all session files, even if they currently have `0 tabs`.
 - The picker no longer probes Kitty for tab counts; `fzf` preview renders the session file as a simple tab/window tree instead.
 - `ctrl-d` inside the `sessions` picker deletes the selected session file and reloads the list in place.
 - `ctrl-o` inside the `sessions` picker opens the selected session file in the editor from `$EDITOR`.
@@ -96,6 +96,12 @@ kitty session binding examples:
 
 ```conf
 tab_bar_filter session:~ or session:^$
-map kitty_mod+e>n launch --copy-env --type=background --cwd=current fish -c "blf kitty new-session"
-map kitty_mod+e>j launch --copy-env --type=background --cwd=current fish -c "blf kitty sessions"
+map kitty_mod+e>n launch --location=hsplit --bias=10 --cwd=current fish -c "blf kitty new-session"
+map kitty_mod+e>j launch --location=before --bias=25 --cwd=current fish -c "blf kitty sessions"
 ```
+
+These mappings are only examples. Because `blf kitty new-session` and `blf kitty sessions` now run directly, you can choose the presentation entirely in `kitty.conf`:
+
+- use `--location=before --bias=25` for a left sidebar
+- use `--location=hsplit --bias=10` for a small prompt below the current window
+- use any other Kitty `launch` placement that fits your workflow

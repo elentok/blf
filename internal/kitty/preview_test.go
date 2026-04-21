@@ -34,8 +34,7 @@ func TestRenderSessionPreview(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"Session: proj\n\nPath: /tmp/proj.kitty-session",
-		"State: inactive\n\n",
+		"Empty session: proj\n\n",
 		"No live tabs, saved session:",
 		"Tab 1: proj",
 		"|- cd: /work tree",
@@ -48,6 +47,12 @@ func TestRenderSessionPreview(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("preview missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "Path: ") {
+		t.Fatalf("preview contains unexpected Path line:\n%s", got)
+	}
+	if !strings.Contains(got, "Empty session: proj\n\n") {
+		t.Fatalf("preview is missing blank line below header:\n%s", got)
 	}
 }
 
@@ -80,9 +85,7 @@ func TestRenderSessionPreviewShowsLiveTabsWhenActive(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"Session: proj\n\nPath: /tmp/proj.kitty-session",
-		"State: active\n\n",
-		"Live tabs:",
+		"Live session: proj",
 		"Tab 1: shell",
 		"|- cd: /work tree",
 		"`- window 1: shell",
@@ -96,10 +99,15 @@ func TestRenderSessionPreviewShowsLiveTabsWhenActive(t *testing.T) {
 	for _, unwanted := range []string{
 		"No live tabs, saved session:",
 		"OS window 1",
+		"Path: ",
+		"Live tabs:",
 	} {
 		if strings.Contains(got, unwanted) {
 			t.Fatalf("preview contains unexpected %q:\n%s", unwanted, got)
 		}
+	}
+	if !strings.Contains(got, "proj\x1b[m\n\n") {
+		t.Fatalf("preview is missing blank line below header:\n%s", got)
 	}
 }
 

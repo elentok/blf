@@ -74,25 +74,19 @@ func GotoOSWindow(args []string, d Deps) error {
 }
 
 func NewSession(args []string, d Deps) error {
-	switch {
-	case len(args) == 0:
-		return LaunchOverlay(NewSessionCmd, d)
-	case len(args) == 1 && args[0] == "--overlay":
-		return runNewSessionOverlay(d)
-	default:
+	if len(args) != 0 {
 		return fmt.Errorf("usage: blf kitty new-session")
 	}
+
+	return runNewSessionPrompt(d)
 }
 
 func SessionsCommand(args []string, d Deps) error {
-	switch {
-	case len(args) == 0:
-		return LaunchOverlay(SessionsCmd, d)
-	case len(args) == 1 && args[0] == "--overlay":
-		return runSessionsOverlay(d)
-	default:
+	if len(args) != 0 {
 		return fmt.Errorf("usage: blf kitty sessions")
 	}
+
+	return runSessionsPicker(d)
 }
 
 func DeleteSession(args []string, d Deps) error {
@@ -150,7 +144,7 @@ func EditSessionFile(args []string, d Deps) error {
 	return editSessionFile(args[0], d)
 }
 
-func runNewSessionOverlay(d Deps) error {
+func runNewSessionPrompt(d Deps) error {
 	name, err := promptSessionName(d.Stdin, d.Stdout)
 	if err != nil {
 		return err
@@ -164,7 +158,7 @@ func runNewSessionOverlay(d Deps) error {
 	return gotoSession(path, d)
 }
 
-func runSessionsOverlay(d Deps) error {
+func runSessionsPicker(d Deps) error {
 	sessions, err := ListSessions(d)
 	if err != nil {
 		return err

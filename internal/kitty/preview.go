@@ -171,10 +171,7 @@ func previewLaunchLabel(raw string) string {
 
 func formatSavedSessionPreview(preview sessionPreview) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Session: %s\n", preview.Name)
-	b.WriteString("\n")
-	fmt.Fprintf(&b, "Path: %s\n", preview.Path)
-	b.WriteString("State: inactive\n")
+	fmt.Fprintf(&b, "Empty session: %s\n", preview.Name)
 	b.WriteString("\n")
 	b.WriteString(savedTabsStyle.Render("No live tabs, saved session:"))
 	b.WriteString("\n")
@@ -185,7 +182,9 @@ func formatSavedSessionPreview(preview sessionPreview) string {
 	}
 
 	for i, tab := range preview.Tabs {
-		b.WriteString("\n")
+		if i > 0 {
+			b.WriteString("\n")
+		}
 		writePreviewTab(&b, i, tab.Name, tab)
 	}
 
@@ -194,17 +193,15 @@ func formatSavedSessionPreview(preview sessionPreview) string {
 
 func formatLiveSessionPreview(path string, windows []OSWindow, saved sessionPreview) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Session: %s\n", sessionStem(path))
+	b.WriteString(liveTabsStyle.Render(fmt.Sprintf("Live session: %s", sessionStem(path))))
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "Path: %s\n", path)
-	b.WriteString("State: active\n")
-	b.WriteString("\n")
-	b.WriteString(liveTabsStyle.Render("Live tabs:"))
 	b.WriteString("\n")
 
 	liveTabs := flattenTabs(windows)
 	for i, tab := range liveTabs {
-		b.WriteString("\n")
+		if i > 0 {
+			b.WriteString("\n")
+		}
 		savedTab := sessionPreviewTab{}
 		if i < len(saved.Tabs) {
 			savedTab = saved.Tabs[i]
