@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.3] - 2026-04-21
+
+### Changed
+
+- `blf kitty sessions` and `blf kitty new-session` now run directly in the current terminal, so their placement is controlled entirely by the Kitty `launch` mapping in `kitty.conf`.
+- The `blf kitty sessions` preview is more compact: it no longer shows the session path, uses `Live session:` / `Empty session:` headers, and keeps the tab list closer to the header.
+
 ## [v0.4.2] - 2026-04-17
 
 ### Changed
