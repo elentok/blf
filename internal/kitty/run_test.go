@@ -255,13 +255,24 @@ func TestListSessionChoicesWritesChoices(t *testing.T) {
 				fakeDirEntry{name: "beta.kitty-session"},
 			}, nil
 		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			if name != "kitty" || strings.Join(args, " ") != "@ ls" {
+				t.Fatalf("unexpected command: %s %v", name, args)
+			}
+			return []byte(`[
+				{"id":1,"is_active":true,"tabs":[
+					{"id":10,"is_focused":true,"title":"active","session_name":"beta","windows":[{"last_focused_at":200}]},
+					{"id":11,"title":"other","session_name":"alpha","windows":[{"last_focused_at":100}]}
+				]}
+			]`), nil
+		},
 	}
 
 	if err := ListSessionChoices(nil, d); err != nil {
 		t.Fatalf("ListSessionChoices returned error: %v", err)
 	}
 
-	want := "/Users/test/.local/share/kitty/sessions/alpha.kitty-session\talpha\n/Users/test/.local/share/kitty/sessions/beta.kitty-session\tbeta\n"
+	want := "/Users/test/.local/share/kitty/sessions/alpha.kitty-session\t\x1b[1;97malpha\x1b[m\n"
 	if out.String() != want {
 		t.Fatalf("output = %q", out.String())
 	}

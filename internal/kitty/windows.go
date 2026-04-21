@@ -49,11 +49,21 @@ func ParseOSWindows(data []byte) ([]OSWindow, error) {
 
 		tabs := make([]Tab, 0, len(rawTabs))
 		for _, rawTab := range rawTabs {
+			windows := make([]Window, 0, len(rawTab.Windows))
+			for _, rawWindow := range rawTab.Windows {
+				windows = append(windows, Window{
+					LastFocusedAt: rawWindow.LastFocusedAt,
+					SessionName:   rawWindow.SessionName,
+				})
+			}
+
 			tabs = append(tabs, Tab{
-				ID:        rawTab.ID,
-				IsActive:  rawTab.IsActive,
-				IsFocused: rawTab.IsFocused,
-				Title:     rawTab.Title,
+				ID:          rawTab.ID,
+				IsActive:    rawTab.IsActive,
+				IsFocused:   rawTab.IsFocused,
+				Title:       rawTab.Title,
+				SessionName: rawTab.SessionName,
+				Windows:     windows,
 			})
 		}
 

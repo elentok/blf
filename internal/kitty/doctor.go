@@ -57,11 +57,13 @@ func writeDoctorReport(d Deps) error {
 	if err := writeDoctorSectionHeader(d.Stdout, "kitty ls"); err != nil {
 		return err
 	}
-	if windows, err := ListOSWindows(d); err != nil {
+	var windows []OSWindow
+	if listedWindows, err := ListOSWindows(d); err != nil {
 		if err := writeLine("kitty @ ls: ERROR: %v", err); err != nil {
 			return err
 		}
 	} else {
+		windows = listedWindows
 		if err := writeLine("os_windows=%d tabs=%d", len(windows), countTabs(windows)); err != nil {
 			return err
 		}
@@ -123,18 +125,26 @@ func writeDoctorReport(d Deps) error {
 		}
 	}
 
-	activeSessions, err := ListActiveSessions(d)
-	if err := writeDoctorSectionHeader(d.Stdout, "active sessions"); err != nil {
+	if err := writeDoctorSectionHeader(d.Stdout, "session data"); err != nil {
 		return err
 	}
+	sessions, err := ListSessions(d)
 	if err != nil {
 		return writeLine("ERROR: %v", err)
 	}
-	if len(activeSessions) == 0 {
+	sessions = sessionsWithLiveSessionMetadata(sessions, windows)
+	if len(sessions) == 0 {
 		return writeLine("none")
 	}
-	for _, session := range activeSessions {
-		if err := writeLine("- %s (%d tabs) -> %s", session.Name, session.TabCount, session.Path); err != nil {
+	for _, session := range sessions {
+		state := "empty"
+		if session.TabCount > 0 {
+			state = "live"
+		}
+		if session.IsActive {
+			state += ", active"
+		}
+		if err := writeLine("- %s [%s] tabs=%d last_focused_at=%.6f -> %s", session.Name, state, session.TabCount, session.LastFocusedAt, session.Path); err != nil {
 			return err
 		}
 	}

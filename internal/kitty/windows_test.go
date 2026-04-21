@@ -10,7 +10,7 @@ func TestParseOSWindowsSupportsTabsKeyVariants(t *testing.T) {
 	t.Run("tabs", func(t *testing.T) {
 		windows, err := ParseOSWindows([]byte(`[
 			{"id":1,"is_active":true,"last_focused":false,"tabs":[
-				{"id":10,"is_active":true,"is_focused":true,"title":"shell"},
+				{"id":10,"is_active":true,"is_focused":true,"title":"shell","windows":[{"last_focused_at":123.5,"session_name":"proj"}]},
 				{"id":11,"is_active":false,"is_focused":false,"title":"logs"}
 			]}
 		]`))
@@ -25,6 +25,12 @@ func TestParseOSWindowsSupportsTabsKeyVariants(t *testing.T) {
 		}
 		if windows[0].Tabs[0].ID != 10 || !windows[0].Tabs[0].IsFocused {
 			t.Fatalf("first tab = %+v", windows[0].Tabs[0])
+		}
+		if len(windows[0].Tabs[0].Windows) != 1 || windows[0].Tabs[0].Windows[0].LastFocusedAt != 123.5 {
+			t.Fatalf("tab windows = %+v", windows[0].Tabs[0].Windows)
+		}
+		if windows[0].Tabs[0].Windows[0].SessionName != "proj" {
+			t.Fatalf("window session name = %q", windows[0].Tabs[0].Windows[0].SessionName)
 		}
 	})
 

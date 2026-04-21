@@ -139,8 +139,8 @@ func TestListActiveSessionsFiltersZeroTabSessions(t *testing.T) {
 				return nil, errors.New("exit status 1")
 			default:
 				t.Fatalf("unexpected args: %v", args)
-				return nil, nil
 			}
+			return nil, nil
 		},
 	}
 
@@ -271,10 +271,10 @@ func TestSessionHelpers(t *testing.T) {
 		t.Fatalf("trimmed = %q", trimSessionExtension("proj.session"))
 	}
 	session := Session{Path: filepath.Join("/tmp", "proj.kitty-session"), Name: "proj", TabCount: 1}
-	if got := formatSessionLabel(session); got != "proj" {
+	if got := formatSessionLabel(session); got != "\x1b[1;97mproj\x1b[m" {
 		t.Fatalf("label = %q", got)
 	}
-	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\tproj\n" {
+	if got := formatSessionChoices([]Session{session}); got != "/tmp/proj.kitty-session\t\x1b[1;97mproj\x1b[m\n" {
 		t.Fatalf("choices = %q", got)
 	}
 	if got := sessionStem("/tmp/proj.kitty-session"); got != "proj" {
@@ -282,5 +282,117 @@ func TestSessionHelpers(t *testing.T) {
 	}
 	if got := sessionMatchExpr("/tmp/proj.kitty-session"); got != `session:^proj$` {
 		t.Fatalf("expr = %q", got)
+	}
+	if got := tabSessionName(Tab{Windows: []Window{{SessionName: "proj"}}}); got != "proj" {
+		t.Fatalf("tab session name = %q", got)
+	}
+}
+
+func TestSessionsWithLiveSessionMetadataMarksLiveAndActiveSessions(t *testing.T) {
+	sessions := []Session{
+		{Name: "alpha", Path: "/tmp/alpha.kitty-session"},
+		{Name: "beta", Path: "/tmp/beta.kitty-session"},
+		{Name: "gamma", Path: "/tmp/gamma.kitty-session"},
+		{Name: "delta", Path: "/tmp/delta.kitty-session"},
+	}
+
+	windows := []OSWindow{
+		{
+			ID:       1,
+			IsActive: true,
+			Tabs: []Tab{
+				{Title: "active", IsFocused: true, Windows: []Window{{LastFocusedAt: 300.1, SessionName: "beta"}}},
+				{Title: "alpha", Windows: []Window{{LastFocusedAt: 250.2, SessionName: "alpha"}}},
+			},
+		},
+		{
+			ID: 2,
+			Tabs: []Tab{
+				{Title: "gamma", Windows: []Window{{LastFocusedAt: 150.4, SessionName: "gamma"}, {LastFocusedAt: 275.6, SessionName: "gamma"}}},
+			},
+		},
+	}
+
+	got := sessionsWithLiveSessionMetadata(sessions, windows)
+	if len(got) != 4 {
+		t.Fatalf("session count = %d, sessions = %#v", len(got), got)
+	}
+	if got[0].Name != "alpha" || got[0].TabCount != 1 || got[0].LastFocusedAt != 250.2 || got[0].IsActive {
+		t.Fatalf("alpha session = %#v", got[0])
+	}
+	if got[1].Name != "beta" || got[1].TabCount != 1 || got[1].LastFocusedAt != 300.1 || !got[1].IsActive {
+		t.Fatalf("beta session = %#v", got[1])
+	}
+	if got[2].Name != "gamma" || got[2].TabCount != 1 || got[2].LastFocusedAt != 275.6 || got[2].IsActive {
+		t.Fatalf("gamma session = %#v", got[2])
+	}
+	if got[3].Name != "delta" || got[3].TabCount != 0 {
+		t.Fatalf("delta session = %#v", got[3])
+	}
+}
+
+func TestFilterAndSortSessionsForPickerHidesActiveSessionAndSortsLiveFirst(t *testing.T) {
+	sessions := []Session{
+		{Name: "alpha", Path: "/tmp/alpha.kitty-session", TabCount: 1, LastFocusedAt: 250.2},
+		{Name: "beta", Path: "/tmp/beta.kitty-session", TabCount: 1, LastFocusedAt: 300.1, IsActive: true},
+		{Name: "gamma", Path: "/tmp/gamma.kitty-session", TabCount: 1, LastFocusedAt: 275.6},
+		{Name: "delta", Path: "/tmp/delta.kitty-session"},
+	}
+
+	got := filterAndSortSessionsForPicker(sessions)
+	if len(got) != 3 {
+		t.Fatalf("session count = %d, sessions = %#v", len(got), got)
+	}
+	if got[0].Name != "gamma" || got[0].TabCount != 1 || got[0].LastFocusedAt != 275.6 {
+		t.Fatalf("first session = %#v", got[0])
+	}
+	if got[1].Name != "alpha" || got[1].TabCount != 1 || got[1].LastFocusedAt != 250.2 {
+		t.Fatalf("second session = %#v", got[1])
+	}
+	if got[2].Name != "delta" || got[2].TabCount != 0 {
+		t.Fatalf("third session = %#v", got[2])
+	}
+}
+
+func TestApplyLiveSessionMetadataHidesActiveSessionFromActiveWindowFallback(t *testing.T) {
+	sessions := []Session{
+		{Name: "alpha", Path: "/tmp/alpha.kitty-session"},
+		{Name: "beta", Path: "/tmp/beta.kitty-session"},
+	}
+
+	windows := []OSWindow{
+		{
+			ID:       1,
+			IsActive: true,
+			Tabs: []Tab{
+				{Title: "shell", Windows: []Window{{LastFocusedAt: 300, SessionName: "beta"}}},
+			},
+		},
+		{
+			ID: 2,
+			Tabs: []Tab{
+				{Title: "editor", Windows: []Window{{LastFocusedAt: 200, SessionName: "alpha"}}},
+			},
+		},
+	}
+
+	got := filterAndSortSessionsForPicker(sessionsWithLiveSessionMetadata(sessions, windows))
+	if len(got) != 1 {
+		t.Fatalf("session count = %d, sessions = %#v", len(got), got)
+	}
+	if got[0].Name != "alpha" {
+		t.Fatalf("remaining session = %#v", got[0])
+	}
+}
+
+func TestFormatSessionLabelDimsEmptySessions(t *testing.T) {
+	live := formatSessionLabel(Session{Name: "live", TabCount: 1})
+	if live != "\x1b[1;97mlive\x1b[m" {
+		t.Fatalf("live label = %q", live)
+	}
+
+	empty := formatSessionLabel(Session{Name: "empty"})
+	if !strings.Contains(empty, "empty") || !strings.Contains(empty, "[2;90m") {
+		t.Fatalf("empty label = %q", empty)
 	}
 }

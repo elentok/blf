@@ -36,6 +36,7 @@ func pickSession(sessions []Session, d Deps) (string, error) {
 	cmd := exec.Command(
 		"fzf",
 		"--layout=reverse",
+		"--ansi",
 		"--bind", fzfNavigationBind,
 		"--delimiter", "\t",
 		"--with-nth", "2",

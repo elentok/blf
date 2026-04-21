@@ -10,6 +10,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"charm.land/lipgloss/v2"
+)
+
+var (
+	liveSessionStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
+	emptySessionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Faint(true)
 )
 
 var sessionExtensions = []string{".kitty-session", ".kitty_session", ".session"}
@@ -224,6 +231,24 @@ func ListSessions(d Deps) ([]Session, error) {
 	return sessions, nil
 }
 
+func ListSessionsForPicker(d Deps) ([]Session, error) {
+	sessions, err := ListSessions(d)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return sessions, nil
+	}
+
+	windows, err := ListOSWindows(d)
+	if err != nil {
+		return nil, err
+	}
+
+	sessions = sessionsWithLiveSessionMetadata(sessions, windows)
+	return filterAndSortSessionsForPicker(sessions), nil
+}
+
 func ListActiveSessions(d Deps) ([]Session, error) {
 	sessions, err := ListSessions(d)
 	if err != nil {
@@ -243,6 +268,100 @@ func ListActiveSessions(d Deps) ([]Session, error) {
 		active = append(active, session)
 	}
 	return active, nil
+}
+
+func sessionsWithLiveSessionMetadata(sessions []Session, windows []OSWindow) []Session {
+	liveByName := make(map[string]Session, len(sessions))
+	activeSessionName := activeSessionName(windows)
+	for _, window := range windows {
+		for _, tab := range window.Tabs {
+			sessionName := tabSessionName(tab)
+			if sessionName == "" {
+				continue
+			}
+
+			session := liveByName[sessionName]
+			session.Name = sessionName
+			session.TabCount++
+			if activeSessionName != "" && sessionName == activeSessionName {
+				session.IsActive = true
+			}
+			for _, window := range tab.Windows {
+				if window.LastFocusedAt > session.LastFocusedAt {
+					session.LastFocusedAt = window.LastFocusedAt
+				}
+			}
+			liveByName[sessionName] = session
+		}
+	}
+
+	enriched := make([]Session, 0, len(sessions))
+	for _, session := range sessions {
+		if live, ok := liveByName[session.Name]; ok {
+			session.TabCount = live.TabCount
+			session.IsActive = live.IsActive
+			session.LastFocusedAt = live.LastFocusedAt
+		}
+		enriched = append(enriched, session)
+	}
+
+	return enriched
+}
+
+func filterAndSortSessionsForPicker(sessions []Session) []Session {
+	filtered := make([]Session, 0, len(sessions))
+	for _, session := range sessions {
+		if session.IsActive {
+			continue
+		}
+		filtered = append(filtered, session)
+	}
+
+	sortSessionsForPicker(filtered)
+	return filtered
+}
+
+func activeSessionName(windows []OSWindow) string {
+	for _, window := range windows {
+		for _, tab := range window.Tabs {
+			sessionName := tabSessionName(tab)
+			if tab.IsFocused && sessionName != "" {
+				return sessionName
+			}
+		}
+	}
+
+	for _, window := range windows {
+		if !window.IsActive {
+			continue
+		}
+		for _, tab := range window.Tabs {
+			sessionName := tabSessionName(tab)
+			if tab.IsActive && sessionName != "" {
+				return sessionName
+			}
+		}
+		for _, tab := range window.Tabs {
+			sessionName := tabSessionName(tab)
+			if sessionName != "" {
+				return sessionName
+			}
+		}
+	}
+
+	return ""
+}
+
+func tabSessionName(tab Tab) string {
+	if strings.TrimSpace(tab.SessionName) != "" {
+		return strings.TrimSpace(tab.SessionName)
+	}
+	for _, window := range tab.Windows {
+		if strings.TrimSpace(window.SessionName) != "" {
+			return strings.TrimSpace(window.SessionName)
+		}
+	}
+	return ""
 }
 
 func sessionTabCount(path string, d Deps) (int, error) {
@@ -308,12 +427,32 @@ func formatSessionChoices(sessions []Session) string {
 }
 
 func formatSessionLabel(session Session) string {
-	return session.Name
+	if session.TabCount == 0 {
+		return emptySessionStyle.Render(session.Name)
+	}
+	return liveSessionStyle.Render(session.Name)
 }
 
 func sortSessionsByName(sessions []Session) {
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Name < sessions[j].Name
+	})
+}
+
+func sortSessionsForPicker(sessions []Session) {
+	sort.Slice(sessions, func(i, j int) bool {
+		left := sessions[i]
+		right := sessions[j]
+
+		leftLive := left.TabCount > 0
+		rightLive := right.TabCount > 0
+		if leftLive != rightLive {
+			return leftLive
+		}
+		if leftLive && left.LastFocusedAt != right.LastFocusedAt {
+			return left.LastFocusedAt > right.LastFocusedAt
+		}
+		return left.Name < right.Name
 	})
 }
 

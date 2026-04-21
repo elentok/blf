@@ -119,7 +119,7 @@ func ListSessionChoices(args []string, d Deps) error {
 		return fmt.Errorf("usage: blf kitty %s", ListSessionChoicesCmd)
 	}
 
-	sessions, err := ListSessions(d)
+	sessions, err := ListSessionsForPicker(d)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func runNewSessionPrompt(d Deps) error {
 }
 
 func runSessionsPicker(d Deps) error {
-	sessions, err := ListSessions(d)
+	sessions, err := ListSessionsForPicker(d)
 	if err != nil {
 		return err
 	}
@@ -179,7 +179,7 @@ func runSessionsPicker(d Deps) error {
 }
 
 func runDeleteSessionOverlay(d Deps) error {
-	sessions, err := ListSessions(d)
+	sessions, err := ListSessionsForPicker(d)
 	if err != nil {
 		return err
 	}

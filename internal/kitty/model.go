@@ -8,16 +8,25 @@ type OSWindow struct {
 }
 
 type Tab struct {
-	ID        int
-	IsActive  bool
-	IsFocused bool
-	Title     string
+	ID          int
+	IsActive    bool
+	IsFocused   bool
+	Title       string
+	SessionName string
+	Windows     []Window
+}
+
+type Window struct {
+	LastFocusedAt float64
+	SessionName   string
 }
 
 type Session struct {
-	Name     string
-	Path     string
-	TabCount int
+	Name          string
+	Path          string
+	TabCount      int
+	IsActive      bool
+	LastFocusedAt float64
 }
 
 type rawOSWindow struct {
@@ -29,8 +38,15 @@ type rawOSWindow struct {
 }
 
 type rawTab struct {
-	ID        int    `json:"id"`
-	IsActive  bool   `json:"is_active"`
-	IsFocused bool   `json:"is_focused"`
-	Title     string `json:"title"`
+	ID          int         `json:"id"`
+	IsActive    bool        `json:"is_active"`
+	IsFocused   bool        `json:"is_focused"`
+	Title       string      `json:"title"`
+	SessionName string      `json:"session_name"`
+	Windows     []rawWindow `json:"windows"`
+}
+
+type rawWindow struct {
+	LastFocusedAt float64 `json:"last_focused_at"`
+	SessionName   string  `json:"session_name"`
 }

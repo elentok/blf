@@ -40,7 +40,11 @@ func TestDoctorPrintsSessionDiagnostics(t *testing.T) {
 			case "kitty --version":
 				return []byte("kitty 0.46.2\n"), nil
 			case "kitty @ ls":
-				return []byte(`[{"id":1,"tabs":[{"id":10,"title":"shell"}]}]`), nil
+				return []byte(`[
+					{"id":1,"is_active":true,"tabs":[
+						{"id":10,"is_active":true,"is_focused":true,"title":"shell","windows":[{"last_focused_at":123.5,"session_name":"alpha"}]}
+					]}
+				]`), nil
 			case "kitty @ ls --match-tab session:.":
 				return []byte(`[]`), nil
 			case "kitty @ ls --match-tab session:~":
@@ -73,8 +77,8 @@ func TestDoctorPrintsSessionDiagnostics(t *testing.T) {
 		"- alpha.kitty-session",
 		"stem=alpha",
 		"session:^alpha$ -> tabs=2",
-		"[active sessions]",
-		"- alpha (2 tabs) -> /Users/test/.local/share/kitty/sessions/alpha.kitty-session",
+		"[session data]",
+		"- alpha [live, active] tabs=1 last_focused_at=123.500000 -> /Users/test/.local/share/kitty/sessions/alpha.kitty-session",
 	} {
 		if !strings.Contains(got, snippet) {
 			t.Fatalf("doctor output missing %q:\n%s", snippet, got)
