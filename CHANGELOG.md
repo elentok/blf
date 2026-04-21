@@ -2,9 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
-## [v0.4.3] - 2026-04-21
+## [v0.4.4] - 2026-04-21
 
-### Changed
+- `blf kitty sessions` now reads Kitty nightly session membership and `last_focused_at` data from `kitty @ ls`, hides the active session, sorts live sessions ahead of empty ones by recency, and dims empty sessions in the picker.
+- `blf kitty doctor` now shows the same nightly-aware session data, including whether each session is live, empty, or active and its latest `last_focused_at` value.
+
+## [v0.4.3] - 2026-04-21
 
 - `blf kitty sessions` and `blf kitty new-session` now run directly in the current terminal, so their placement is controlled entirely by the Kitty `launch` mapping in `kitty.conf`.
 - The `blf kitty sessions` preview is more compact: it no longer shows the session path, uses `Live session:` / `Empty session:` headers, and keeps the tab list closer to the header.
