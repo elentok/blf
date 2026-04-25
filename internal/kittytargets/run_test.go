@@ -9,36 +9,35 @@ import (
 	"github.com/elentok/blf/internal/targets"
 )
 
-func TestExecuteTopLevelOpensOverlay(t *testing.T) {
+func TestExecuteTopLevelFallsBackToCurrentWindowOutsideOverlay(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "17")
 
 	origLookPath := lookPath
-	origExecutablePath := executablePath
 	origOutputCmd := outputCmd
-	origRunCmd := runCmd
-	origStderr := stderr
 	t.Cleanup(func() {
 		lookPath = origLookPath
-		executablePath = origExecutablePath
 		outputCmd = origOutputCmd
-		runCmd = origRunCmd
-		stderr = origStderr
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/kitty", nil }
-	executablePath = func() (string, error) { return "/tmp/go-build/blf", nil }
+
+	var matches []string
 	outputCmd = func(name string, args ...string) ([]byte, error) {
-		if name != "kitty" || strings.Join(args, " ") != "@ get-text --extent screen --match id:17" {
+		if name != "kitty" || len(args) != 6 || strings.Join(args[:5], " ") != "@ get-text --extent screen --match" {
 			t.Fatalf("unexpected output command: %s %v", name, args)
+		}
+		matches = append(matches, args[5])
+		if args[5] == "state:overlay_parent" {
+			return nil, errors.New("not in overlay")
 		}
 		return []byte("visit https://example.com"), nil
 	}
 
-	var calls [][]string
-	var errBuf bytes.Buffer
-	stderr = &errBuf
-	runCmd = func(name string, args ...string) error {
-		calls = append(calls, append([]string{name}, args...))
+	origRunPopupUI := runPopupUI
+	t.Cleanup(func() { runPopupUI = origRunPopupUI })
+	var gotLines []string
+	runPopupUI = func(lines []string, tgts []targets.Target, title string, notify func(string), runResumeCmd func(string) error) error {
+		gotLines = append([]string{}, lines...)
 		return nil
 	}
 
@@ -46,20 +45,14 @@ func TestExecuteTopLevelOpensOverlay(t *testing.T) {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
-	if len(calls) != 1 {
-		t.Fatalf("expected one run command call, got %d", len(calls))
+	if len(matches) != 2 {
+		t.Fatalf("expected two capture attempts, got %v", matches)
 	}
-
-	got := strings.Join(calls[0], " ")
-	for _, snippet := range []string{
-		"kitty @ launch",
-		"--type=overlay",
-		"--copy-env",
-		"/tmp/go-build/blf kitty targets --overlay --target 17",
-	} {
-		if !strings.Contains(got, snippet) {
-			t.Fatalf("expected %q in launch command: %s", snippet, got)
-		}
+	if matches[0] != "state:overlay_parent" || matches[1] != "id:17" {
+		t.Fatalf("capture matches = %v", matches)
+	}
+	if len(gotLines) != 1 || gotLines[0] != "visit https://example.com" {
+		t.Fatalf("lines = %#v", gotLines)
 	}
 }
 
@@ -67,22 +60,19 @@ func TestExecuteTopLevelNoTargetsDoesNotOpenOverlay(t *testing.T) {
 	t.Setenv("KITTY_WINDOW_ID", "17")
 
 	origLookPath := lookPath
-	origExecutablePath := executablePath
 	origOutputCmd := outputCmd
 	origRunCmd := runCmd
 	origStderr := stderr
 	t.Cleanup(func() {
 		lookPath = origLookPath
-		executablePath = origExecutablePath
 		outputCmd = origOutputCmd
 		runCmd = origRunCmd
 		stderr = origStderr
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/kitty", nil }
-	executablePath = func() (string, error) { return "/tmp/go-build/blf", nil }
 	outputCmd = func(name string, args ...string) ([]byte, error) {
-		if name != "kitty" || strings.Join(args, " ") != "@ get-text --extent screen --match id:17" {
+		if name != "kitty" || strings.Join(args, " ") != "@ get-text --extent screen --match state:overlay_parent" {
 			t.Fatalf("unexpected output command: %s %v", name, args)
 		}
 		return []byte("nothing here"), nil
@@ -111,30 +101,42 @@ func TestExecuteTopLevelNoTargetsDoesNotOpenOverlay(t *testing.T) {
 	}
 }
 
-func TestExecuteTopLevelReturnsExecutableResolutionError(t *testing.T) {
-	t.Setenv("KITTY_WINDOW_ID", "17")
+func TestExecuteTopLevelUsesOverlayParentWhenAvailable(t *testing.T) {
+	t.Setenv("KITTY_WINDOW_ID", "24")
 
 	origLookPath := lookPath
-	origExecutablePath := executablePath
-	origStderr := stderr
+	origOutputCmd := outputCmd
+	origRunPopupUI := runPopupUI
 	t.Cleanup(func() {
 		lookPath = origLookPath
-		executablePath = origExecutablePath
-		stderr = origStderr
+		outputCmd = origOutputCmd
+		runPopupUI = origRunPopupUI
 	})
 
 	lookPath = func(string) (string, error) { return "/usr/bin/kitty", nil }
-	executablePath = func() (string, error) { return "", errors.New("boom") }
 
-	var errBuf bytes.Buffer
-	stderr = &errBuf
-
-	err := Execute(nil)
-	if err == nil || !strings.Contains(err.Error(), "resolve current executable") {
-		t.Fatalf("error = %v", err)
+	var matches []string
+	outputCmd = func(name string, args ...string) ([]byte, error) {
+		matches = append(matches, args[5])
+		if args[5] != "state:overlay_parent" {
+			t.Fatalf("unexpected match %q", args[5])
+		}
+		return []byte("visit https://example.com"), nil
 	}
-	if got := errBuf.String(); got != "blf kitty targets: resolve current executable: boom\n" {
-		t.Fatalf("stderr = %q", got)
+	runPopupUI = func(lines []string, tgts []targets.Target, title string, notify func(string), runResumeCmd func(string) error) error {
+		return nil
+	}
+
+	if err := Execute(nil); err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if len(matches) != 2 {
+		t.Fatalf("expected overlay-parent probe and capture, got %v", matches)
+	}
+	for _, match := range matches {
+		if match != "state:overlay_parent" {
+			t.Fatalf("matches = %v", matches)
+		}
 	}
 }
 
@@ -162,7 +164,7 @@ func TestExecuteOverlayNoTargetsIsNil(t *testing.T) {
 		return nil
 	}
 
-	if err := Execute([]string{"--overlay", "--target", "17"}); err != nil {
+	if err := Execute([]string{"--target", "17"}); err != nil {
 		t.Fatalf("expected nil for no targets case, got %v", err)
 	}
 
@@ -192,7 +194,7 @@ func TestExecuteOverlayNoTargetsReturnsErrorWhenNotificationFails(t *testing.T) 
 		return errors.New("show_error failed")
 	}
 
-	err := Execute([]string{"--overlay", "--target", "17"})
+	err := Execute([]string{"--target", "17"})
 	if err == nil || !strings.Contains(err.Error(), "notify kitty targets failure") {
 		t.Fatalf("error = %v", err)
 	}
@@ -226,7 +228,7 @@ func TestExecuteOverlayRunsPopupUI(t *testing.T) {
 		return nil
 	}
 
-	if err := Execute([]string{"--overlay", "--target", "17"}); err != nil {
+	if err := Execute([]string{"--target", "17"}); err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
 
@@ -242,15 +244,15 @@ func TestExecuteOverlayRunsPopupUI(t *testing.T) {
 }
 
 func TestParseOverlayArgs(t *testing.T) {
-	windowID, err := parseOverlayArgs([]string{"--target", "17"})
+	match, err := resolveTargetMatch([]string{"--target", "17"})
 	if err != nil {
-		t.Fatalf("parseOverlayArgs returned error: %v", err)
+		t.Fatalf("resolveTargetMatch returned error: %v", err)
 	}
-	if windowID != "17" {
-		t.Fatalf("windowID = %q", windowID)
+	if match != "id:17" {
+		t.Fatalf("match = %q", match)
 	}
 
-	_, err = parseOverlayArgs([]string{"--target"})
+	_, err = resolveTargetMatch([]string{"--target"})
 	if err == nil || !strings.Contains(err.Error(), "usage") {
 		t.Fatalf("expected usage error, got %v", err)
 	}
@@ -309,14 +311,14 @@ func TestRunResumeCommandInWindowSendsCommand(t *testing.T) {
 		return nil
 	}
 
-	if err := runResumeCommandInWindow("17", "codex resume abc123"); err != nil {
+	if err := runResumeCommandInWindow("state:overlay_parent", "codex resume abc123"); err != nil {
 		t.Fatalf("runResumeCommandInWindow returned error: %v", err)
 	}
 
 	if len(calls) != 1 {
 		t.Fatalf("expected one kitty call, got %d", len(calls))
 	}
-	if got := strings.Join(calls[0], " "); got != "kitty @ send-text --match id:17 -- codex resume abc123\r" {
+	if got := strings.Join(calls[0], " "); got != "kitty @ send-text --match state:overlay_parent -- codex resume abc123\r" {
 		t.Fatalf("call = %q", got)
 	}
 }

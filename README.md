@@ -70,7 +70,8 @@ bind-key t run 'blf tmux-targets'
 `kitty targets` behavior:
 
 - Captures the visible viewport of the current Kitty window and detects the same targets as `tmux-targets`.
-- Opens a Kitty overlay only when at least one target is found.
+- Runs directly inside the Kitty window or overlay where it was launched.
+- When launched in an overlay, it reads and acts on the covered window via Kitty's `state:overlay_parent` match.
 - Reuses the shared targets UI for navigation, search, copy, open, and resume-command actions.
 - Sends AI resume commands back to the original Kitty window with `kitty @ send-text`.
 - If no targets are found, prints an error and also attempts to show a Kitty error notification.
@@ -78,7 +79,7 @@ bind-key t run 'blf tmux-targets'
 kitty binding example:
 
 ```conf
-map kitty_mod+e>o launch --copy-env --type=background --cwd=current fish -c "blf kitty targets"
+map kitty_mod+e>o launch --copy-env --type=overlay --cwd=current fish -c "blf kitty targets"
 ```
 
 `kitty sessions` behavior:

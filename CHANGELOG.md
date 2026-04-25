@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- `blf kitty targets` now runs directly in the launched Kitty overlay instead of spawning its own nested overlay, and it targets the covered window via Kitty's `state:overlay_parent` match.
+
 ## [v0.4.4] - 2026-04-21
 
 - `blf kitty sessions` now reads Kitty nightly session membership and `last_focused_at` data from `kitty @ ls`, hides the active session, sorts live sessions ahead of empty ones by recency, and dims empty sessions in the picker.
