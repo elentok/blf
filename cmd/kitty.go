@@ -16,6 +16,8 @@ func runKitty(args []string, d deps) error {
 		return internalkitty.ListOSWindowsCommand(kittyDepsFromCmd(d))
 	case internalkitty.GotoOSWindowCmd:
 		return internalkitty.GotoOSWindow(args[1:], kittyDepsFromCmd(d))
+	case internalkitty.TargetsCmd:
+		return internalkitty.Targets(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.NewSessionCmd:
 		return internalkitty.NewSession(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.SessionsCmd:
@@ -32,11 +34,6 @@ func runKitty(args []string, d deps) error {
 		return internalkitty.DeleteSessionFile(args[1:], kittyDepsFromCmd(d))
 	case internalkitty.EditSessionFileCmd:
 		return internalkitty.EditSessionFile(args[1:], kittyDepsFromCmd(d))
-	case "targets":
-		if d.runKittyTargets == nil {
-			return fmt.Errorf("kitty targets runner is not configured")
-		}
-		return d.runKittyTargets(args[1:])
 	default:
 		return fmt.Errorf("unknown kitty command %q", args[0])
 	}
@@ -48,6 +45,7 @@ func kittyDepsFromCmd(d deps) internalkitty.Deps {
 		Stdout:         d.stdout,
 		Stderr:         d.stderr,
 		LookupEnv:      d.lookupEnv,
+		LookPath:       d.lookPath,
 		RunCommand:     d.runCommand,
 		FileExists:     d.fileExists,
 		RemoveFile:     d.removeFile,

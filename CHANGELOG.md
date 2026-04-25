@@ -5,6 +5,7 @@ All notable changes to this project are documented in this file.
 ## [Unreleased]
 
 - `blf kitty targets` now runs directly in the launched Kitty overlay instead of spawning its own nested overlay, and it targets the covered window via Kitty's `state:overlay_parent` match.
+- `blf kitty targets` now lives in `internal/kitty`, so all `blf kitty ...` subcommands share one internal package and dependency model.
 
 ## [v0.4.4] - 2026-04-21
 

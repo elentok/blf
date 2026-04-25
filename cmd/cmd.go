@@ -8,46 +8,45 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elentok/blf/internal/kittytargets"
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
 	"github.com/elentok/blf/internal/tmuxtargets"
 )
 
 type deps struct {
-	stdout          io.Writer
-	stderr          io.Writer
-	stdin           io.Reader
-	lookupEnv       func(string) (string, bool)
-	openURL         func(string) error
-	copyText        func(string) error
-	runTmuxLinks    func(string) error
-	runTargets      func([]string) error
-	runKittyTargets func([]string) error
-	runCommand      func(string, ...string) ([]byte, error)
-	fileExists      func(string) (bool, error)
-	removeFile      func(string) error
-	readFile        func(string) ([]byte, error)
-	readDir         func(string) ([]os.DirEntry, error)
-	writeFile       func(string, []byte, os.FileMode) error
-	mkdirAll        func(string, os.FileMode) error
-	executablePath  func() (string, error)
-	getwd           func() (string, error)
-	userHomeDir     func() (string, error)
-	now             func() time.Time
+	stdout         io.Writer
+	stderr         io.Writer
+	stdin          io.Reader
+	lookupEnv      func(string) (string, bool)
+	openURL        func(string) error
+	copyText       func(string) error
+	runTmuxLinks   func(string) error
+	runTargets     func([]string) error
+	lookPath       func(string) (string, error)
+	runCommand     func(string, ...string) ([]byte, error)
+	fileExists     func(string) (bool, error)
+	removeFile     func(string) error
+	readFile       func(string) ([]byte, error)
+	readDir        func(string) ([]os.DirEntry, error)
+	writeFile      func(string, []byte, os.FileMode) error
+	mkdirAll       func(string, os.FileMode) error
+	executablePath func() (string, error)
+	getwd          func() (string, error)
+	userHomeDir    func() (string, error)
+	now            func() time.Time
 }
 
 func defaultDeps() deps {
 	return deps{
-		stdout:          os.Stdout,
-		stderr:          os.Stderr,
-		stdin:           os.Stdin,
-		lookupEnv:       os.LookupEnv,
-		openURL:         platform.OpenURL,
-		copyText:        platform.CopyText,
-		runTmuxLinks:    tmuxlinks.RunMenu,
-		runTargets:      tmuxtargets.Execute,
-		runKittyTargets: kittytargets.Execute,
+		stdout:       os.Stdout,
+		stderr:       os.Stderr,
+		stdin:        os.Stdin,
+		lookupEnv:    os.LookupEnv,
+		openURL:      platform.OpenURL,
+		copyText:     platform.CopyText,
+		runTmuxLinks: tmuxlinks.RunMenu,
+		runTargets:   tmuxtargets.Execute,
+		lookPath:     exec.LookPath,
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},

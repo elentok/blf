@@ -10,6 +10,7 @@ type Deps struct {
 	Stdout         io.Writer
 	Stderr         io.Writer
 	LookupEnv      func(string) (string, bool)
+	LookPath       func(string) (string, error)
 	RunCommand     func(string, ...string) ([]byte, error)
 	FileExists     func(string) (bool, error)
 	RemoveFile     func(string) error

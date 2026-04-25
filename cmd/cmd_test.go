@@ -272,15 +272,24 @@ func TestExecuteRoutesKitty(t *testing.T) {
 }
 
 func TestExecuteRoutesKittyTargets(t *testing.T) {
-	var got []string
+	var calls []string
 	d := deps{
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
 		runTargets:   func([]string) error { return nil },
-		runKittyTargets: func(args []string) error {
-			got = append([]string{}, args...)
-			return nil
+		lookPath:     func(name string) (string, error) { return "/usr/bin/" + name, nil },
+		runCommand: func(name string, args ...string) ([]byte, error) {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			switch {
+			case name == "kitty" && strings.Join(args, " ") == "@ get-text --extent screen --match id:17":
+				return []byte("nothing here"), nil
+			case name == "kitten" && strings.Join(args, " ") == `@ action show_error "blf kitty targets" "no targets found in current kitty window"`:
+				return []byte{}, nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return nil, nil
+			}
 		},
 		fileExists: func(string) (bool, error) { return false, nil },
 		readFile:   func(string) ([]byte, error) { return nil, nil },
@@ -288,12 +297,12 @@ func TestExecuteRoutesKittyTargets(t *testing.T) {
 		stderr:     &strings.Builder{},
 	}
 
-	err := execute([]string{"kitty", "targets", "--overlay", "--target", "17"}, d)
+	err := execute([]string{"kitty", "targets", "--target", "17"}, d)
 	if err != nil {
 		t.Fatalf("execute returned error: %v", err)
 	}
-	if strings.Join(got, " ") != "--overlay --target 17" {
-		t.Fatalf("kitty targets called with %v", got)
+	if strings.Join(calls, "\n") != "kitty @ get-text --extent screen --match id:17\nkitten @ action show_error \"blf kitty targets\" \"no targets found in current kitty window\"" {
+		t.Fatalf("calls = %v", calls)
 	}
 }
 
