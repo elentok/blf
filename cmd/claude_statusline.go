@@ -15,13 +15,17 @@ import (
 var (
 	claudeModelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	claudeTokensStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	claudeContextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	claudeErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	claudeFaintStyle   = lipgloss.NewStyle().Faint(true)
 	claudeSeparator    = claudeFaintStyle.Render("·")
 	claudeLeftBracket  = claudeFaintStyle.Render("[")
 	claudeRightBracket = claudeFaintStyle.Render("]")
 )
+
+type claudeStatusField struct {
+	text    string
+	invalid bool
+}
 
 type claudeStatusLineData struct {
 	ContextWindow struct {
@@ -83,33 +87,38 @@ func runClaudeStatusLine(args []string, d deps) error {
 }
 
 func claudeStatusLineFromValues(model string, tokens float64, contextPercent float64, fiveHourPercent float64, weekPercent float64) string {
-	modelText := model
-	tokensText := claudeStatusNumberFromValue(tokens, false)
-	ctxText := claudeStatusContextProgressValue(contextPercent)
-	fiveText := claudeStatusNumberFromValue(fiveHourPercent, true)
-	weekText := claudeStatusNumberFromValue(weekPercent, true)
+	modelText := claudeStatusField{text: model}
+	tokensText := claudeStatusField{text: claudeStatusNumberFromValue(tokens, false)}
+	ctxText := claudeStatusField{text: claudeStatusContextProgressValue(contextPercent)}
+	fiveText := claudeStatusField{text: claudeStatusNumberFromValue(fiveHourPercent, true)}
+	weekText := claudeStatusField{text: claudeStatusNumberFromValue(weekPercent, true)}
 	return claudeStatusLineFromParts(modelText, tokensText, ctxText, fiveText, weekText)
 }
 
-func claudeStatusLineFromParts(modelText string, tokensText string, ctxText string, fiveText string, weekText string) string {
+func claudeStatusLineFromParts(modelText claudeStatusField, tokensText claudeStatusField, ctxText claudeStatusField, fiveText claudeStatusField, weekText claudeStatusField) string {
 	parts := make([]string, 0, 5)
-	if modelText != "" {
+	if modelText.text != "" {
 		parts = append(parts, claudeStatusStyledValue(modelText, claudeModelStyle))
 	}
-	if tokensText != "" {
-		tokensSegment := claudeStatusStyledValue("  "+tokensText, claudeTokensStyle)
-		parts = append(parts, tokensSegment)
+	if tokensText.text != "" {
+		tokensSegment := claudeStatusField{text: "  " + tokensText.text, invalid: tokensText.invalid}
+		tokensSegmentRendered := claudeStatusStyledValue(tokensSegment, claudeTokensStyle)
+		parts = append(parts, tokensSegmentRendered)
 	}
 
 	usageParts := make([]string, 0, 3)
-	if ctxText != "" {
-		usageParts = append(usageParts, claudeStatusStyledValue(ctxText, claudeContextStyle))
+	if ctxText.text != "" {
+		usageParts = append(usageParts, claudeStatusStyledValue(ctxText, lipgloss.NewStyle()))
 	}
-	if fiveText != "" {
-		usageParts = append(usageParts, fiveText+" of 5h")
+	if fiveText.text != "" {
+		usageParts = append(usageParts, claudeStatusStyledValue(
+			claudeStatusField{text: fiveText.text + " of 5h", invalid: fiveText.invalid}, lipgloss.NewStyle(),
+		))
 	}
-	if weekText != "" {
-		usageParts = append(usageParts, claudeFaintStyle.Render(weekText+" of weekly"))
+	if weekText.text != "" {
+		usageParts = append(usageParts, claudeStatusStyledValue(
+			claudeStatusField{text: weekText.text + " of weekly", invalid: weekText.invalid}, claudeFaintStyle,
+		))
 	}
 	if len(usageParts) > 0 {
 		parts = append(parts, strings.Join(usageParts, " "+claudeSeparator+" "))
@@ -117,52 +126,55 @@ func claudeStatusLineFromParts(modelText string, tokensText string, ctxText stri
 	return strings.Join(parts, " "+claudeSeparator+" ")
 }
 
-func claudeStatusStyledValue(value string, style lipgloss.Style) string {
-	if strings.Contains(value, "missing/invalid") {
-		return claudeErrorStyle.Render(value)
+func claudeStatusStyledValue(value claudeStatusField, style lipgloss.Style) string {
+	if value.invalid {
+		return claudeErrorStyle.Render(value.text)
 	}
-	return style.Render(value)
+	return style.Render(value.text)
 }
 
-func claudeStatusStringField(raw json.RawMessage, name string, silent bool) string {
+func claudeStatusMissingInvalid(raw json.RawMessage, name string, silent bool) claudeStatusField {
 	if len(raw) == 0 {
 		if silent {
-			return ""
+			return claudeStatusField{}
 		}
-		return name + " missing/invalid"
+		return claudeStatusField{text: name + " missing/invalid", invalid: true}
+	}
+	return claudeStatusField{text: name + " missing/invalid: " + string(raw), invalid: true}
+}
+
+func claudeStatusStringField(raw json.RawMessage, name string, silent bool) claudeStatusField {
+	if len(raw) == 0 {
+		return claudeStatusMissingInvalid(raw, name, silent)
 	}
 
 	var text string
 	if err := json.Unmarshal(raw, &text); err != nil || strings.TrimSpace(text) == "" {
 		if silent {
-			return ""
+			return claudeStatusField{}
 		}
-		return name + " missing/invalid: " + string(raw)
+		return claudeStatusMissingInvalid(raw, name, silent)
 	}
-	return text
+	return claudeStatusField{text: text}
 }
 
-func claudeStatusNumberField(raw json.RawMessage, name string, asPercent bool, silent bool) string {
+func claudeStatusNumberField(raw json.RawMessage, name string, asPercent bool, silent bool) claudeStatusField {
 	if len(raw) == 0 {
-		if silent {
-			return ""
-		}
-		return name + " missing/invalid"
+		return claudeStatusMissingInvalid(raw, name, silent)
 	}
 
 	value, ok := claudeStatusParseNumber(raw)
 	if !ok {
 		if silent {
-			return ""
+			return claudeStatusField{}
 		}
-		return name + " missing/invalid: " + string(raw)
+		return claudeStatusMissingInvalid(raw, name, silent)
 	}
 
-	formatted := strconv.FormatFloat(value, 'f', 0, 64)
 	if asPercent {
-		return formatted + "%"
+		return claudeStatusField{text: claudeStatusNumberFromValue(value, true)}
 	}
-	return claudeStatusNumberFromValue(value, false)
+	return claudeStatusField{text: claudeStatusNumberFromValue(value, false)}
 }
 
 func claudeStatusNumberFromValue(value float64, asPercent bool) string {
@@ -171,28 +183,26 @@ func claudeStatusNumberFromValue(value float64, asPercent bool) string {
 		return formatted + "%"
 	}
 	if value > 1000 {
-		return strconv.FormatFloat(math.Round(value/1000), 'f', 0, 64) + "k"
+		withDecimal := strconv.FormatFloat(math.Round(value/100)/10, 'f', 1, 64)
+		return strings.TrimSuffix(withDecimal, ".0") + "k"
 	}
 	return formatted
 }
 
-func claudeStatusContextProgressField(raw json.RawMessage, silent bool) string {
+func claudeStatusContextProgressField(raw json.RawMessage, silent bool) claudeStatusField {
 	if len(raw) == 0 {
-		if silent {
-			return ""
-		}
-		return "context missing/invalid"
+		return claudeStatusMissingInvalid(raw, "context", silent)
 	}
 
 	value, ok := claudeStatusParseNumber(raw)
 	if !ok {
 		if silent {
-			return ""
+			return claudeStatusField{}
 		}
-		return "context missing/invalid: " + string(raw)
+		return claudeStatusMissingInvalid(raw, "context", silent)
 	}
 
-	return claudeStatusContextProgressValue(value)
+	return claudeStatusField{text: claudeStatusContextProgressValue(value)}
 }
 
 func claudeStatusContextProgressValue(value float64) string {
@@ -222,6 +232,9 @@ func claudeStatusContextProgressColor(percent float64) string {
 func claudeStatusParseNumber(raw json.RawMessage) (float64, bool) {
 	var num float64
 	if err := json.Unmarshal(raw, &num); err == nil {
+		if math.IsNaN(num) || math.IsInf(num, 0) {
+			return 0, false
+		}
 		return num, true
 	}
 
@@ -231,7 +244,7 @@ func claudeStatusParseNumber(raw json.RawMessage) (float64, bool) {
 	}
 
 	parsed, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
-	if err != nil {
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 		return 0, false
 	}
 	return parsed, true

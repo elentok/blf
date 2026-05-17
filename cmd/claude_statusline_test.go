@@ -14,7 +14,7 @@ func TestRunClaudeStatusLineValidInput(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"Claude Sonnet", "1k", "51%", "11% of 5h", "73% of weekly"} {
+	for _, want := range []string{"Claude Sonnet", "1.2k", "51%", "11% of 5h", "73% of weekly"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q: %q", want, got)
 		}
@@ -51,6 +51,25 @@ func TestRunClaudeStatusLineInvalidFields(t *testing.T) {
 		"context missing/invalid: \"oops\"",
 		"5h missing/invalid",
 		"88% of weekly",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q: %q", want, got)
+		}
+	}
+}
+
+func TestRunClaudeStatusLineRejectsNonFiniteNumbers(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":"NaN","used_percentage":"Infinity"},"rate_limits":{"five_hour":{"used_percentage":10},"seven_day":{"used_percentage":20}},"model":{"display_name":"Claude"}}`)}
+
+	if err := runClaudeStatusLine(nil, d); err != nil {
+		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		`tokens missing/invalid: "NaN"`,
+		`context missing/invalid: "Infinity"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q: %q", want, got)
