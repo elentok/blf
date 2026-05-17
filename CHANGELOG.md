@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.6] - 2026-05-17
+
+- Added `blf kitty ls` to render a readable tree from `kitty @ ls`, including OS windows, tabs, windows, session names, command lines, and foreground processes.
+- Added `blf claude-statusline` to render Claude status JSON as a compact status line with model, token count, context usage, and 5h/weekly rate-limit usage.
+
 ## [v0.4.5] - 2026-04-25
 
 - `blf kitty targets` now runs directly in the launched Kitty overlay instead of spawning its own nested overlay, and it targets the covered window via Kitty's `state:overlay_parent` match.

@@ -31,6 +31,7 @@ brew install blf
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
+- `blf claude-statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -76,6 +77,20 @@ bind-key t run 'blf tmux-targets'
 - Reuses the shared targets UI for navigation, search, copy, open, and resume-command actions.
 - Sends AI resume commands back to the original Kitty window with `kitty @ send-text`.
 - If no targets are found, prints an error and also attempts to show a Kitty error notification.
+
+`kitty ls` behavior:
+
+- Runs `kitty @ ls` and renders a readable tree grouped by OS window, tab, and window.
+- Highlights active/last-focused state and includes per-window command line and foreground process when available.
+
+`claude-statusline` behavior:
+
+- Reads JSON from stdin and renders model, tokens, context usage, and 5h/weekly usage in a single line.
+- Context usage is shown as a progress bar with thresholds: `0-20%` green, `21-40%` orange, `41%+` red.
+- Token counts over `1000` are compacted using `k` notation (`1234 -> 1.2k`).
+- Missing/invalid fields render as `"<field> missing/invalid"` (or include raw invalid value), and malformed JSON prints an error and exits non-zero.
+- `--silent` suppresses missing/invalid field segments.
+- `--demo` ignores stdin and prints three sample lines (`10%`, `30%`, `60%`) for quick theme/style previews.
 
 kitty binding example:
 
