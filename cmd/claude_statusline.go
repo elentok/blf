@@ -17,6 +17,7 @@ var (
 	claudeTokensStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	claudeErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	claudeFaintStyle   = lipgloss.NewStyle().Faint(true)
+	claudePlainStyle   = lipgloss.NewStyle()
 	claudeSeparator    = claudeFaintStyle.Render("·")
 	claudeLeftBracket  = claudeFaintStyle.Render("[")
 	claudeRightBracket = claudeFaintStyle.Render("]")
@@ -95,29 +96,29 @@ func claudeStatusLineFromValues(model string, tokens float64, contextPercent flo
 	return claudeStatusLineFromParts(modelText, tokensText, ctxText, fiveText, weekText)
 }
 
-func claudeStatusLineFromParts(modelText claudeStatusField, tokensText claudeStatusField, ctxText claudeStatusField, fiveText claudeStatusField, weekText claudeStatusField) string {
+func claudeStatusLineFromParts(model claudeStatusField, tokens claudeStatusField, ctx claudeStatusField, five claudeStatusField, week claudeStatusField) string {
 	parts := make([]string, 0, 5)
-	if modelText.text != "" {
-		parts = append(parts, claudeStatusStyledValue(modelText, claudeModelStyle))
+	if model.text != "" {
+		parts = append(parts, claudeStatusStyledValue(model, claudeModelStyle))
 	}
-	if tokensText.text != "" {
-		tokensSegment := claudeStatusField{text: "  " + tokensText.text, invalid: tokensText.invalid}
+	if tokens.text != "" {
+		tokensSegment := claudeStatusField{text: "  " + tokens.text, invalid: tokens.invalid}
 		tokensSegmentRendered := claudeStatusStyledValue(tokensSegment, claudeTokensStyle)
 		parts = append(parts, tokensSegmentRendered)
 	}
 
 	usageParts := make([]string, 0, 3)
-	if ctxText.text != "" {
-		usageParts = append(usageParts, claudeStatusStyledValue(ctxText, lipgloss.NewStyle()))
+	if ctx.text != "" {
+		usageParts = append(usageParts, claudeStatusStyledValue(ctx, claudePlainStyle))
 	}
-	if fiveText.text != "" {
+	if five.text != "" {
 		usageParts = append(usageParts, claudeStatusStyledValue(
-			claudeStatusField{text: fiveText.text + " of 5h", invalid: fiveText.invalid}, lipgloss.NewStyle(),
+			claudeStatusField{text: five.text + " of 5h", invalid: five.invalid}, claudePlainStyle,
 		))
 	}
-	if weekText.text != "" {
+	if week.text != "" {
 		usageParts = append(usageParts, claudeStatusStyledValue(
-			claudeStatusField{text: weekText.text + " of weekly", invalid: weekText.invalid}, claudeFaintStyle,
+			claudeStatusField{text: week.text + " of weekly", invalid: week.invalid}, claudeFaintStyle,
 		))
 	}
 	if len(usageParts) > 0 {
@@ -134,10 +135,10 @@ func claudeStatusStyledValue(value claudeStatusField, style lipgloss.Style) stri
 }
 
 func claudeStatusMissingInvalid(raw json.RawMessage, name string, silent bool) claudeStatusField {
+	if silent {
+		return claudeStatusField{}
+	}
 	if len(raw) == 0 {
-		if silent {
-			return claudeStatusField{}
-		}
 		return claudeStatusField{text: name + " missing/invalid", invalid: true}
 	}
 	return claudeStatusField{text: name + " missing/invalid: " + string(raw), invalid: true}
