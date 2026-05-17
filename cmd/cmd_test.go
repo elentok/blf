@@ -328,3 +328,26 @@ func TestExecuteRoutesNPMScripts(t *testing.T) {
 		t.Fatalf("npm-scripts output = %q", out.String())
 	}
 }
+
+func TestExecuteRoutesClaudeStatusLine(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func([]string) error { return nil },
+		fileExists:   func(string) (bool, error) { return false, nil },
+		readFile:     func(string) ([]byte, error) { return nil, nil },
+		stdout:       out,
+		stderr:       &strings.Builder{},
+		stdin:        strings.NewReader(`{"context_window":{"total_input_tokens":42,"used_percentage":20},"rate_limits":{"five_hour":{"used_percentage":5},"seven_day":{"used_percentage":10}},"model":{"display_name":"Claude"}}`),
+	}
+
+	err := execute([]string{"claude-statusline"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if !strings.Contains(out.String(), "used 42 tokens") {
+		t.Fatalf("claude-statusline output = %q", out.String())
+	}
+}

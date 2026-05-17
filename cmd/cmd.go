@@ -90,6 +90,8 @@ func execute(args []string, d deps) error {
 		return runCal(args[1:], d)
 	case "sum":
 		return runSum(args[1:], d)
+	case "claude-statusline":
+		return runClaudeStatusLine(args[1:], d)
 	case "kitty":
 		return runKitty(args[1:], d)
 	case "version", "-v", "--version":
