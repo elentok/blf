@@ -31,6 +31,43 @@ func TestListOSWindowsCommand(t *testing.T) {
 	}
 }
 
+func TestLSCommand(t *testing.T) {
+	out := &strings.Builder{}
+	d := Deps{
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			if name != "kitty" || strings.Join(args, " ") != "@ ls" {
+				t.Fatalf("unexpected command: %s %v", name, args)
+			}
+			return []byte(`[
+				{"id":7,"is_active":true,"tabs":[
+					{"id":70,"is_active":true,"title":"shell","windows":[
+						{"id":700,"is_active":true,"title":"editor","session_name":"proj","cmdline":["nvim","main.go"],"last_reported_cmdline":"nvim main.go","foreground_processes":[{"pid":123,"cmdline":["go","test"],"cwd":"/work"}]}
+					]}
+				]}
+			]`), nil
+		},
+		Stdout: out,
+		Stderr: &strings.Builder{},
+	}
+
+	err := LSCommand(d)
+	if err != nil {
+		t.Fatalf("LSCommand returned error: %v", err)
+	}
+	if got := out.String(); got != ""+
+		"- OS Window 7 (active)\n"+
+		"\x1b[38;2;243;139;169;48;2;50;40;59m  - Tab 70 (active): shell\x1b[m\n"+
+		"\x1b[38;2;249;226;176;48;2;51;49;59m    - Window 700 (active) [proj]: editor\x1b[m\n"+
+		"      \x1b[38;2;137;180;250m- cmdline:\x1b[m nvim main.go\n"+
+		"      \x1b[38;2;137;180;250m- last_reported_cmdline:\x1b[m nvim main.go\n"+
+		"      \x1b[38;2;137;180;250m- Foreground processes:\x1b[m\n"+
+		"        - Proc 123:\n"+
+		"          \x1b[38;2;137;180;250m- cmdline:\x1b[m go... (1 more lines)\n"+
+		"          \x1b[38;2;137;180;250m- cwd:\x1b[m /work\n" {
+		t.Fatalf("output = %q", got)
+	}
+}
+
 func TestGotoOSWindowWithExplicitID(t *testing.T) {
 	var commands []string
 	d := Deps{

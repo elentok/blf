@@ -24,6 +24,7 @@ brew install blf
 - `blf tmux-links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
 - `blf tmux-targets`: open an interactive popup to navigate and act on detected targets.
 - `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
+- `blf kitty ls`: print a readable tree for `kitty @ ls`, including OS windows, tabs, windows, cmdlines, and foreground processes.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
 - `blf kitty new-session`: prompt for a session name, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.

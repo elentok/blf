@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	LSCmd                 = "ls"
 	ListOSWindowsCmd      = "list-os-windows"
 	GotoOSWindowCmd       = "goto-os-window"
 	TargetsCmd            = "targets"
@@ -18,6 +19,16 @@ const (
 	DeleteSessionFileCmd  = "__delete-session-file"
 	EditSessionFileCmd    = "__edit-session-file"
 )
+
+func LSCommand(d Deps) error {
+	windows, err := ListOSWindows(d)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(d.Stdout, FormatKittyLS(windows))
+	return err
+}
 
 func ListOSWindowsCommand(d Deps) error {
 	windows, err := ListOSWindows(d)

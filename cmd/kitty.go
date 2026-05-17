@@ -8,10 +8,12 @@ import (
 
 func runKitty(args []string, d deps) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: blf kitty <list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
+		return fmt.Errorf("usage: blf kitty <ls|list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
 	}
 
 	switch args[0] {
+	case internalkitty.LSCmd:
+		return internalkitty.LSCommand(kittyDepsFromCmd(d))
 	case internalkitty.ListOSWindowsCmd:
 		return internalkitty.ListOSWindowsCommand(kittyDepsFromCmd(d))
 	case internalkitty.GotoOSWindowCmd:

@@ -16,9 +16,23 @@ type Tab struct {
 	Windows     []Window
 }
 
+type ForegroundProcess struct {
+	PID     int
+	Cmdline []string
+	Cwd     string
+}
+
 type Window struct {
-	LastFocusedAt float64
-	SessionName   string
+	ID                        int
+	IsActive                  bool
+	Cmdline                   []string
+	ForegroundProcesses       []ForegroundProcess
+	Title                     string
+	SessionName               string
+	LastReportedCmdline       string
+	HasActivitySinceLastFocus bool
+	LastFocusedAt             float64
+	Cwd                       string
 }
 
 type Session struct {
@@ -47,6 +61,20 @@ type rawTab struct {
 }
 
 type rawWindow struct {
-	LastFocusedAt float64 `json:"last_focused_at"`
-	SessionName   string  `json:"session_name"`
+	ID                        int                    `json:"id"`
+	IsActive                  bool                   `json:"is_active"`
+	Cmdline                   []string               `json:"cmdline"`
+	ForegroundProcesses       []rawForegroundProcess `json:"foreground_processes"`
+	Title                     string                 `json:"title"`
+	SessionName               string                 `json:"session_name"`
+	LastReportedCmdline       string                 `json:"last_reported_cmdline"`
+	HasActivitySinceLastFocus bool                   `json:"has_activity_since_last_focus"`
+	LastFocusedAt             float64                `json:"last_focused_at"`
+	Cwd                       string                 `json:"cwd"`
+}
+
+type rawForegroundProcess struct {
+	PID     int      `json:"pid"`
+	Cmdline []string `json:"cmdline"`
+	Cwd     string   `json:"cwd"`
 }
