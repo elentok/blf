@@ -347,7 +347,7 @@ func TestExecuteRoutesClaudeStatusLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute returned error: %v", err)
 	}
-	if !strings.Contains(out.String(), "used 42 tokens") {
+	if !strings.Contains(out.String(), "42") {
 		t.Fatalf("claude-statusline output = %q", out.String())
 	}
 }

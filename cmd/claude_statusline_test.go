@@ -14,10 +14,13 @@ func TestRunClaudeStatusLineValidInput(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"Claude Sonnet", "used 1k tokens", "51% of total", "11% of 5h", "73% of weekly"} {
+	for _, want := range []string{"Claude Sonnet", "1k", "51%", "11% of 5h", "73% of weekly"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q: %q", want, got)
 		}
+	}
+	if strings.Contains(got, "51% of total") {
+		t.Fatalf("expected context to render as progress bar, got %q", got)
 	}
 }
 
@@ -28,7 +31,7 @@ func TestRunClaudeStatusLineTokensBelowThreshold(t *testing.T) {
 	if err := runClaudeStatusLine(nil, d); err != nil {
 		t.Fatalf("runClaudeStatusLine returned error: %v", err)
 	}
-	if !strings.Contains(out.String(), "used 999 tokens") {
+	if !strings.Contains(out.String(), "999") {
 		t.Fatalf("unexpected output: %q", out.String())
 	}
 }
@@ -84,5 +87,54 @@ func TestRunClaudeStatusLineMalformedJSON(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "error: malformed JSON input") {
 		t.Fatalf("expected malformed JSON message, got %q", out.String())
+	}
+}
+
+func TestClaudeStatusContextProgressColorThresholds(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   float64
+		wantHex string
+	}{
+		{name: "green range", input: 20, wantHex: "#22c55e"},
+		{name: "orange range", input: 21, wantHex: "#f59e0b"},
+		{name: "red range", input: 41, wantHex: "#ef4444"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := claudeStatusContextProgressColor(tc.input)
+			if got != tc.wantHex {
+				t.Fatalf("expected %s, got %s", tc.wantHex, got)
+			}
+		})
+	}
+}
+
+func TestRunClaudeStatusLineDemo(t *testing.T) {
+	out := &strings.Builder{}
+	d := deps{stdout: out, stdin: strings.NewReader(`{"model":"ignored"}`)}
+
+	if err := runClaudeStatusLine([]string{"--demo"}, d); err != nil {
+		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines, got %d: %q", len(lines), out.String())
+	}
+
+	for _, line := range lines {
+		for _, want := range []string{"TheModel", "25k", "12% of 5h", "34% of weekly"} {
+			if !strings.Contains(line, want) {
+				t.Fatalf("line missing %q: %q", want, line)
+			}
+		}
+	}
+
+	for _, want := range []string{"10%", "30%", "60%"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("demo output missing %q: %q", want, out.String())
+		}
 	}
 }

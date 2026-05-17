@@ -117,6 +117,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
 	fmt.Fprintln(w, "  blf cal [date]")
 	fmt.Fprintln(w, "  blf sum [-e|--echo]")
+	fmt.Fprintln(w, "  blf claude-statusline [--silent] [--demo]")
 	fmt.Fprintln(w, "  blf kitty <ls|list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
