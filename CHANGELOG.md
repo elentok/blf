@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.7] - 2026-05-18
+
+- `blf claude-statusline` now hides `5h` and `weekly` values when they are missing or invalid (for example on Bedrock payloads), instead of rendering `missing/invalid` placeholders.
+
 ## [v0.4.6] - 2026-05-17
 
 - Added `blf kitty ls` to render a readable tree from `kitty @ ls`, including OS windows, tabs, windows, session names, command lines, and foreground processes.
