@@ -80,8 +80,8 @@ func runClaudeStatusLine(args []string, d deps) error {
 	modelText := claudeStatusStringField(payload.Model.DisplayName, "model", silent)
 	tokensText := claudeStatusNumberField(payload.ContextWindow.TotalInputTokens, "tokens", false, silent)
 	ctxText := claudeStatusContextProgressField(payload.ContextWindow.UsedPercentage, silent)
-	fiveText := claudeStatusNumberField(payload.RateLimits.FiveHour.UsedPercentage, "5h", true, silent)
-	weekText := claudeStatusNumberField(payload.RateLimits.SevenDay.UsedPercentage, "weekly", true, silent)
+	fiveText := claudeStatusNumberField(payload.RateLimits.FiveHour.UsedPercentage, "5h", true, true)
+	weekText := claudeStatusNumberField(payload.RateLimits.SevenDay.UsedPercentage, "weekly", true, true)
 
 	fmt.Fprintln(d.stdout, claudeStatusLineFromParts(modelText, tokensText, ctxText, fiveText, weekText))
 	return nil

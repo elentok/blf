@@ -49,12 +49,14 @@ func TestRunClaudeStatusLineInvalidFields(t *testing.T) {
 		"model missing/invalid: 9",
 		"tokens missing/invalid: \"NaN?\"",
 		"context missing/invalid: \"oops\"",
-		"5h missing/invalid",
 		"88% of weekly",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q: %q", want, got)
 		}
+	}
+	if strings.Contains(got, "5h missing/invalid") || strings.Contains(got, "weekly missing/invalid") {
+		t.Fatalf("expected missing 5h/weekly values to be hidden, got %q", got)
 	}
 }
 
