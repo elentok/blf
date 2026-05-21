@@ -49,3 +49,27 @@ Also pin the outer box height explicitly with `.Height(m.height - 2)` so it alwa
 **Why:** The original `usedH = headerH + outputsH + footerH + 8` used a guessed constant of 8 for "borders + padding". The actual border cost was different, leaving the box 3–4 rows too short.
 
 **How to apply:** For each layout region, count its rows explicitly (content + border). Sum them. Subtract from `m.height`. Never guess.
+
+---
+
+## CLI picker rendering
+
+### Do not rely on tab-aligned display columns in `fzf` UIs
+
+When building `fzf` picker rows, do not depend on `\t` producing visually aligned multi-column output across terminals. Use a simple single display label such as `name (n tabs)` and keep any machine-readable value in a hidden leading field only if needed for selection parsing.
+
+**Why:** The Kitty session picker used tab-separated visible columns and the alignment rendered poorly in real usage. The display became clearer and more stable once the visible portion was reduced to a plain text label.
+
+**How to apply:** Prefer one human-facing label column. If the selected value must differ from the label, keep the raw value in a hidden first field and select only the visible label with `fzf --with-nth`.
+
+---
+
+## External JSON
+
+### Do not assume external timestamp fields are integers
+
+When parsing JSON from external tools, especially nightly builds, do not model timestamp-like fields as integers unless the upstream format guarantees that. Accept numeric values that may include fractional seconds.
+
+**Why:** Kitty nightly emits `last_focused_at` as a JSON number like `978.424564`. Parsing it as `int64` broke `blf kitty sessions` at runtime.
+
+**How to apply:** Use `float64` for raw parsed fields when the upstream JSON emits generic numbers, and only coerce to integer types if the format is explicitly stable and verified.
