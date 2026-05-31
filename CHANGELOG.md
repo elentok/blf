@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.9] - 2026-05-31
+
+- `blf copy-ref` on macOS now reliably copies multiple files. It previously landed only a random subset on the clipboard (for example 2 of 3), because the pasteboard's lazy file-reference providers raced with the short-lived CLI process exiting; the references are now materialized before the process exits.
+
 ## [v0.4.8] - 2026-05-31
 
 - Added `blf copy-ref <file>...` to copy one or more files to the clipboard as file references, so pasting into a GUI app drops/attaches the actual files. Resolves relative and `~` paths to absolute, accepts directories, validates every path up front (all-or-nothing), and confirms the count on success. Uses `osascript` on macOS and `wl-copy` (Wayland) on Linux.
