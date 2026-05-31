@@ -80,6 +80,8 @@ func execute(args []string, d deps) error {
 		return runOpen(args[1:], d)
 	case "copy":
 		return runCopy(args[1:], d)
+	case "copy-ref":
+		return runCopyRef(args[1:], d)
 	case "tmux-targets":
 		return d.runTargets(args[1:])
 	case "npm-scripts":
@@ -121,6 +123,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  blf kitty <ls|list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
 	fmt.Fprintln(w, "  blf open <url>")
 	fmt.Fprintln(w, "  blf copy <text>")
+	fmt.Fprintln(w, "  blf copy-ref <file>...")
 	fmt.Fprintln(w, "  blf version")
 	fmt.Fprintln(w)
 }

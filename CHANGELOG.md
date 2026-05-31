@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.8] - 2026-05-31
+
+- Added `blf copy-ref <file>...` to copy one or more files to the clipboard as file references, so pasting into a GUI app drops/attaches the actual files. Resolves relative and `~` paths to absolute, accepts directories, validates every path up front (all-or-nothing), and confirms the count on success. Uses `osascript` on macOS and `wl-copy` (Wayland) on Linux.
+
 ## [v0.4.7] - 2026-05-18
 
 - `blf claude-statusline` now hides `5h` and `weekly` values when they are missing or invalid (for example on Bedrock payloads), instead of rendering `missing/invalid` placeholders.
