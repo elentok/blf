@@ -18,9 +18,18 @@ func TestBuildCopyRefCommandDarwinSingle(t *testing.T) {
 	if name != "osascript" {
 		t.Fatalf("name = %q, want osascript", name)
 	}
-	want := `set the clipboard to POSIX file "/a/x.png"`
-	if len(args) != 2 || args[0] != "-e" || args[1] != want {
-		t.Fatalf("args = %#v, want [-e %q]", args, want)
+	if len(args) != 4 || args[0] != "-l" || args[1] != "JavaScript" || args[2] != "-e" {
+		t.Fatalf("args = %#v, want [-l JavaScript -e <script>]", args)
+	}
+	script := args[3]
+	if !strings.Contains(script, `var paths=["/a/x.png"];`) {
+		t.Fatalf("script does not embed the path as a JSON array: %q", script)
+	}
+	if !strings.Contains(script, "pb.writeObjects(urls);") {
+		t.Fatalf("script does not write NSURLs to the pasteboard: %q", script)
+	}
+	if !strings.Contains(script, "dataForType('public.file-url')") {
+		t.Fatalf("script does not force the lazy file-url data to resolve: %q", script)
 	}
 }
 
@@ -29,9 +38,8 @@ func TestBuildCopyRefCommandDarwinMultiple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	want := `set the clipboard to {POSIX file "/a/x.png", POSIX file "/a/y.png"}`
-	if args[1] != want {
-		t.Fatalf("script = %q, want %q", args[1], want)
+	if !strings.Contains(args[3], `var paths=["/a/x.png","/a/y.png"];`) {
+		t.Fatalf("script does not embed both paths as a JSON array: %q", args[3])
 	}
 }
 
@@ -40,9 +48,10 @@ func TestBuildCopyRefCommandDarwinEscaping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	want := `set the clipboard to POSIX file "/tmp/a \"b\" \\c.png"`
-	if args[1] != want {
-		t.Fatalf("script = %q, want %q", args[1], want)
+	// json.Marshal escapes the embedded quotes and backslash so the path
+	// stays a valid JavaScript string literal.
+	if !strings.Contains(args[3], `var paths=["/tmp/a \"b\" \\c.png"];`) {
+		t.Fatalf("script does not JSON-escape the path: %q", args[3])
 	}
 }
 
@@ -238,9 +247,9 @@ func TestCopyRefForOSSuccessSingle(t *testing.T) {
 	if gotName != "osascript" {
 		t.Fatalf("name = %q, want osascript", gotName)
 	}
-	wantScript := fmt.Sprintf(`set the clipboard to POSIX file "%s"`, f)
-	if len(gotArgs) != 2 || gotArgs[1] != wantScript {
-		t.Fatalf("args = %#v, want script %q", gotArgs, wantScript)
+	wantFragment := fmt.Sprintf(`var paths=["%s"];`, f)
+	if len(gotArgs) != 4 || !strings.Contains(gotArgs[3], wantFragment) {
+		t.Fatalf("args = %#v, want script embedding %q", gotArgs, wantFragment)
 	}
 	if out.String() != "copied 1 file reference to clipboard\n" {
 		t.Fatalf("stdout = %q", out.String())
@@ -292,8 +301,8 @@ func TestCopyRefForOSExpandsTilde(t *testing.T) {
 	if err := copyRefForOS([]string{"~/a.png"}, d, "darwin"); err != nil {
 		t.Fatalf("error: %v", err)
 	}
-	wantScript := fmt.Sprintf(`set the clipboard to POSIX file "%s"`, f)
-	if len(gotArgs) != 2 || gotArgs[1] != wantScript {
+	wantFragment := fmt.Sprintf(`var paths=["%s"];`, f)
+	if len(gotArgs) != 4 || !strings.Contains(gotArgs[3], wantFragment) {
 		t.Fatalf("args = %#v, want tilde expanded to %q", gotArgs, f)
 	}
 }

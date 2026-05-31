@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -107,7 +108,11 @@ func expandTilde(path string, homeDir func() (string, error)) (string, error) {
 func buildCopyRefCommand(goos string, paths []string) (string, []string, error) {
 	switch goos {
 	case "darwin":
-		return "osascript", []string{"-e", buildAppleScript(paths)}, nil
+		script, err := buildMacScript(paths)
+		if err != nil {
+			return "", nil, err
+		}
+		return "osascript", []string{"-l", "JavaScript", "-e", script}, nil
 	case "linux":
 		return "wl-copy", []string{"--type", "text/uri-list", buildURIList(paths)}, nil
 	default:
@@ -115,28 +120,35 @@ func buildCopyRefCommand(goos string, paths []string) (string, []string, error) 
 	}
 }
 
-// buildAppleScript builds an AppleScript that sets the clipboard to the given
-// paths as POSIX file references. Each path is embedded in a double-quoted
-// AppleScript literal; because execution goes through exec (no shell), only
-// AppleScript-level escaping is required.
-func buildAppleScript(paths []string) string {
-	refs := make([]string, len(paths))
-	for i, p := range paths {
-		refs[i] = fmt.Sprintf("POSIX file \"%s\"", escapeAppleScript(p))
+// buildMacScript builds a JXA (JavaScript for Automation) script that writes the
+// given paths to the clipboard as NSURL file references via NSPasteboard's
+// modern writeObjects API.
+//
+// writeObjects installs lazy data providers, one pasteboard item per file. From
+// a short-lived CLI process those providers race with process teardown, so
+// copying N files intermittently lands only some of them. To defeat the race we
+// force every item's file-url data to materialize in-process (by reading it)
+// before returning, which resolves the providers synchronously.
+//
+// (AppleScript's "set the clipboard to {POSIX file ...}" is not an option: it
+// puts an opaque list on the clipboard that GUI apps cannot paste.)
+//
+// Paths are embedded as a JSON array, which is also valid JavaScript and gives
+// correct string escaping.
+func buildMacScript(paths []string) (string, error) {
+	encoded, err := json.Marshal(paths)
+	if err != nil {
+		return "", err
 	}
-	if len(refs) == 1 {
-		return "set the clipboard to " + refs[0]
-	}
-	return "set the clipboard to {" + strings.Join(refs, ", ") + "}"
-}
-
-// escapeAppleScript backslash-escapes the characters that are special inside an
-// AppleScript string literal. Backslash must be escaped first so the escaping
-// of quotes is not doubled.
-func escapeAppleScript(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	return s
+	return fmt.Sprintf("ObjC.import('AppKit');"+
+		"var paths=%s;"+
+		"var urls=$.NSMutableArray.alloc.init;"+
+		"paths.forEach(function(p){urls.addObject($.NSURL.fileURLWithPath(p));});"+
+		"var pb=$.NSPasteboard.generalPasteboard;"+
+		"pb.clearContents;"+
+		"pb.writeObjects(urls);"+
+		"var items=pb.pasteboardItems;"+
+		"for(var i=0;i<items.count;i++){items.objectAtIndex(i).dataForType('public.file-url');}", encoded), nil
 }
 
 // buildURIList builds a newline-joined text/uri-list payload of file:// URIs.
