@@ -102,7 +102,8 @@ func claudeStatusLineFromParts(model claudeStatusField, tokens claudeStatusField
 		parts = append(parts, claudeStatusStyledValue(model, claudeModelStyle))
 	}
 	if tokens.text != "" {
-		tokensSegment := claudeStatusField{text: "  " + tokens.text, invalid: tokens.invalid}
+
+		tokensSegment := claudeStatusField{text: "🤔 " + tokens.text, invalid: tokens.invalid}
 		tokensSegmentRendered := claudeStatusStyledValue(tokensSegment, claudeTokensStyle)
 		parts = append(parts, tokensSegmentRendered)
 	}
