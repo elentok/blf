@@ -135,7 +135,7 @@ func TestCopyRefForOSNoArgs(t *testing.T) {
 		stdout:      &strings.Builder{},
 		userHomeDir: func() (string, error) { return "/home/test", nil },
 		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand: func(string, ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(string, ...string) ([]byte, error) {
 			called = true
 			return nil, nil
 		},
@@ -144,7 +144,7 @@ func TestCopyRefForOSNoArgs(t *testing.T) {
 		t.Fatal("expected usage error for no args")
 	}
 	if called {
-		t.Fatal("runCommand must not be called when there are no args")
+		t.Fatal("runCommandWithoutStderr must not be called when there are no args")
 	}
 }
 
@@ -154,7 +154,7 @@ func TestCopyRefForOSMissingFile(t *testing.T) {
 		stdout:      &strings.Builder{},
 		userHomeDir: func() (string, error) { return "/home/test", nil },
 		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand: func(string, ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(string, ...string) ([]byte, error) {
 			called = true
 			return nil, nil
 		},
@@ -165,7 +165,7 @@ func TestCopyRefForOSMissingFile(t *testing.T) {
 		t.Fatalf("error = %v, want file not found", err)
 	}
 	if called {
-		t.Fatal("runCommand must not be called when a file is missing")
+		t.Fatal("runCommandWithoutStderr must not be called when a file is missing")
 	}
 }
 
@@ -182,7 +182,7 @@ func TestCopyRefForOSAtomicOneMissing(t *testing.T) {
 		stdout:      &strings.Builder{},
 		userHomeDir: func() (string, error) { return "/home/test", nil },
 		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand: func(string, ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(string, ...string) ([]byte, error) {
 			called = true
 			return nil, nil
 		},
@@ -191,7 +191,7 @@ func TestCopyRefForOSAtomicOneMissing(t *testing.T) {
 		t.Fatal("expected error when one of several files is missing")
 	}
 	if called {
-		t.Fatal("runCommand must not be called: validation is all-or-nothing")
+		t.Fatal("runCommandWithoutStderr must not be called: validation is all-or-nothing")
 	}
 }
 
@@ -207,7 +207,7 @@ func TestCopyRefForOSLinuxToolMissing(t *testing.T) {
 		stdout:      &strings.Builder{},
 		userHomeDir: func() (string, error) { return "/home/test", nil },
 		lookPath:    func(string) (string, error) { return "", fmt.Errorf("not found") },
-		runCommand: func(string, ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(string, ...string) ([]byte, error) {
 			called = true
 			return nil, nil
 		},
@@ -217,7 +217,7 @@ func TestCopyRefForOSLinuxToolMissing(t *testing.T) {
 		t.Fatalf("error = %v, want install hint", err)
 	}
 	if called {
-		t.Fatal("runCommand must not be called when wl-copy is missing")
+		t.Fatal("runCommandWithoutStderr must not be called when wl-copy is missing")
 	}
 }
 
@@ -235,7 +235,7 @@ func TestCopyRefForOSSuccessSingle(t *testing.T) {
 		stdout:      out,
 		userHomeDir: func() (string, error) { return "/home/test", nil },
 		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand: func(name string, args ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(name string, args ...string) ([]byte, error) {
 			gotName = name
 			gotArgs = args
 			return nil, nil
@@ -268,10 +268,10 @@ func TestCopyRefForOSSuccessMultiplePlural(t *testing.T) {
 
 	out := &strings.Builder{}
 	d := deps{
-		stdout:      out,
-		userHomeDir: func() (string, error) { return "/home/test", nil },
-		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand:  func(string, ...string) ([]byte, error) { return nil, nil },
+		stdout:                  out,
+		userHomeDir:             func() (string, error) { return "/home/test", nil },
+		lookPath:                func(string) (string, error) { return "", nil },
+		runCommandWithoutStderr: func(string, ...string) ([]byte, error) { return nil, nil },
 	}
 	if err := copyRefForOS([]string{a, b}, d, "darwin"); err != nil {
 		t.Fatalf("error: %v", err)
@@ -293,7 +293,7 @@ func TestCopyRefForOSExpandsTilde(t *testing.T) {
 		stdout:      &strings.Builder{},
 		userHomeDir: func() (string, error) { return home, nil },
 		lookPath:    func(string) (string, error) { return "", nil },
-		runCommand: func(_ string, args ...string) ([]byte, error) {
+		runCommandWithoutStderr: func(_ string, args ...string) ([]byte, error) {
 			gotArgs = args
 			return nil, nil
 		},

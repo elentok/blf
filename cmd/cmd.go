@@ -14,26 +14,27 @@ import (
 )
 
 type deps struct {
-	stdout         io.Writer
-	stderr         io.Writer
-	stdin          io.Reader
-	lookupEnv      func(string) (string, bool)
-	openURL        func(string) error
-	copyText       func(string) error
-	runTmuxLinks   func(string) error
-	runTargets     func([]string) error
-	lookPath       func(string) (string, error)
-	runCommand     func(string, ...string) ([]byte, error)
-	fileExists     func(string) (bool, error)
-	removeFile     func(string) error
-	readFile       func(string) ([]byte, error)
-	readDir        func(string) ([]os.DirEntry, error)
-	writeFile      func(string, []byte, os.FileMode) error
-	mkdirAll       func(string, os.FileMode) error
-	executablePath func() (string, error)
-	getwd          func() (string, error)
-	userHomeDir    func() (string, error)
-	now            func() time.Time
+	stdout                  io.Writer
+	stderr                  io.Writer
+	stdin                   io.Reader
+	lookupEnv               func(string) (string, bool)
+	openURL                 func(string) error
+	copyText                func(string) error
+	runTmuxLinks            func(string) error
+	runTargets              func([]string) error
+	lookPath                func(string) (string, error)
+	runCommand              func(string, ...string) ([]byte, error)
+	runCommandWithoutStderr func(string, ...string) ([]byte, error)
+	fileExists              func(string) (bool, error)
+	removeFile              func(string) error
+	readFile                func(string) ([]byte, error)
+	readDir                 func(string) ([]os.DirEntry, error)
+	writeFile               func(string, []byte, os.FileMode) error
+	mkdirAll                func(string, os.FileMode) error
+	executablePath          func() (string, error)
+	getwd                   func() (string, error)
+	userHomeDir             func() (string, error)
+	now                     func() time.Time
 }
 
 func defaultDeps() deps {
@@ -49,6 +50,18 @@ func defaultDeps() deps {
 		lookPath:     exec.LookPath,
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
+		},
+		// runCommandWithoutStderr is for commands that fork a long-lived child
+		// which inherits stderr (e.g. wl-copy, whose daemon child holds the
+		// clipboard until the next write). Output() would capture stderr via an
+		// os.Pipe and block in Wait() until that write end closes, which never
+		// happens while the child lives, hanging us forever. Setting Stderr to
+		// an *os.File hands the fd straight through, so Wait() returns when the
+		// direct child exits.
+		runCommandWithoutStderr: func(name string, args ...string) ([]byte, error) {
+			cmd := exec.Command(name, args...)
+			cmd.Stderr = os.Stderr
+			return cmd.Output()
 		},
 		fileExists:     fileExists,
 		removeFile:     os.Remove,

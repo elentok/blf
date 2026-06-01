@@ -40,7 +40,10 @@ func copyRefForOS(args []string, d deps, goos string) error {
 		}
 	}
 
-	if _, err := d.runCommand(name, cmdArgs...); err != nil {
+	// Use the stderr-passthrough runner: wl-copy forks a daemon child that
+	// inherits stderr and lives until the next clipboard write, which would
+	// hang a stderr-capturing runner. See runCommandWithoutStderr in cmd.go.
+	if _, err := d.runCommandWithoutStderr(name, cmdArgs...); err != nil {
 		return fmt.Errorf("copy-ref: %w", err)
 	}
 
