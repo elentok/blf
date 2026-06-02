@@ -1,16 +1,16 @@
-package cmd
+package claude
 
 import (
 	"strings"
 	"testing"
 )
 
-func TestRunClaudeStatusLineValidInput(t *testing.T) {
+func TestRunStatusLineValidInput(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":1234,"used_percentage":51.2},"rate_limits":{"five_hour":{"used_percentage":11.4},"seven_day":{"used_percentage":72.8}},"model":{"display_name":"Claude Sonnet"}}`)}
 
-	if err := runClaudeStatusLine(nil, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine(nil, strings.NewReader(`{"context_window":{"total_input_tokens":1234,"used_percentage":51.2},"rate_limits":{"five_hour":{"used_percentage":11.4},"seven_day":{"used_percentage":72.8}},"model":{"display_name":"Claude Sonnet"}}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 
 	got := out.String()
@@ -24,24 +24,24 @@ func TestRunClaudeStatusLineValidInput(t *testing.T) {
 	}
 }
 
-func TestRunClaudeStatusLineTokensBelowThreshold(t *testing.T) {
+func TestRunStatusLineTokensBelowThreshold(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":999,"used_percentage":1},"rate_limits":{"five_hour":{"used_percentage":2},"seven_day":{"used_percentage":3}},"model":{"display_name":"Claude"}}`)}
 
-	if err := runClaudeStatusLine(nil, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine(nil, strings.NewReader(`{"context_window":{"total_input_tokens":999,"used_percentage":1},"rate_limits":{"five_hour":{"used_percentage":2},"seven_day":{"used_percentage":3}},"model":{"display_name":"Claude"}}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 	if !strings.Contains(out.String(), "999") {
 		t.Fatalf("unexpected output: %q", out.String())
 	}
 }
 
-func TestRunClaudeStatusLineInvalidFields(t *testing.T) {
+func TestRunStatusLineInvalidFields(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":"NaN?","used_percentage":"oops"},"rate_limits":{"five_hour":{},"seven_day":{"used_percentage":88}},"model":{"display_name":9}}`)}
 
-	if err := runClaudeStatusLine(nil, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine(nil, strings.NewReader(`{"context_window":{"total_input_tokens":"NaN?","used_percentage":"oops"},"rate_limits":{"five_hour":{},"seven_day":{"used_percentage":88}},"model":{"display_name":9}}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 
 	got := out.String()
@@ -60,12 +60,12 @@ func TestRunClaudeStatusLineInvalidFields(t *testing.T) {
 	}
 }
 
-func TestRunClaudeStatusLineRejectsNonFiniteNumbers(t *testing.T) {
+func TestRunStatusLineRejectsNonFiniteNumbers(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":"NaN","used_percentage":"Infinity"},"rate_limits":{"five_hour":{"used_percentage":10},"seven_day":{"used_percentage":20}},"model":{"display_name":"Claude"}}`)}
 
-	if err := runClaudeStatusLine(nil, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine(nil, strings.NewReader(`{"context_window":{"total_input_tokens":"NaN","used_percentage":"Infinity"},"rate_limits":{"five_hour":{"used_percentage":10},"seven_day":{"used_percentage":20}},"model":{"display_name":"Claude"}}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 
 	got := out.String()
@@ -79,12 +79,12 @@ func TestRunClaudeStatusLineRejectsNonFiniteNumbers(t *testing.T) {
 	}
 }
 
-func TestRunClaudeStatusLineSilentSkipsInvalid(t *testing.T) {
+func TestRunStatusLineSilentSkipsInvalid(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"context_window":{"total_input_tokens":"bad"},"rate_limits":{"five_hour":{"used_percentage":10}},"model":{"display_name":"Claude"}}`)}
 
-	if err := runClaudeStatusLine([]string{"--silent"}, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine([]string{"--silent"}, strings.NewReader(`{"context_window":{"total_input_tokens":"bad"},"rate_limits":{"five_hour":{"used_percentage":10}},"model":{"display_name":"Claude"}}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 
 	got := out.String()
@@ -98,11 +98,10 @@ func TestRunClaudeStatusLineSilentSkipsInvalid(t *testing.T) {
 	}
 }
 
-func TestRunClaudeStatusLineMalformedJSON(t *testing.T) {
+func TestRunStatusLineMalformedJSON(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"model":`)}
 
-	err := runClaudeStatusLine(nil, d)
+	err := RunStatusLine(nil, strings.NewReader(`{"model":`), out)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -111,7 +110,7 @@ func TestRunClaudeStatusLineMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestClaudeStatusContextProgressColorThresholds(t *testing.T) {
+func TestContextProgressColorThresholds(t *testing.T) {
 	cases := []struct {
 		name    string
 		input   float64
@@ -124,7 +123,7 @@ func TestClaudeStatusContextProgressColorThresholds(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := claudeStatusContextProgressColor(tc.input)
+			got := contextProgressColor(tc.input)
 			if got != tc.wantHex {
 				t.Fatalf("expected %s, got %s", tc.wantHex, got)
 			}
@@ -132,12 +131,12 @@ func TestClaudeStatusContextProgressColorThresholds(t *testing.T) {
 	}
 }
 
-func TestRunClaudeStatusLineDemo(t *testing.T) {
+func TestRunStatusLineDemo(t *testing.T) {
 	out := &strings.Builder{}
-	d := deps{stdout: out, stdin: strings.NewReader(`{"model":"ignored"}`)}
 
-	if err := runClaudeStatusLine([]string{"--demo"}, d); err != nil {
-		t.Fatalf("runClaudeStatusLine returned error: %v", err)
+	err := RunStatusLine([]string{"--demo"}, strings.NewReader(`{"model":"ignored"}`), out)
+	if err != nil {
+		t.Fatalf("RunStatusLine returned error: %v", err)
 	}
 
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
