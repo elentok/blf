@@ -17,6 +17,36 @@ brew tap elentok/stuff
 brew install blf
 ```
 
+## Shell Completions
+
+### fish
+
+```bash
+blf completion fish > ~/.config/fish/completions/blf.fish
+```
+
+### bash
+
+```bash
+# Linux
+blf completion bash > /etc/bash_completion.d/blf
+
+# macOS
+blf completion bash > $(brew --prefix)/etc/bash_completion.d/blf
+```
+
+### zsh
+
+```bash
+# Linux
+blf completion zsh > "${fpath[1]}/_blf"
+
+# macOS
+blf completion zsh > $(brew --prefix)/share/zsh/site-functions/_blf
+```
+
+Start a new shell for completions to take effect.
+
 ## Commands
 
 - `blf open <url>`: open a URL with the system default browser.

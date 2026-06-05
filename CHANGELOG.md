@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.11] - 2026-06-05
+
+- Shell completions are now available via `blf completion fish|bash|zsh` (powered by Cobra).
+- All commands and subcommands now support `--help` for usage and flag descriptions.
+- Added `--version` / `-v` flag to the root command (equivalent to `blf version`).
+- `blf claude-statusline`: changed the tokens icon.
+
 ## [v0.4.10] - 2026-06-01
 
 - `blf copy-ref` on Linux no longer hangs. `wl-copy` forks a daemon child that inherits stderr and keeps it open until the next clipboard write, which stalled blf because the command runner captured stderr through a pipe and waited for it to close. The clipboard command now passes stderr straight through, so it returns as soon as the copy is handed off.
