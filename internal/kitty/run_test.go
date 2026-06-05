@@ -88,7 +88,7 @@ func TestGotoOSWindowWithExplicitID(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	err := GotoOSWindow([]string{"7"}, d)
+	err := GotoOSWindow("7", d)
 	if err != nil {
 		t.Fatalf("GotoOSWindow returned error: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestNewSessionCreatesAndSwitches(t *testing.T) {
 		},
 	}
 
-	if err := NewSession(nil, d); err != nil {
+	if err := NewSession(d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestNewSessionSwitchesToExistingActiveSession(t *testing.T) {
 		},
 	}
 
-	if err := NewSession(nil, d); err != nil {
+	if err := NewSession(d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 	if writeInvoked {
@@ -201,7 +201,7 @@ func TestNewSessionRecreatesExistingZeroTabSession(t *testing.T) {
 		},
 	}
 
-	if err := NewSession(nil, d); err != nil {
+	if err := NewSession(d); err != nil {
 		t.Fatalf("NewSession returned error: %v", err)
 	}
 	if !writeInvoked {
@@ -225,7 +225,7 @@ func TestDeleteSessionLaunchesOverlay(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	if err := DeleteSession(nil, d); err != nil {
+	if err := DeleteSession(false, d); err != nil {
 		t.Fatalf("DeleteSession returned error: %v", err)
 	}
 
@@ -248,7 +248,7 @@ func TestSessionsCommandShowsErrorWhenNoSessions(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	if err := SessionsCommand(nil, d); err != nil {
+	if err := SessionsCommand(d); err != nil {
 		t.Fatalf("SessionsCommand returned error: %v", err)
 	}
 
@@ -271,7 +271,7 @@ func TestDeleteSessionOverlayShowsErrorWhenNoSessions(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	if err := DeleteSession([]string{"--overlay"}, d); err != nil {
+	if err := DeleteSession(true, d); err != nil {
 		t.Fatalf("DeleteSession returned error: %v", err)
 	}
 
@@ -305,7 +305,7 @@ func TestListSessionChoicesWritesChoices(t *testing.T) {
 		},
 	}
 
-	if err := ListSessionChoices(nil, d); err != nil {
+	if err := ListSessionChoices(d); err != nil {
 		t.Fatalf("ListSessionChoices returned error: %v", err)
 	}
 
@@ -324,7 +324,7 @@ func TestEditSessionFileUsesEditor(t *testing.T) {
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
 	}
 
-	if err := EditSessionFile([]string{"/Users/test/.local/share/kitty/sessions/proj.kitty-session"}, d); err != nil {
+	if err := EditSessionFile("/Users/test/.local/share/kitty/sessions/proj.kitty-session", d); err != nil {
 		t.Fatalf("EditSessionFile returned error: %v", err)
 	}
 }
@@ -335,7 +335,7 @@ func TestEditSessionFileRequiresEditor(t *testing.T) {
 		UserHomeDir: func() (string, error) { return "/Users/test", nil },
 	}
 
-	err := EditSessionFile([]string{"/Users/test/.local/share/kitty/sessions/proj.kitty-session"}, d)
+	err := EditSessionFile("/Users/test/.local/share/kitty/sessions/proj.kitty-session", d)
 	if err == nil || !strings.Contains(err.Error(), "EDITOR environment variable is not set") {
 		t.Fatalf("error = %v", err)
 	}

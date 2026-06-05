@@ -40,7 +40,7 @@ func TestTargetsFallsBackToCurrentWindowOutsideOverlay(t *testing.T) {
 		},
 	}
 
-	if err := Targets(nil, d); err != nil {
+	if err := Targets(false, "", d); err != nil {
 		t.Fatalf("Targets returned error: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestTargetsNoTargetsShowsError(t *testing.T) {
 		Stderr: &errBuf,
 	}
 
-	if err := Targets(nil, d); err != nil {
+	if err := Targets(false, "", d); err != nil {
 		t.Fatalf("expected nil for no-targets case, got %v", err)
 	}
 
@@ -120,7 +120,7 @@ func TestTargetsUsesOverlayParentWhenAvailable(t *testing.T) {
 		},
 	}
 
-	if err := Targets(nil, d); err != nil {
+	if err := Targets(false, "", d); err != nil {
 		t.Fatalf("Targets returned error: %v", err)
 	}
 	if len(matches) != 2 {
@@ -147,7 +147,7 @@ func TestTargetsExplicitTargetNoTargetsIsNil(t *testing.T) {
 		},
 	}
 
-	if err := Targets([]string{"--target", "17"}, d); err != nil {
+	if err := Targets(false, "17", d); err != nil {
 		t.Fatalf("expected nil for no-targets case, got %v", err)
 	}
 }
@@ -163,7 +163,7 @@ func TestTargetsNoTargetsReturnsErrorWhenNotificationFails(t *testing.T) {
 		},
 	}
 
-	err := Targets([]string{"--target", "17"}, d)
+	err := Targets(false, "17", d)
 	if err == nil || !strings.Contains(err.Error(), "notify kitty targets failure") {
 		t.Fatalf("error = %v", err)
 	}
@@ -193,7 +193,7 @@ func TestTargetsRunsPopupUI(t *testing.T) {
 		},
 	}
 
-	if err := Targets([]string{"--target", "17"}, d); err != nil {
+	if err := Targets(false, "17", d); err != nil {
 		t.Fatalf("Targets returned error: %v", err)
 	}
 
@@ -205,21 +205,6 @@ func TestTargetsRunsPopupUI(t *testing.T) {
 	}
 	if len(gotTargets) != 1 || gotTargets[0].Text != "https://example.com" {
 		t.Fatalf("targets = %#v", gotTargets)
-	}
-}
-
-func TestResolveTargetMatch(t *testing.T) {
-	match, err := resolveTargetMatch([]string{"--target", "17"}, Deps{})
-	if err != nil {
-		t.Fatalf("resolveTargetMatch returned error: %v", err)
-	}
-	if match != "id:17" {
-		t.Fatalf("match = %q", match)
-	}
-
-	_, err = resolveTargetMatch([]string{"--target"}, Deps{})
-	if err == nil || !strings.Contains(err.Error(), "usage") {
-		t.Fatalf("expected usage error, got %v", err)
 	}
 }
 

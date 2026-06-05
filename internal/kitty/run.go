@@ -40,20 +40,13 @@ func ListOSWindowsCommand(d Deps) error {
 	return err
 }
 
-func GotoOSWindow(args []string, d Deps) error {
-	if len(args) > 1 {
-		return fmt.Errorf("usage: blf kitty goto-os-window [id]")
-	}
-
+func GotoOSWindow(id string, d Deps) error {
 	windows, err := ListOSWindows(d)
 	if err != nil {
 		return err
 	}
 
-	id := ""
-	if len(args) == 1 {
-		id = args[0]
-	} else {
+	if id == "" {
 		otherWindows := filterInactiveOSWindows(windows)
 		if len(otherWindows) == 0 {
 			return ShowError(d, "blf kitty", "No other kitty windows")
@@ -85,39 +78,23 @@ func GotoOSWindow(args []string, d Deps) error {
 	return nil
 }
 
-func NewSession(args []string, d Deps) error {
-	if len(args) != 0 {
-		return fmt.Errorf("usage: blf kitty new-session")
-	}
-
+func NewSession(d Deps) error {
 	return runNewSessionPrompt(d)
 }
 
-func SessionsCommand(args []string, d Deps) error {
-	if len(args) != 0 {
-		return fmt.Errorf("usage: blf kitty sessions")
-	}
-
+func SessionsCommand(d Deps) error {
 	return runSessionsPicker(d)
 }
 
-func DeleteSession(args []string, d Deps) error {
-	switch {
-	case len(args) == 0:
-		return LaunchOverlay(DeleteSessionCmd, d)
-	case len(args) == 1 && args[0] == "--overlay":
+func DeleteSession(overlay bool, d Deps) error {
+	if overlay {
 		return runDeleteSessionOverlay(d)
-	default:
-		return fmt.Errorf("usage: blf kitty delete-session")
 	}
+	return LaunchOverlay(DeleteSessionCmd, d)
 }
 
-func PreviewSession(args []string, d Deps) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: blf kitty %s <path>", PreviewSessionCmd)
-	}
-
-	preview, err := RenderSessionPreview(args[0], d)
+func PreviewSession(path string, d Deps) error {
+	preview, err := RenderSessionPreview(path, d)
 	if err != nil {
 		return err
 	}
@@ -126,11 +103,7 @@ func PreviewSession(args []string, d Deps) error {
 	return err
 }
 
-func ListSessionChoices(args []string, d Deps) error {
-	if len(args) != 0 {
-		return fmt.Errorf("usage: blf kitty %s", ListSessionChoicesCmd)
-	}
-
+func ListSessionChoices(d Deps) error {
 	sessions, err := ListSessionsForPicker(d)
 	if err != nil {
 		return err
@@ -140,20 +113,12 @@ func ListSessionChoices(args []string, d Deps) error {
 	return err
 }
 
-func DeleteSessionFile(args []string, d Deps) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: blf kitty %s <path>", DeleteSessionFileCmd)
-	}
-
-	return deleteSessionFile(args[0], d)
+func DeleteSessionFile(path string, d Deps) error {
+	return deleteSessionFile(path, d)
 }
 
-func EditSessionFile(args []string, d Deps) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: blf kitty %s <path>", EditSessionFileCmd)
-	}
-
-	return editSessionFile(args[0], d)
+func EditSessionFile(path string, d Deps) error {
+	return editSessionFile(path, d)
 }
 
 func runNewSessionPrompt(d Deps) error {

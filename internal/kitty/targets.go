@@ -14,8 +14,8 @@ var (
 	runTargetsPopupUI = targets.RunPopupUI
 )
 
-func Targets(args []string, d Deps) error {
-	err := runTargets(args, d)
+func Targets(overlay bool, target string, d Deps) error {
+	err := runTargets(target, d)
 	if err == nil {
 		return nil
 	}
@@ -33,12 +33,12 @@ func Targets(args []string, d Deps) error {
 	return err
 }
 
-func runTargets(args []string, d Deps) error {
+func runTargets(target string, d Deps) error {
 	if err := requireKittyBinaries(d); err != nil {
 		return err
 	}
 
-	targetMatch, err := resolveTargetMatch(args, d)
+	targetMatch, err := resolveTargetMatch(target, d)
 	if err != nil {
 		return err
 	}
@@ -76,25 +76,11 @@ func requireKittyBinaries(d Deps) error {
 	return nil
 }
 
-func resolveTargetMatch(args []string, d Deps) (string, error) {
-	switch len(args) {
-	case 0:
-		return resolveImplicitTargetMatch(d)
-	case 1:
-		if args[0] == "--overlay" {
-			return resolveImplicitTargetMatch(d)
-		}
-	case 2:
-		if args[0] == "--target" {
-			return parseExplicitTargetMatch(args[1])
-		}
-	case 3:
-		if args[0] == "--overlay" && args[1] == "--target" {
-			return parseExplicitTargetMatch(args[2])
-		}
+func resolveTargetMatch(target string, d Deps) (string, error) {
+	if target != "" {
+		return parseExplicitTargetMatch(target)
 	}
-
-	return "", errors.New("usage: blf kitty targets [--target <window-id>]")
+	return resolveImplicitTargetMatch(d)
 }
 
 func resolveImplicitTargetMatch(d Deps) (string, error) {
