@@ -23,10 +23,10 @@ var (
 	}
 )
 
-func Execute(args []string) error {
+func Execute(popup bool, target string) error {
 	var err error
-	if len(args) > 0 && args[0] == "--popup" {
-		err = runPopupMode(args[1:])
+	if popup {
+		err = runPopupMode(target)
 	} else {
 		err = runTopLevel()
 	}
@@ -71,12 +71,7 @@ func runTopLevel() error {
 	return nil
 }
 
-func runPopupMode(args []string) error {
-	targetPane, err := parsePopupArgs(args)
-	if err != nil {
-		return err
-	}
-
+func runPopupMode(targetPane string) error {
 	if _, err := lookPath("tmux"); err != nil {
 		return errors.New("tmux binary not found in PATH")
 	}
@@ -101,16 +96,6 @@ func runPopupMode(args []string) error {
 	}
 
 	return nil
-}
-
-func parsePopupArgs(args []string) (string, error) {
-	if len(args) != 2 || args[0] != "--target" {
-		return "", errors.New("usage: blf tmux-targets --popup --target <pane-id>")
-	}
-	if strings.TrimSpace(args[1]) == "" {
-		return "", errors.New("missing popup target pane id")
-	}
-	return args[1], nil
 }
 
 func currentPaneID() (string, error) {

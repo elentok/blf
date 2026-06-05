@@ -30,7 +30,7 @@ func TestExecuteTopLevelOpensPopup(t *testing.T) {
 		return nil
 	}
 
-	err := Execute(nil)
+	err := Execute(false, "")
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -79,27 +79,12 @@ func TestExecutePopupNoTargetsIsNil(t *testing.T) {
 		return nil
 	}
 
-	err := Execute([]string{"--popup", "--target", "%1"})
+	err := Execute(true, "%1")
 	if err != nil {
 		t.Fatalf("expected nil for no targets case, got %v", err)
 	}
 	if messages != 1 {
 		t.Fatalf("expected one display-message call, got %d", messages)
-	}
-}
-
-func TestParsePopupArgs(t *testing.T) {
-	pane, err := parsePopupArgs([]string{"--target", "%1"})
-	if err != nil {
-		t.Fatalf("parsePopupArgs returned error: %v", err)
-	}
-	if pane != "%1" {
-		t.Fatalf("pane = %q", pane)
-	}
-
-	_, err = parsePopupArgs([]string{"--target"})
-	if err == nil || !strings.Contains(err.Error(), "usage") {
-		t.Fatalf("expected usage error, got %v", err)
 	}
 }
 
