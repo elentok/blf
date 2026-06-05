@@ -1,43 +1,176 @@
 package cmd
 
 import (
-	"fmt"
+	"github.com/spf13/cobra"
 
 	internalkitty "github.com/elentok/blf/internal/kitty"
 )
 
-func runKitty(args []string, d deps) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: blf kitty <ls|list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
+func newKittyCmd(d deps) *cobra.Command {
+	kitty := &cobra.Command{
+		Use:   "kitty",
+		Short: "Kitty terminal utilities",
 	}
 
-	switch args[0] {
-	case internalkitty.LSCmd:
-		return internalkitty.LSCommand(kittyDepsFromCmd(d))
-	case internalkitty.ListOSWindowsCmd:
-		return internalkitty.ListOSWindowsCommand(kittyDepsFromCmd(d))
-	case internalkitty.GotoOSWindowCmd:
-		return internalkitty.GotoOSWindow(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.TargetsCmd:
-		return internalkitty.Targets(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.NewSessionCmd:
-		return internalkitty.NewSession(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.SessionsCmd:
-		return internalkitty.SessionsCommand(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.DeleteSessionCmd:
-		return internalkitty.DeleteSession(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.DoctorCmd:
-		return internalkitty.Doctor(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.PreviewSessionCmd:
-		return internalkitty.PreviewSession(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.ListSessionChoicesCmd:
-		return internalkitty.ListSessionChoices(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.DeleteSessionFileCmd:
-		return internalkitty.DeleteSessionFile(args[1:], kittyDepsFromCmd(d))
-	case internalkitty.EditSessionFileCmd:
-		return internalkitty.EditSessionFile(args[1:], kittyDepsFromCmd(d))
-	default:
-		return fmt.Errorf("unknown kitty command %q", args[0])
+	kitty.AddCommand(
+		newKittyLSCmd(d),
+		newKittyListOSWindowsCmd(d),
+		newKittyGotoOSWindowCmd(d),
+		newKittyTargetsCmd(d),
+		newKittyNewSessionCmd(d),
+		newKittySessionsCmd(d),
+		newKittyDeleteSessionCmd(d),
+		newKittyDoctorCmd(d),
+		newKittyPreviewSessionCmd(d),
+		newKittyListSessionChoicesCmd(d),
+		newKittyDeleteSessionFileCmd(d),
+		newKittyEditSessionFileCmd(d),
+	)
+
+	return kitty
+}
+
+func newKittyLSCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.LSCmd,
+		Short: "List kitty state",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.LSCommand(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyListOSWindowsCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.ListOSWindowsCmd,
+		Short: "List OS windows",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.ListOSWindowsCommand(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyGotoOSWindowCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.GotoOSWindowCmd + " [id]",
+		Short: "Go to an OS window",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id := ""
+			if len(args) > 0 {
+				id = args[0]
+			}
+			return internalkitty.GotoOSWindow(id, kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyTargetsCmd(d deps) *cobra.Command {
+	var overlay bool
+	var target string
+
+	cmd := &cobra.Command{
+		Use:   internalkitty.TargetsCmd,
+		Short: "Show targets in current kitty window",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.Targets(overlay, target, kittyDepsFromCmd(d))
+		},
+	}
+	cmd.Flags().BoolVar(&overlay, "overlay", false, "Run in overlay mode")
+	cmd.Flags().StringVar(&target, "target", "", "Target window ID")
+	return cmd
+}
+
+func newKittyNewSessionCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.NewSessionCmd,
+		Short: "Create a new kitty session",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.NewSession(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittySessionsCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.SessionsCmd,
+		Short: "Open kitty sessions picker",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.SessionsCommand(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyDeleteSessionCmd(d deps) *cobra.Command {
+	var overlay bool
+
+	cmd := &cobra.Command{
+		Use:   internalkitty.DeleteSessionCmd,
+		Short: "Delete a kitty session",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.DeleteSession(overlay, kittyDepsFromCmd(d))
+		},
+	}
+	cmd.Flags().BoolVar(&overlay, "overlay", false, "Run in overlay mode")
+	return cmd
+}
+
+func newKittyDoctorCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.DoctorCmd,
+		Short: "Run kitty diagnostics",
+		// pass remaining args through to the internal function
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.Doctor(args, kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyPreviewSessionCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:    internalkitty.PreviewSessionCmd + " <path>",
+		Short:  "Preview a kitty session file",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.PreviewSession(args[0], kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyListSessionChoicesCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:    internalkitty.ListSessionChoicesCmd,
+		Short:  "List session choices for picker",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.ListSessionChoices(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyDeleteSessionFileCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:    internalkitty.DeleteSessionFileCmd + " <path>",
+		Short:  "Delete a kitty session file",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.DeleteSessionFile(args[0], kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyEditSessionFileCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:    internalkitty.EditSessionFileCmd + " <path>",
+		Short:  "Edit a kitty session file",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.EditSessionFile(args[0], kittyDepsFromCmd(d))
+		},
 	}
 }
 

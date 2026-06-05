@@ -11,6 +11,7 @@ import (
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
 	"github.com/elentok/blf/internal/tmuxtargets"
+	"github.com/spf13/cobra"
 )
 
 type deps struct {
@@ -21,7 +22,7 @@ type deps struct {
 	openURL                 func(string) error
 	copyText                func(string) error
 	runTmuxLinks            func(string) error
-	runTargets              func([]string) error
+	runTargets              func(popup bool, target string) error
 	lookPath                func(string) (string, error)
 	runCommand              func(string, ...string) ([]byte, error)
 	runCommandWithoutStderr func(string, ...string) ([]byte, error)
@@ -81,96 +82,173 @@ func Execute(args []string) error {
 }
 
 func execute(args []string, d deps) error {
-	if len(args) == 0 {
-		printUsage(d.stderr)
-		return fmt.Errorf("missing command")
+	root := &cobra.Command{
+		Use:           "blf",
+		Short:         "blf - Blazingly Fast CLI utilities",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Version:       getVersion(),
 	}
+	root.SetOut(d.stdout)
+	root.SetErr(d.stderr)
 
-	switch args[0] {
-	case "tmux-links":
-		return runTmuxLinks(args[1:], d)
-	case "open":
-		return runOpen(args[1:], d)
-	case "copy":
-		return runCopy(args[1:], d)
-	case "copy-ref":
-		return runCopyRef(args[1:], d)
-	case "tmux-targets":
-		return d.runTargets(args[1:])
-	case "npm-scripts":
-		return runNPMScripts(d)
-	case "querystring", "qs":
-		return runQueryString(args[1:], d)
-	case "cal":
-		return runCal(args[1:], d)
-	case "sum":
-		return runSum(args[1:], d)
-	case "claude-statusline":
-		return runClaudeStatusLine(args[1:], d)
-	case "kitty":
-		return runKitty(args[1:], d)
-	case "version", "-v", "--version":
-		return runVersion(d.stdout)
-	case "help", "-h", "--help":
-		printUsage(d.stdout)
-		return nil
-	default:
-		printUsage(d.stderr)
-		return fmt.Errorf("unknown command %q", args[0])
+	root.AddCommand(
+		newTmuxLinksCmd(d),
+		newOpenCmd(d),
+		newCopyCmd(d),
+		newCopyRefCmd(d),
+		newTmuxTargetsCmd(d),
+		newNPMScriptsCmd(d),
+		newQueryStringCmd(d),
+		newCalCmd(d),
+		newSumCmd(d),
+		newClaudeStatusLineCmd(d),
+		newKittyCmd(d),
+		newVersionCmd(d),
+	)
+
+	root.SetArgs(args)
+	return root.Execute()
+}
+
+func newTmuxLinksCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "tmux-links <open|copy>",
+		Short: "Open or copy tmux links",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			mode := args[0]
+			if mode != tmuxlinks.ModeOpen && mode != tmuxlinks.ModeCopy {
+				return fmt.Errorf("invalid tmux-links mode %q (expected open or copy)", mode)
+			}
+			return d.runTmuxLinks(mode)
+		},
 	}
 }
 
-func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "blf - Blazingly Fast CLI utilities")
-	fmt.Fprintln(w)
-
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  blf tmux-links <open|copy>")
-	fmt.Fprintln(w, "  blf tmux-targets")
-	fmt.Fprintln(w, "  blf npm-scripts")
-	fmt.Fprintln(w, "  blf querystring <querystring|-> [key]")
-	fmt.Fprintln(w, "  blf qs <querystring|-> [key]")
-	fmt.Fprintln(w, "  blf cal [date]")
-	fmt.Fprintln(w, "  blf sum [-e|--echo]")
-	fmt.Fprintln(w, "  blf claude-statusline [--silent] [--demo]")
-	fmt.Fprintln(w, "  blf kitty <ls|list-os-windows|goto-os-window|targets|new-session|sessions|delete-session|doctor> [id]")
-	fmt.Fprintln(w, "  blf open <url>")
-	fmt.Fprintln(w, "  blf copy <text>")
-	fmt.Fprintln(w, "  blf copy-ref <file>...")
-	fmt.Fprintln(w, "  blf version")
-	fmt.Fprintln(w)
+func newOpenCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "open <url>",
+		Short: "Open a URL in the browser",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := d.openURL(args[0]); err != nil {
+				return fmt.Errorf("open url: %w", err)
+			}
+			return nil
+		},
+	}
 }
 
-func runTmuxLinks(args []string, d deps) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: blf tmux-links <open|copy>")
+func newCopyCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "copy <text>",
+		Short: "Copy text to clipboard",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			text := strings.Join(args, " ")
+			if err := d.copyText(text); err != nil {
+				return fmt.Errorf("copy text: %w", err)
+			}
+			return nil
+		},
 	}
-	mode := args[0]
-	if mode != tmuxlinks.ModeOpen && mode != tmuxlinks.ModeCopy {
-		return fmt.Errorf("invalid tmux-links mode %q (expected open or copy)", mode)
-	}
-	return d.runTmuxLinks(mode)
 }
 
-func runOpen(args []string, d deps) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: blf open <url>")
+func newCopyRefCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "copy-ref <file>...",
+		Short: "Copy file references to clipboard",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCopyRef(args, d)
+		},
 	}
-	if err := d.openURL(args[0]); err != nil {
-		return fmt.Errorf("open url: %w", err)
-	}
-	return nil
 }
 
-func runCopy(args []string, d deps) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: blf copy <text>")
+func newTmuxTargetsCmd(d deps) *cobra.Command {
+	var popup bool
+	var target string
+
+	cmd := &cobra.Command{
+		Use:   "tmux-targets",
+		Short: "Show tmux targets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return d.runTargets(popup, target)
+		},
 	}
-	text := strings.Join(args, " ")
-	if err := d.copyText(text); err != nil {
-		return fmt.Errorf("copy text: %w", err)
+	cmd.Flags().BoolVar(&popup, "popup", false, "Show in popup")
+	cmd.Flags().StringVar(&target, "target", "", "Target pane")
+	return cmd
+}
+
+func newNPMScriptsCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "npm-scripts",
+		Short: "List npm scripts",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runNPMScripts(d)
+		},
 	}
-	return nil
+}
+
+func newQueryStringCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:     "querystring <querystring|-> [key]",
+		Aliases: []string{"qs"},
+		Short:   "Parse and query URL query strings",
+		Args:    cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runQueryString(args, d)
+		},
+	}
+}
+
+func newCalCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "cal [date]",
+		Short: "Show a calendar",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCal(args, d)
+		},
+	}
+}
+
+func newSumCmd(d deps) *cobra.Command {
+	var echo bool
+
+	cmd := &cobra.Command{
+		Use:   "sum",
+		Short: "Sum numbers from stdin",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSumWithEcho(echo, d)
+		},
+	}
+	cmd.Flags().BoolVarP(&echo, "echo", "e", false, "Echo each line")
+	return cmd
+}
+
+func newClaudeStatusLineCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "claude-statusline",
+		Short: "Show Claude status line",
+		// pass remaining args through to the internal function
+		DisableFlagParsing: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runClaudeStatusLine(args, d)
+		},
+	}
+}
+
+func newVersionCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runVersion(d.stdout)
+		},
+	}
 }
 
 func fileExists(path string) (bool, error) {

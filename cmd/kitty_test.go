@@ -25,9 +25,9 @@ func TestRunKittyTargetsRoutesToInternalKitty(t *testing.T) {
 		stderr: &strings.Builder{},
 	}
 
-	err := runKitty([]string{"targets", "--target", "17"}, d)
+	err := execute([]string{"kitty", "targets", "--target", "17"}, d)
 	if err != nil {
-		t.Fatalf("runKitty returned error: %v", err)
+		t.Fatalf("execute returned error: %v", err)
 	}
 	if strings.Join(calls, "\n") != "kitty @ get-text --extent screen --match id:17\nkitten @ action show_error \"blf kitty targets\" \"no targets found in current kitty window\"" {
 		t.Fatalf("calls = %v", calls)
@@ -51,8 +51,8 @@ func TestRunKittyLSRoutesToInternalKitty(t *testing.T) {
 		stderr: &strings.Builder{},
 	}
 
-	if err := runKitty([]string{"ls"}, d); err != nil {
-		t.Fatalf("runKitty returned error: %v", err)
+	if err := execute([]string{"kitty", "ls"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
 	}
 	if got := out.String(); got != ""+
 		"- OS Window 1 (active)\n"+

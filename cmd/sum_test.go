@@ -8,12 +8,12 @@ import (
 
 func TestRunSumSumsFirstTokenFromEachLine(t *testing.T) {
 	out := &strings.Builder{}
-	err := runSum(nil, deps{
+	err := runSumWithEcho(false, deps{
 		stdout: out,
 		stdin:  strings.NewReader("1 apple\n2 banana\n\n3\n"),
 	})
 	if err != nil {
-		t.Fatalf("runSum returned error: %v", err)
+		t.Fatalf("runSumWithEcho returned error: %v", err)
 	}
 	if out.String() != "= 6\n" {
 		t.Fatalf("output = %q", out.String())
@@ -22,40 +22,26 @@ func TestRunSumSumsFirstTokenFromEachLine(t *testing.T) {
 
 func TestRunSumEchoesTrimmedInput(t *testing.T) {
 	out := &strings.Builder{}
-	err := runSum([]string{"-e"}, deps{
+	err := runSumWithEcho(true, deps{
 		stdout: out,
 		stdin:  strings.NewReader("1 apple\n2 banana\n\n3\n"),
 	})
 	if err != nil {
-		t.Fatalf("runSum returned error: %v", err)
+		t.Fatalf("runSumWithEcho returned error: %v", err)
 	}
 	if out.String() != "1 apple\n2 banana\n\n3\n\n= 6\n" {
 		t.Fatalf("output = %q", out.String())
 	}
 }
 
-func TestRunSumSupportsLongEchoFlag(t *testing.T) {
-	out := &strings.Builder{}
-	err := runSum([]string{"--echo"}, deps{
-		stdout: out,
-		stdin:  strings.NewReader("1\n"),
-	})
-	if err != nil {
-		t.Fatalf("runSum returned error: %v", err)
-	}
-	if out.String() != "1\n\n= 1\n" {
-		t.Fatalf("output = %q", out.String())
-	}
-}
-
 func TestRunSumPreservesNaNBehavior(t *testing.T) {
 	out := &strings.Builder{}
-	err := runSum(nil, deps{
+	err := runSumWithEcho(false, deps{
 		stdout: out,
 		stdin:  strings.NewReader("4.5 foo\nbar\n"),
 	})
 	if err != nil {
-		t.Fatalf("runSum returned error: %v", err)
+		t.Fatalf("runSumWithEcho returned error: %v", err)
 	}
 	if out.String() != "= NaN\n" {
 		t.Fatalf("output = %q", out.String())
@@ -64,22 +50,15 @@ func TestRunSumPreservesNaNBehavior(t *testing.T) {
 
 func TestRunSumSupportsJSNumberForms(t *testing.T) {
 	out := &strings.Builder{}
-	err := runSum(nil, deps{
+	err := runSumWithEcho(false, deps{
 		stdout: out,
 		stdin:  strings.NewReader("0x10 hex\n1e2 sci\nInfinity x\n"),
 	})
 	if err != nil {
-		t.Fatalf("runSum returned error: %v", err)
+		t.Fatalf("runSumWithEcho returned error: %v", err)
 	}
 	if out.String() != "= Infinity\n" {
 		t.Fatalf("output = %q", out.String())
-	}
-}
-
-func TestRunSumUsage(t *testing.T) {
-	err := runSum([]string{"wat"}, deps{stdout: &strings.Builder{}, stdin: strings.NewReader("")})
-	if err == nil || err.Error() != "usage: blf sum [-e|--echo]" {
-		t.Fatalf("error = %v", err)
 	}
 }
 

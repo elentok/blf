@@ -8,17 +8,7 @@ import (
 	"strings"
 )
 
-func runSum(args []string, d deps) error {
-	echo := false
-	for _, arg := range args {
-		switch arg {
-		case "-e", "--echo":
-			echo = true
-		default:
-			return fmt.Errorf("usage: blf sum [-e|--echo]")
-		}
-	}
-
+func runSumWithEcho(echo bool, d deps) error {
 	data, err := io.ReadAll(d.stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)

@@ -16,7 +16,7 @@ func TestExecuteRoutesOpen(t *testing.T) {
 		},
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       &strings.Builder{},
@@ -41,7 +41,7 @@ func TestExecuteRoutesCopyWithSpaces(t *testing.T) {
 			return nil
 		},
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       &strings.Builder{},
@@ -66,7 +66,7 @@ func TestExecuteRoutesTmuxLinks(t *testing.T) {
 			got = mode
 			return nil
 		},
-		runTargets: func([]string) error { return nil },
+		runTargets: func(bool, string) error { return nil },
 		fileExists: func(string) (bool, error) { return false, nil },
 		readFile:   func(string) ([]byte, error) { return nil, nil },
 		stdout:     &strings.Builder{},
@@ -87,7 +87,7 @@ func TestExecuteInvalidCommand(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       &strings.Builder{},
@@ -104,7 +104,7 @@ func TestExecutePropagatesActionError(t *testing.T) {
 		openURL:      func(string) error { return boom },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       &strings.Builder{},
@@ -116,13 +116,15 @@ func TestExecutePropagatesActionError(t *testing.T) {
 }
 
 func TestExecuteRoutesTmuxTargets(t *testing.T) {
-	var got []string
+	var gotPopup bool
+	var gotTarget string
 	d := deps{
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets: func(args []string) error {
-			got = append([]string{}, args...)
+		runTargets: func(popup bool, target string) error {
+			gotPopup = popup
+			gotTarget = target
 			return nil
 		},
 		fileExists: func(string) (bool, error) { return false, nil },
@@ -135,8 +137,11 @@ func TestExecuteRoutesTmuxTargets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute returned error: %v", err)
 	}
-	if strings.Join(got, " ") != "--popup --target %1" {
-		t.Fatalf("tmux-targets called with %v", got)
+	if !gotPopup {
+		t.Fatalf("tmux-targets: expected popup=true, got false")
+	}
+	if gotTarget != "%1" {
+		t.Fatalf("tmux-targets: expected target=%%1, got %q", gotTarget)
 	}
 }
 
@@ -150,7 +155,7 @@ func TestExecuteRoutesVersion(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       out,
@@ -174,7 +179,7 @@ func TestExecuteRoutesQueryStringAliases(t *testing.T) {
 				openURL:      func(string) error { return nil },
 				copyText:     func(string) error { return nil },
 				runTmuxLinks: func(string) error { return nil },
-				runTargets:   func([]string) error { return nil },
+				runTargets:   func(bool, string) error { return nil },
 				fileExists:   func(string) (bool, error) { return false, nil },
 				readFile:     func(string) ([]byte, error) { return nil, nil },
 				stdout:       out,
@@ -199,7 +204,7 @@ func TestExecuteRoutesCal(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       out,
@@ -225,7 +230,7 @@ func TestExecuteRoutesSum(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       out,
@@ -249,7 +254,7 @@ func TestExecuteRoutesKitty(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			if name != "kitty" || strings.Join(args, " ") != "@ ls" {
 				t.Fatalf("unexpected command: %s %v", name, args)
@@ -277,7 +282,7 @@ func TestExecuteRoutesKittyTargets(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		lookPath:     func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			calls = append(calls, name+" "+strings.Join(args, " "))
@@ -312,7 +317,7 @@ func TestExecuteRoutesNPMScripts(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return true, nil },
 		readFile: func(string) ([]byte, error) {
 			return []byte(`{"scripts":{"dev":"vite"}}`), nil
@@ -335,7 +340,7 @@ func TestExecuteRoutesClaudeStatusLine(t *testing.T) {
 		openURL:      func(string) error { return nil },
 		copyText:     func(string) error { return nil },
 		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func([]string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
 		fileExists:   func(string) (bool, error) { return false, nil },
 		readFile:     func(string) ([]byte, error) { return nil, nil },
 		stdout:       out,
