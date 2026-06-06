@@ -104,6 +104,7 @@ func execute(args []string, d deps) error {
 		newSumCmd(d),
 		newClaudeStatusLineCmd(d),
 		newKittyCmd(d),
+		newDimPathCmd(d),
 		newVersionCmd(d),
 	)
 
