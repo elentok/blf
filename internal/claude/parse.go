@@ -71,7 +71,7 @@ func parseNumberField(raw json.RawMessage, name string, asPercent bool, silent b
 	return statusField{text: numberFromValue(value, asPercent)}
 }
 
-func parseContextProgressField(raw json.RawMessage, silent bool) statusField {
+func parseContextProgressField(raw json.RawMessage, rawTokens float64, silent bool) statusField {
 	if len(raw) == 0 {
 		return errorField(raw, "context", silent)
 	}
@@ -84,7 +84,7 @@ func parseContextProgressField(raw json.RawMessage, silent bool) statusField {
 		return errorField(raw, "context", silent)
 	}
 
-	return statusField{text: contextProgressValue(value)}
+	return statusField{text: contextProgressValue(value, rawTokens)}
 }
 
 func parseNumber(raw json.RawMessage) (float64, bool) {

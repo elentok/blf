@@ -12,22 +12,25 @@ import (
 
 func statusLineFromValues(model string, tokens float64, contextPercent float64, fiveHourPercent float64, weekPercent float64) string {
 	return statusLineFromParts(
+		tokens,
 		statusField{text: model},
 		statusField{text: numberFromValue(tokens, false)},
-		statusField{text: contextProgressValue(contextPercent)},
+		statusField{text: contextProgressValue(contextPercent, tokens)},
 		statusField{text: numberFromValue(fiveHourPercent, true)},
 		statusField{text: numberFromValue(weekPercent, true)},
 	)
 }
 
-func statusLineFromParts(model, tokens, ctx, five, week statusField) string {
+func statusLineFromParts(rawTokens float64, model, tokens, ctx, five, week statusField) string {
 	parts := make([]string, 0, 5)
 	if model.text != "" {
 		parts = append(parts, styledValue(model, modelStyle))
 	}
 	if tokens.text != "" {
-		tokensSegment := statusField{text: "🤔 " + tokens.text, invalid: tokens.invalid}
-		parts = append(parts, styledValue(tokensSegment, tokensStyle))
+		icon := tokenIcon(rawTokens)
+		tokensSegment := statusField{text: icon + " " + tokens.text, invalid: tokens.invalid}
+		dynamicStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tokenColor(rawTokens)))
+		parts = append(parts, styledValue(tokensSegment, dynamicStyle))
 	}
 
 	usageParts := make([]string, 0, 3)
@@ -69,25 +72,37 @@ func numberFromValue(value float64, asPercent bool) string {
 	return formatted
 }
 
-func contextProgressValue(value float64) string {
-	percent := math.Max(0, math.Min(100, value))
+func contextProgressValue(percent, tokens float64) string {
+	pct := math.Max(0, math.Min(100, percent))
+	color := tokenColor(tokens)
 	bar := progress.New(
 		progress.WithWidth(12),
 		progress.WithFillCharacters('■', '·'),
-		progress.WithColors(lipgloss.Color(contextProgressColor(percent))),
+		progress.WithColors(lipgloss.Color(color)),
 		progress.WithoutPercentage(),
 	)
-	return fmt.Sprintf("%s%s%s %s", leftBracket, bar.ViewAs(percent/100),
-		rightBracket, numberFromValue(value, true))
+	percentText := lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(numberFromValue(percent, true))
+	return fmt.Sprintf("%s%s%s %s", leftBracket, bar.ViewAs(pct/100), rightBracket, percentText)
 }
 
-func contextProgressColor(percent float64) string {
+func tokenColor(tokens float64) string {
 	switch {
-	case percent <= 20:
+	case tokens < 75000:
 		return "#22c55e"
-	case percent <= 40:
+	case tokens < 100000:
 		return "#f59e0b"
 	default:
 		return "#ef4444"
+	}
+}
+
+func tokenIcon(tokens float64) string {
+	switch {
+	case tokens < 75000:
+		return "🙂"
+	case tokens < 100000:
+		return "🤔"
+	default:
+		return "🥵"
 	}
 }

@@ -110,24 +110,45 @@ func TestRunStatusLineMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestContextProgressColorThresholds(t *testing.T) {
+func TestTokenColorThresholds(t *testing.T) {
 	cases := []struct {
 		name    string
-		input   float64
+		tokens  float64
 		wantHex string
 	}{
-		{name: "green range", input: 20, wantHex: "#22c55e"},
-		{name: "orange range", input: 21, wantHex: "#f59e0b"},
-		{name: "red range", input: 41, wantHex: "#ef4444"},
+		{name: "green below 75k", tokens: 74999, wantHex: "#22c55e"},
+		{name: "orange at 75k", tokens: 75000, wantHex: "#f59e0b"},
+		{name: "orange below 100k", tokens: 99999, wantHex: "#f59e0b"},
+		{name: "red at 100k", tokens: 100000, wantHex: "#ef4444"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := contextProgressColor(tc.input)
+			got := tokenColor(tc.tokens)
 			if got != tc.wantHex {
 				t.Fatalf("expected %s, got %s", tc.wantHex, got)
 			}
 		})
+	}
+}
+
+func TestTokenIconThresholds(t *testing.T) {
+	cases := []struct {
+		tokens   float64
+		wantIcon string
+	}{
+		{tokens: 0, wantIcon: "🙂"},
+		{tokens: 74999, wantIcon: "🙂"},
+		{tokens: 75000, wantIcon: "🤔"},
+		{tokens: 99999, wantIcon: "🤔"},
+		{tokens: 100000, wantIcon: "🥵"},
+	}
+
+	for _, tc := range cases {
+		got := tokenIcon(tc.tokens)
+		if got != tc.wantIcon {
+			t.Fatalf("tokenIcon(%v): expected %s, got %s", tc.tokens, tc.wantIcon, got)
+		}
 	}
 }
 
@@ -145,14 +166,14 @@ func TestRunStatusLineDemo(t *testing.T) {
 	}
 
 	for _, line := range lines {
-		for _, want := range []string{"TheModel", "25k", "12% of 5h", "34% of weekly"} {
+		for _, want := range []string{"TheModel", "12% of 5h", "34% of weekly"} {
 			if !strings.Contains(line, want) {
 				t.Fatalf("line missing %q: %q", want, line)
 			}
 		}
 	}
 
-	for _, want := range []string{"10%", "30%", "60%"} {
+	for _, want := range []string{"50k", "85k", "120k", "10%", "30%", "60%", "🙂", "🤔", "🥵"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("demo output missing %q: %q", want, out.String())
 		}

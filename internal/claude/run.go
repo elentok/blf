@@ -20,8 +20,15 @@ func RunStatusLine(args []string, stdin io.Reader, stdout io.Writer) error {
 		}
 	}
 	if demo {
-		for _, percent := range []int{10, 30, 60} {
-			fmt.Fprintln(stdout, statusLineFromValues("TheModel", 25000, float64(percent), 12, 34))
+		for _, row := range []struct {
+			tokens  float64
+			percent int
+		}{
+			{50000, 10},
+			{85000, 30},
+			{120000, 60},
+		} {
+			fmt.Fprintln(stdout, statusLineFromValues("TheModel", row.tokens, float64(row.percent), 12, 34))
 		}
 		return nil
 	}
@@ -37,12 +44,13 @@ func RunStatusLine(args []string, stdin io.Reader, stdout io.Writer) error {
 		return fmt.Errorf("parse JSON: %w", err)
 	}
 
+	rawTokens, _ := parseNumber(payload.ContextWindow.TotalInputTokens)
 	modelText := parseStringField(payload.Model.DisplayName, "model", silent)
 	tokensText := parseNumberField(payload.ContextWindow.TotalInputTokens, "tokens", false, silent)
-	ctxText := parseContextProgressField(payload.ContextWindow.UsedPercentage, silent)
+	ctxText := parseContextProgressField(payload.ContextWindow.UsedPercentage, rawTokens, silent)
 	fiveText := parseNumberField(payload.RateLimits.FiveHour.UsedPercentage, "5h", true, true)
 	weekText := parseNumberField(payload.RateLimits.SevenDay.UsedPercentage, "weekly", true, true)
 
-	fmt.Fprintln(stdout, statusLineFromParts(modelText, tokensText, ctxText, fiveText, weekText))
+	fmt.Fprintln(stdout, statusLineFromParts(rawTokens, modelText, tokensText, ctxText, fiveText, weekText))
 	return nil
 }
