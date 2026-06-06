@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.14] - 2026-06-06
+
+- Added `blf dim-path` to dim the directory portion of file paths from stdin, for use with `fd | blf dim-path | fzf --ansi`.
+
 ## [v0.4.13] - 2026-06-06
 
 - `blf claude-statusline`: token usage coloring is now based on absolute token count instead of context percentage. Green (🙂) below 75k, orange (🤔) from 75k–100k, red (🥵) at 100k+. The color is applied to the progress bar, percentage text, token count, and icon.

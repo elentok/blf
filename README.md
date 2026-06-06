@@ -66,6 +66,7 @@ Start a new shell for completions to take effect.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
+- `blf dim-path`: read file paths from stdin and dim the directory portion, leaving only the filename at full brightness. Designed for use with `fd | blf dim-path | fzf --ansi`. Respects `NO_COLOR`.
 - `blf sum [-e|--echo]`: sum the first space-delimited value from each stdin line.
 - `blf version`: print the current `blf` version.
 
