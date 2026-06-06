@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
-## [v0.4.11] - 2026-06-05
+## [v0.4.12] - 2026-06-06
+
+- Upgrade goreleaser
+- Run go mod tidy to fix release issue
+
+## [v0.4.11] - 2026-06-05 - failed to release
 
 - Shell completions are now available via `blf completion fish|bash|zsh` (powered by Cobra).
 - All commands and subcommands now support `--help` for usage and flag descriptions.
