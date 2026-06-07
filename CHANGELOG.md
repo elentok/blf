@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.15] - 2026-06-07
+
+- Added `blf clean-url` to unwrap redirect-wrapper URLs (e.g. Google search `/url?...&url=`) and strip tracking query params (`utm_*`, `gclid`, `fbclid`, etc.). Run it as `blf clean-url <url>` to print the cleaned URL, or `blf clean-url --clipboard` to clean the URL on the clipboard in place.
+- Fix `blf dim-path` to support `path/to/file/` (only dim `path/to/`)
+
 ## [v0.4.14] - 2026-06-06
 
 - Added `blf dim-path` to dim the directory portion of file paths from stdin, for use with `fd | blf dim-path | fzf --ansi`.

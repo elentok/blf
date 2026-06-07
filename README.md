@@ -67,6 +67,7 @@ Start a new shell for completions to take effect.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
 - `blf dim-path`: read file paths from stdin and dim the directory portion, leaving only the filename at full brightness. Designed for use with `fd | blf dim-path | fzf --ansi`. Respects `NO_COLOR`.
+- `blf clean-url <url>` / `blf clean-url --clipboard`: unwrap redirect-wrapper URLs (e.g. Google search `/url?...&url=`) and strip tracking query params (`utm_*`, `gclid`, `fbclid`, etc.). Pass a URL to print the cleaned result, or use `--clipboard` to read, clean, and write the URL back to the clipboard.
 - `blf sum [-e|--echo]`: sum the first space-delimited value from each stdin line.
 - `blf version`: print the current `blf` version.
 

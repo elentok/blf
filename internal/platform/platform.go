@@ -12,3 +12,7 @@ func OpenURL(url string) error {
 func CopyText(text string) error {
 	return clipboard.WriteAll(text)
 }
+
+func ReadClipboardText() (string, error) {
+	return clipboard.ReadAll()
+}
