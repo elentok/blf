@@ -18,7 +18,11 @@ func runDimPath(d deps) error {
 	scanner := bufio.NewScanner(d.stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
-		idx := strings.LastIndex(line, "/")
+		searchEnd := len(line)
+		if searchEnd > 0 && line[searchEnd-1] == '/' {
+			searchEnd--
+		}
+		idx := strings.LastIndex(line[:searchEnd], "/")
 		if idx < 0 {
 			fmt.Fprintln(d.stdout, line)
 			continue

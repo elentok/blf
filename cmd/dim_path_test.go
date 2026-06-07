@@ -10,10 +10,10 @@ import (
 
 func TestDimPath(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		wantDimmed  string
-		wantPlain   string
+		name       string
+		input      string
+		wantDimmed string
+		wantPlain  string
 	}{
 		{
 			name:       "absolute path",
@@ -28,8 +28,8 @@ func TestDimPath(t *testing.T) {
 			wantPlain:  "file",
 		},
 		{
-			name:    "no slash",
-			input:   "Makefile\n",
+			name:       "no slash",
+			input:      "Makefile\n",
 			wantDimmed: "",
 			wantPlain:  "Makefile",
 		},
@@ -38,6 +38,12 @@ func TestDimPath(t *testing.T) {
 			input:      "/file\n",
 			wantDimmed: "/",
 			wantPlain:  "file",
+		},
+		{
+			name:       "slash suffix",
+			input:      "/path/to/dir/\n",
+			wantDimmed: "/path/to/",
+			wantPlain:  "dir/",
 		},
 	}
 
@@ -62,12 +68,22 @@ func TestDimPath(t *testing.T) {
 			}
 
 			if tt.wantDimmed != "" {
-				dimmed := ansi.Strip(strings.Split(got, tt.wantPlain)[0])
-				if dimmed != tt.wantDimmed {
-					t.Errorf("dimmed prefix stripped = %q, want %q", dimmed, tt.wantDimmed)
+				start := strings.Index(got, "\x1b[2m")
+				if start < 0 {
+					t.Fatalf("expected faint ANSI code in output, got %q", got)
 				}
-				if !strings.Contains(got, "\x1b[2m") {
-					t.Errorf("expected faint ANSI code in output, got %q", got)
+				start += len("\x1b[2m")
+				end := strings.Index(got[start:], "\x1b[m")
+				if end < 0 {
+					t.Fatalf("expected faint reset ANSI code in output, got %q", got)
+				}
+				dimmed := got[start : start+end]
+				rest := got[start+end+len("\x1b[m"):]
+				if dimmed != tt.wantDimmed {
+					t.Errorf("dimmed prefix = %q, want %q", dimmed, tt.wantDimmed)
+				}
+				if rest != tt.wantPlain+"\n" {
+					t.Errorf("plain suffix = %q, want %q", rest, tt.wantPlain+"\n")
 				}
 			}
 		})
