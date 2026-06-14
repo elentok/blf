@@ -147,16 +147,37 @@ func newOpenCmd(d deps) *cobra.Command {
 func newCopyCmd(d deps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "copy <text>",
-		Short: "Copy text to clipboard",
+		Short: "Copy text to clipboard (use - to read from stdin)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			text := strings.Join(args, " ")
+			text, err := copyInput(args, d)
+			if err != nil {
+				return err
+			}
 			if err := d.copyText(text); err != nil {
 				return fmt.Errorf("copy text: %w", err)
 			}
 			return nil
 		},
 	}
+}
+
+// copyInput returns the text to copy for the `copy` command: stdin (trimmed of
+// trailing newlines) when the sole argument is "-", otherwise the arguments
+// joined with spaces.
+func copyInput(args []string, d deps) (string, error) {
+	if len(args) == 1 && args[0] == "-" {
+		data, err := io.ReadAll(d.stdin)
+		if err != nil {
+			return "", fmt.Errorf("read stdin: %w", err)
+		}
+		text := strings.TrimRight(string(data), "\r\n")
+		if text == "" {
+			return "", fmt.Errorf("copy: empty input")
+		}
+		return text, nil
+	}
+	return strings.Join(args, " "), nil
 }
 
 func newCopyRefCmd(d deps) *cobra.Command {

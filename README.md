@@ -50,7 +50,7 @@ Start a new shell for completions to take effect.
 ## Commands
 
 - `blf open <url>`: open a URL with the system default browser.
-- `blf copy <text>`: copy text to the system clipboard.
+- `blf copy <text>`: copy text to the system clipboard. Use `blf copy -` to read the text from stdin (e.g. `echo hello | blf copy -`); trailing newlines are trimmed.
 - `blf copy-ref <file>...`: copy one or more files to the clipboard as references (paste the actual files in GUI apps). Resolves relative and `~` paths, accepts directories, and validates all paths before copying (macOS via `osascript`, Linux/Wayland via `wl-copy`).
 - `blf tmux-links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
 - `blf tmux-targets`: open an interactive popup to navigate and act on detected targets.

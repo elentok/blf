@@ -1,4 +1,4 @@
-# blf
+## blf
 
 A collection of blazingly-fast misc CLI utilities, dispatched from a single `blf` binary.
 
@@ -25,10 +25,10 @@ The command that produces a **clean URL** — the result of repeatedly unwrappin
 
 ## Relationships
 
-- `blf copy <text>` copies **content** (a string) to the clipboard.
+- `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).
 - `blf copy-ref <file>...` copies **File references** to the clipboard — a reference/handle, not the bytes.
 - `blf clean-url` reads a URL (from an argument or the clipboard) and prints (and, in `--clipboard` mode, writes back) the **clean URL**.
 
 ## Flagged ambiguities
 
-- "file ref" is also used informally in the `tmux-targets` feature to mean a `path:line[:col]` token detected *inside text* (a location pointer). That is a different concept from the clipboard **File reference** defined here. Left as-is for now; rename to "file location" later if the overlap causes confusion.
+- "file ref" is also used informally in the `tmux-targets` feature to mean a `path:line[:col]` token detected _inside text_ (a location pointer). That is a different concept from the clipboard **File reference** defined here. Left as-is for now; rename to "file location" later if the overlap causes confusion.

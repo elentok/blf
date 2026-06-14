@@ -57,6 +57,55 @@ func TestExecuteRoutesCopyWithSpaces(t *testing.T) {
 	}
 }
 
+func TestExecuteRoutesCopyFromStdin(t *testing.T) {
+	var got string
+	d := deps{
+		openURL: func(string) error { return nil },
+		copyText: func(s string) error {
+			got = s
+			return nil
+		},
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
+		fileExists:   func(string) (bool, error) { return false, nil },
+		readFile:     func(string) ([]byte, error) { return nil, nil },
+		stdin:        strings.NewReader("hello world\n\n"),
+		stdout:       &strings.Builder{},
+		stderr:       &strings.Builder{},
+	}
+
+	err := execute([]string{"copy", "-"}, d)
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if got != "hello world" {
+		t.Fatalf("copy called with %q", got)
+	}
+}
+
+func TestExecuteCopyFromStdinEmptyErrors(t *testing.T) {
+	called := false
+	d := deps{
+		openURL:      func(string) error { return nil },
+		copyText:     func(string) error { called = true; return nil },
+		runTmuxLinks: func(string) error { return nil },
+		runTargets:   func(bool, string) error { return nil },
+		fileExists:   func(string) (bool, error) { return false, nil },
+		readFile:     func(string) ([]byte, error) { return nil, nil },
+		stdin:        strings.NewReader("\n\n"),
+		stdout:       &strings.Builder{},
+		stderr:       &strings.Builder{},
+	}
+
+	err := execute([]string{"copy", "-"}, d)
+	if err == nil {
+		t.Fatal("expected error for empty stdin, got nil")
+	}
+	if called {
+		t.Fatal("copyText should not be called for empty input")
+	}
+}
+
 func TestExecuteRoutesTmuxLinks(t *testing.T) {
 	var got string
 	d := deps{
