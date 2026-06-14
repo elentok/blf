@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [v0.4.16] - 2026-06-14
 
 - `blf copy -` reads the text to copy from stdin (e.g. `echo hello | blf copy -`), trimming trailing newlines and erroring on empty input.
 
