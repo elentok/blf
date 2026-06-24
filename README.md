@@ -58,6 +58,7 @@ Start a new shell for completions to take effect.
 - `blf kitty ls`: print a readable tree for `kitty @ ls`, including OS windows, tabs, windows, cmdlines, and foreground processes.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
+- `blf kitty list-agents [--json]`: list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions, each with its working/idle status. Add `--json` for a machine-readable list (the source of truth for other tools).
 - `blf kitty new-session`: prompt for a session name, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
@@ -110,6 +111,13 @@ bind-key t run 'blf tmux-targets'
 - Reuses the shared targets UI for navigation, search, copy, open, and resume-command actions.
 - Sends AI resume commands back to the original Kitty window with `kitty @ send-text`.
 - If no targets are found, prints an error and also attempts to show a Kitty error notification.
+
+`kitty list-agents` behavior:
+
+- Detects an agent window by whole command-word matching: the first token of the window's `last_reported_cmdline`, falling back to a foreground process's command word. A path that merely contains an agent's name (e.g. `/private/tmp/claude-501/…`) is never matched, and an agent launched behind a shell wrapper (e.g. `/bin/sh /usr/bin/command claude`) still is.
+- Status is derived from the window title: a leading braille-spinner rune means `working`, otherwise `idle`. OpenCode has no title status signal and always reads `idle`.
+- Lists agents across every OS window and session, drops the currently-focused window, and sorts working agents first, then by most recently focused.
+- `--json` emits an array of `{ id, agent, status, dir, title, session }` objects; these field names are the stable contract for external callers.
 
 `kitty ls` behavior:
 

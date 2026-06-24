@@ -23,6 +23,20 @@ _Avoid_: "junk param" / "garbage param" (imprecise — some non-tracking params 
 **clean-url**:
 The command that produces a **clean URL** — the result of repeatedly unwrapping **redirect wrappers** and then stripping **tracking params**: `blf clean-url <url>` or `blf clean-url --clipboard` (reads from and writes back to the clipboard, also printing the result).
 
+**agent window**:
+A Kitty window currently running a known AI coding agent (`claude`, `codex`, `opencode`, `cursor-agent`). Identity is decided by matching whole command **words** — the first token of `last_reported_cmdline` (primary) or a foreground process's command-word/basename (backup) — never a substring of the full cmdline (a path like `/tmp/claude-501/…` must not count).
+_Avoid_: "agent pane" (that's tmux's term; Kitty has windows), matching the agent name anywhere in the cmdline (substring matching produces false positives).
+
+**agent status**:
+Whether an **agent window** is currently **working** (actively processing) or **idle** (anything else — finished, or waiting on input). Derived solely from the window's OSC title: a leading braille-spinner char (U+2800–U+28FF) means working, otherwise idle. _Known gap_: OpenCode has no title signal, so it always reads idle.
+_Avoid_: "waiting"/"blocked" as a distinct status (deliberately collapsed into idle for now).
+
+**goto-agent**:
+The command that opens a picker of all **agent windows** (across every OS window and session) with their **agent status**, and focuses the chosen one: `blf kitty goto-agent`.
+
+**list-agents**:
+The non-interactive counterpart that lists **agent windows** with **agent status**, optionally as JSON (`blf kitty list-agents [--json]`); intended as the shared source of truth for external callers (e.g. the nvim send-to-agent feature).
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).

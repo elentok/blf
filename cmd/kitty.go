@@ -17,6 +17,7 @@ func newKittyCmd(d deps) *cobra.Command {
 		newKittyListOSWindowsCmd(d),
 		newKittyGotoOSWindowCmd(d),
 		newKittyTargetsCmd(d),
+		newKittyListAgentsCmd(d),
 		newKittyNewSessionCmd(d),
 		newKittySessionsCmd(d),
 		newKittyDeleteSessionCmd(d),
@@ -78,6 +79,20 @@ func newKittyTargetsCmd(d deps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&overlay, "overlay", false, "Run in overlay mode")
 	cmd.Flags().StringVar(&target, "target", "", "Target window ID")
+	return cmd
+}
+
+func newKittyListAgentsCmd(d deps) *cobra.Command {
+	var asJSON bool
+
+	cmd := &cobra.Command{
+		Use:   internalkitty.ListAgentsCmd,
+		Short: "List open AI agent windows and their status",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.ListAgentsCommand(asJSON, kittyDepsFromCmd(d))
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "Output as JSON")
 	return cmd
 }
 

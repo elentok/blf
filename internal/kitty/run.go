@@ -11,6 +11,7 @@ const (
 	ListOSWindowsCmd      = "list-os-windows"
 	GotoOSWindowCmd       = "goto-os-window"
 	TargetsCmd            = "targets"
+	ListAgentsCmd         = "list-agents"
 	NewSessionCmd         = "new-session"
 	SessionsCmd           = "sessions"
 	DeleteSessionCmd      = "delete-session"

@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- Added `blf kitty list-agents [--json]` to list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions with their working/idle status. Detection matches whole command words (so a path like `/private/tmp/claude-501/…` is never a false positive, while an agent behind a shell wrapper is still found); status comes from the window title's braille spinner. `--json` emits a stable `{ id, agent, status, dir, title, session }` contract for other tools.
+
 ## [v0.4.16] - 2026-06-14
 
 - `blf copy -` reads the text to copy from stdin (e.g. `echo hello | blf copy -`), trimming trailing newlines and erroring on empty input.
