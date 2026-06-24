@@ -12,6 +12,8 @@ const (
 	GotoOSWindowCmd       = "goto-os-window"
 	TargetsCmd            = "targets"
 	ListAgentsCmd         = "list-agents"
+	GotoAgentCmd          = "goto-agent"
+	PreviewAgentCmd       = "__preview-agent"
 	NewSessionCmd         = "new-session"
 	SessionsCmd           = "sessions"
 	DeleteSessionCmd      = "delete-session"
@@ -77,6 +79,40 @@ func GotoOSWindow(id string, d Deps) error {
 	}
 
 	return nil
+}
+
+func GotoAgent(d Deps) error {
+	agents, err := ListAgents(d)
+	if err != nil {
+		return err
+	}
+	if len(agents) == 0 {
+		return ShowError(d, "blf kitty goto-agent", "No agent windows")
+	}
+
+	id, err := pickAgent(agents, d)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return nil
+	}
+
+	if _, err := d.RunCommand("kitten", "@", "focus-window", "--match", "id:"+id); err != nil {
+		return fmt.Errorf("focus kitty agent window %s: %w", id, err)
+	}
+
+	return nil
+}
+
+func PreviewAgent(id string, d Deps) error {
+	preview, err := RenderAgentPreview(id, d)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(d.Stdout, preview)
+	return err
 }
 
 func NewSession(d Deps) error {

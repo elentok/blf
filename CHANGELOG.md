@@ -2,9 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [v0.4.17] - 2026-06-24
 
 - Added `blf kitty list-agents [--json]` to list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions with their working/idle status. Detection matches whole command words (so a path like `/private/tmp/claude-501/…` is never a false positive, while an agent behind a shell wrapper is still found); status comes from the window title's braille spinner. `--json` emits a stable `{ id, agent, status, dir, title, session }` contract for other tools.
+- Added `blf kitty goto-agent` to pick an open AI agent window with `fzf` (status, directory, and title, with a live screen preview) and focus it, pulling its tab and OS window forward.
 
 ## [v0.4.16] - 2026-06-14
 

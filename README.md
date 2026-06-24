@@ -59,6 +59,7 @@ Start a new shell for completions to take effect.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
 - `blf kitty list-agents [--json]`: list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions, each with its working/idle status. Add `--json` for a machine-readable list (the source of truth for other tools).
+- `blf kitty goto-agent`: pick an open AI agent window with `fzf` (showing each agent's status, directory, and title, with a live screen preview) and focus the selected window, pulling its tab and OS window forward.
 - `blf kitty new-session`: prompt for a session name, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
@@ -118,6 +119,17 @@ bind-key t run 'blf tmux-targets'
 - Status is derived from the window title: a leading braille-spinner rune means `working`, otherwise `idle`. OpenCode has no title status signal and always reads `idle`.
 - Lists agents across every OS window and session, drops the currently-focused window, and sorts working agents first, then by most recently focused.
 - `--json` emits an array of `{ id, agent, status, dir, title, session }` objects; these field names are the stable contract for external callers.
+
+`kitty goto-agent` behavior:
+
+- Builds the same agent list as `list-agents` (working-first, dropping the currently-focused window) and presents it in an `fzf` picker.
+- The picker hides the Kitty window id in a tab-delimited field and shows `<status>  <dir>  <title>  <agent>`; the preview pane runs `kitty @ get-text` to show a live snapshot of the highlighted agent's screen.
+- Selecting an agent focuses its window with `kitten @ focus-window` (which pulls the window's tab and OS window forward). With no agents open it shows a `No agent windows` Kitty error.
+- Runs directly in the current terminal; bind it to a Kitty mapping to launch it where you want (e.g. a new tab or overlay).
+
+```conf
+map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
+```
 
 `kitty ls` behavior:
 

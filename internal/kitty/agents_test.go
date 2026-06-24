@@ -292,6 +292,56 @@ func TestListAgentsCommandJSONContract(t *testing.T) {
 	}
 }
 
+func TestRenderAgentPreviewUsesGetText(t *testing.T) {
+	var gotArgs string
+	d := Deps{
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			gotArgs = name + " " + strings.Join(args, " ")
+			return []byte("screen contents"), nil
+		},
+	}
+
+	out, err := RenderAgentPreview("42", d)
+	if err != nil {
+		t.Fatalf("RenderAgentPreview: %v", err)
+	}
+	if out != "screen contents" {
+		t.Fatalf("preview = %q", out)
+	}
+	if gotArgs != "kitty @ get-text --match id:42 --extent screen" {
+		t.Fatalf("command = %q", gotArgs)
+	}
+}
+
+func TestGotoAgentEmptyShowsError(t *testing.T) {
+	var calls []string
+	d := Deps{
+		LookupEnv: func(string) (string, bool) { return "", false },
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			calls = append(calls, name+" "+strings.Join(args, " "))
+			if name == "kitty" && strings.Join(args, " ") == "@ ls" {
+				return agentsLS(), nil
+			}
+			return []byte{}, nil
+		},
+	}
+
+	if err := GotoAgent(d); err != nil {
+		t.Fatalf("GotoAgent: %v", err)
+	}
+
+	want := `kitten @ action show_error "blf kitty goto-agent" "No agent windows"`
+	found := false
+	for _, c := range calls {
+		if c == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected show_error call, got %v", calls)
+	}
+}
+
 func TestListAgentsCommandJSONEmptyIsArray(t *testing.T) {
 	data := agentsLS()
 	d := depsWithLS(t, data, map[string]string{})

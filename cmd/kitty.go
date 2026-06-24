@@ -18,6 +18,8 @@ func newKittyCmd(d deps) *cobra.Command {
 		newKittyGotoOSWindowCmd(d),
 		newKittyTargetsCmd(d),
 		newKittyListAgentsCmd(d),
+		newKittyGotoAgentCmd(d),
+		newKittyPreviewAgentCmd(d),
 		newKittyNewSessionCmd(d),
 		newKittySessionsCmd(d),
 		newKittyDeleteSessionCmd(d),
@@ -94,6 +96,28 @@ func newKittyListAgentsCmd(d deps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Output as JSON")
 	return cmd
+}
+
+func newKittyGotoAgentCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.GotoAgentCmd,
+		Short: "Pick an open AI agent window and focus it",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.GotoAgent(kittyDepsFromCmd(d))
+		},
+	}
+}
+
+func newKittyPreviewAgentCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:    internalkitty.PreviewAgentCmd + " <id>",
+		Short:  "Preview an agent window's screen",
+		Hidden: true,
+		Args:   cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.PreviewAgent(args[0], kittyDepsFromCmd(d))
+		},
+	}
 }
 
 func newKittyNewSessionCmd(d deps) *cobra.Command {

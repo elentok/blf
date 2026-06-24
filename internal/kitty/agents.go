@@ -2,6 +2,7 @@ package kitty
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -280,6 +281,20 @@ func parseAgentSelection(line string) (string, error) {
 		return "", invalidAgentSelection(plain)
 	}
 	return id, nil
+}
+
+// RenderAgentPreview returns a screen snapshot of an agent window for the fzf
+// preview pane.
+func RenderAgentPreview(id string, d Deps) (string, error) {
+	if d.RunCommand == nil {
+		return "", errors.New("kitty command runner is not configured")
+	}
+
+	out, err := d.RunCommand("kitty", "@", "get-text", "--match", "id:"+id, "--extent", "screen")
+	if err != nil {
+		return "", fmt.Errorf("get text for kitty agent window %s: %w", id, err)
+	}
+	return string(out), nil
 }
 
 func invalidAgentSelection(selection string) error {
