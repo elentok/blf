@@ -112,7 +112,11 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 
 	rates := p.currency.Rates()
 	if rates == nil {
-		return nil
+		return []Result{{
+			Title:  "loading rates…",
+			Icon:   IconRoleLoading,
+			Source: "currency",
+		}}
 	}
 
 	fromRate, ok := rates.USD[upper]
@@ -134,12 +138,11 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 		converted := value * toRate / fromRate
 		formatted := formatCurrencyAmount(converted)
 		results = append(results, Result{
-			Title:    formatted + " " + strings.ToLower(code),
-			Subtitle: FormatNumber(value) + " " + strings.ToLower(upper),
-			Icon:     IconRoleCurrency,
-			Source:   "currency",
-			Weight:   1.5,
-			Action:   Action{Type: ActionCopy, Target: formatted},
+			Title:  formatted + " " + strings.ToLower(code),
+			Icon:   IconRoleCurrency,
+			Source: "currency",
+			Weight: 1.5,
+			Action: Action{Type: ActionCopy, Target: formatted},
 		})
 	}
 	return results
