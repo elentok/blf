@@ -349,15 +349,9 @@ func (m Model) renderResult(r Result, selected bool) string {
 	// Title with fuzzy-match highlights
 	title := m.renderTitle(r, selected)
 
-	// Subtitle — plain text for selected rows to avoid an embedded ANSI reset
-	// cancelling the Width(w) background fill.
 	subtitle := ""
 	if r.Subtitle != "" {
-		if selected {
-			subtitle = " " + r.Subtitle
-		} else {
-			subtitle = " " + subtitleStyle.Render(r.Subtitle)
-		}
+		subtitle = " " + subtitleStyle.Render(r.Subtitle)
 	}
 
 	line := icon + title + subtitle

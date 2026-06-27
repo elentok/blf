@@ -139,8 +139,8 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 		converted := value * toRate / fromRate
 		formatted := formatCurrencyAmount(converted)
 		results = append(results, Result{
-			Title:    formatted + " " + code,
-			Subtitle: FormatNumber(value) + " " + upper,
+			Title:    formatted + " " + strings.ToLower(code),
+			Subtitle: FormatNumber(value) + " " + strings.ToLower(upper),
 			Icon:     IconRoleCurrency,
 			Source:   "currency",
 			Weight:   1.5,
