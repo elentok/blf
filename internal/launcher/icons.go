@@ -14,23 +14,37 @@ var CurrencyIcons = map[string]string{
 // appIconPatterns maps lowercase substrings to Nerd Font glyphs.
 // Checked in order; first match wins.
 var appIconPatterns = []struct{ sub, glyph string }{
-	{"firefox", "󰈹"},           // nf-md-firefox
-	{"chrome", "󰊯"},            // nf-md-google-chrome
-	{"spotify", "󰓇"},           // nf-md-spotify
-	{"keepass", "󰌆"},           // nf-md-key-variant
-	{"1password", "󰌆"},         // nf-md-key-variant
-	{"passwords", "󰌆"},         // nf-md-key-variant
+	{"firefox", "󰈹"},            // nf-md-firefox
+	{"chrome", "󰊯"},             // nf-md-google-chrome
+	{"safari", "󰀹"},             // nf-md-apple-safari
+	{"spotify", "󰓇"},            // nf-md-spotify
+	{"steam", ""},              // nf-fa-steam
+	{"keepass", "󰌆"},            // nf-md-key-variant
+	{"1password", "󰌆"},          // nf-md-key-variant
+	{"passwords", "󰌆"},          // nf-md-key-variant
 	{"visual studio code", "󰨞"}, // nf-md-visual-studio-code
-	{"vscode", "󰨞"},            // nf-md-visual-studio-code
-	{"terminal", "󰆍"},          // nf-md-console
-	{"slack", "󰒱"},             // nf-md-slack
-	{"obsidian", "󱓧"},          // nf-md-obsidian
-	{"notion", "󰎈"},            // nf-md-note-text
-	{"finder", "󰀶"},            // nf-md-folder
-	{"mail", "󰇮"},              // nf-md-email
-	{"calendar", "󰃭"},          // nf-md-calendar
-	{"settings", "󰒓"},          // nf-md-cog
+	{"vscode", "󰨞"},             // nf-md-visual-studio-code
+	{"terminal", "󰆍"},           // nf-md-console
+	{"slack", "󰒱"},              // nf-md-slack
+	{"obsidian", "󱓧"},           // nf-md-obsidian
+	{"notion", ""},
+	{"finder", "󰀶"},             // nf-md-folder
+	{"mail", "󰇮"},               // nf-md-email
+	{"calendar", "󰃭"},           // nf-md-calendar
+	{"settings", "󰒓"},           // nf-md-cog
 	{"system preferences", "󰒓"}, // nf-md-cog
+	{"whatsapp", ""},           // nf-fa-whatsapp
+	{"telegram", ""},           // nf-fa-telegram
+	{"chatgpt", "󰭻"},            // nf-md-robot
+	{"prism launcher", "󰍳"},     // nf-md-minecraft
+	{"prusa", "󰹛"},              // nf-md-printer-3d
+	{"freecad", ""},            // nf-md-cube-outline
+	{"openscad", ""},           // nf-md-cube-scan
+	{"prisma", ""},             // nf-md-database
+	{"contacts", "󰛋"},           // nf-md-contacts
+	{"vlc", "󰕼"},
+	{"book", ""},
+	{"messages", ""},
 }
 
 // AppIconGlyph returns the Nerd Font glyph for an app by title substring match,
@@ -54,8 +68,8 @@ var Icons = map[IconRole]string{
 	IconRoleApp:      "󰀻 ", // nf-md-apps
 	IconRoleScript:   "󰐊 ", // nf-md-play
 	IconRoleHistory:  "󰋚 ", // nf-md-history
-	IconRoleError:    " ", // nf-fa-exclamation_circle
-	IconRoleLoading:  " ", // nf-fa-spinner
+	IconRoleError:   "󰀪 ", // nf-md-alert
+	IconRoleLoading: "󰔟 ", // nf-md-loading
 }
 
 // ASCIIIcons is a plain-text fallback for environments without Nerd Fonts.
