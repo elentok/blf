@@ -101,7 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "up":
+		case "up", "ctrl+k":
 			if m.selected > 0 {
 				m.selected--
 				if m.selected < m.offset {
@@ -110,7 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "down":
+		case "down", "ctrl+j":
 			if m.selected < len(m.results)-1 {
 				m.selected++
 				visibleRows := m.visibleResultRows()
