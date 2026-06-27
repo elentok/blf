@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher"
@@ -84,9 +85,9 @@ func newLauncherCmd(d deps) *cobra.Command {
 					appsProvider,
 					scriptsProvider,
 				},
-				ConfigErr:     cfgErr,
-				CopyText:      d.copyText,
-				CurrencyCache: currencyCache,
+				ConfigErr:       cfgErr,
+				CopyText:        d.copyText,
+				CurrencyCache:   currencyCache,
 				AppsProvider:    appsProvider,
 				AppsCachePath:   appsCachePath,
 				HomeDir:         homeDir,
@@ -102,6 +103,9 @@ func newLauncherCmd(d deps) *cobra.Command {
 					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
 					return err
 				},
+				// Defer the hide by one render tick so the cleared frame is flushed
+				// before Kitty saves the buffer (see Model.resetAndHide).
+				HideDelay:   50 * time.Millisecond,
 				UseNerdFont: true,
 			})
 

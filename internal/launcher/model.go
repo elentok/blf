@@ -31,6 +31,7 @@ type ModelConfig struct {
 	ScriptsProvider *ScriptsProvider // optional; nil disables script execution
 	History         *history.History // optional; nil disables history
 	HistoryPath     string           // path to persist history; empty skips persistence
+	HideDelay       time.Duration    // delay before hiding the terminal (see resetAndHide); 0 = immediate
 }
 
 // clearStatusMsg is sent after a delay to erase a transient status message.
@@ -109,17 +110,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.recordHistory(m.input.Value())
 				}
 			}
-			m.input.Reset()
-			m.results = nil
-			m.selected = 0
-			m.offset = 0
-			m.status = ""
-			m.scriptOutput = nil
-			m.historyIdx = -1
-			if m.cfg.HideTerminal != nil {
-				_ = m.cfg.HideTerminal()
-			}
-			return m, nil
+			return m, m.resetAndHide()
 
 		case "up", "ctrl+k":
 			if m.selected > 0 {
@@ -155,15 +146,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			// Sync action success: reset and hide.
-			m.input.Reset()
-			m.results = nil
-			m.selected = 0
-			m.offset = 0
-			m.status = ""
-			if m.cfg.HideTerminal != nil {
-				_ = m.cfg.HideTerminal()
-			}
-			return m, nil
+			return m, m.resetAndHide()
 
 		case "ctrl+r":
 			if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
@@ -271,15 +254,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "launch error: " + msg.Err.Error()
 			return m, nil
 		}
-		m.input.Reset()
-		m.results = nil
-		m.selected = 0
-		m.offset = 0
-		m.status = ""
-		if m.cfg.HideTerminal != nil {
-			_ = m.cfg.HideTerminal()
-		}
-		return m, nil
+		return m, m.resetAndHide()
 
 	case ScriptRunMsg:
 		m.status = ""
@@ -310,15 +285,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// ignore or clipboard: reset and hide
-		m.input.Reset()
-		m.results = nil
-		m.selected = 0
-		m.offset = 0
-		m.scriptOutput = nil
-		if m.cfg.HideTerminal != nil {
-			_ = m.cfg.HideTerminal()
-		}
-		return m, nil
+		return m, m.resetAndHide()
 
 	case clearStatusMsg:
 		if m.status == "saved" {
@@ -432,6 +399,39 @@ func (m *Model) saveHistory() {
 		return
 	}
 	_ = m.cfg.History.Save(m.cfg.HistoryPath)
+}
+
+// resetAndHide clears the launcher back to its empty state and returns a Cmd that
+// hides the Kitty quick terminal.
+//
+// The hide is deferred by cfg.HideDelay (rather than called inline) to dodge a
+// bubbletea v2 render race: Update stores the new view but the terminal is only
+// flushed on a ~60fps ticker in a separate goroutine, and there is no synchronous
+// flush API. Hiding immediately would let Kitty save the pre-reset buffer (the old
+// input text), which it then restores on the next show — a visible flash before the
+// next repaint clears it. Waiting one render tick ensures the cleared frame is
+// flushed before we hide, so the buffer Kitty saves is already clean.
+func (m *Model) resetAndHide() tea.Cmd {
+	m.input.Reset()
+	m.results = nil
+	m.selected = 0
+	m.offset = 0
+	m.status = ""
+	m.scriptOutput = nil
+	m.historyIdx = -1
+
+	hide := m.cfg.HideTerminal
+	if hide == nil {
+		return nil
+	}
+	delay := m.cfg.HideDelay
+	return func() tea.Msg {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+		_ = hide()
+		return nil
+	}
 }
 
 // clearStatusAfter returns a Cmd that sends clearStatusMsg after d.
