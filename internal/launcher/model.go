@@ -580,6 +580,8 @@ func (m Model) renderTitle(r Result, selected bool) string {
 			} else {
 				sb.WriteString(resultHighlightStyle.Render(s))
 			}
+		} else if selected {
+			sb.WriteString(resultSelectedStyle.Render(s))
 		} else {
 			sb.WriteString(s)
 		}
