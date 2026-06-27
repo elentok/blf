@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher"
+	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/units"
 	"github.com/spf13/cobra"
 )
 
@@ -19,14 +22,38 @@ func newLauncherCmd(d deps) *cobra.Command {
 			}
 
 			cfg, cfgErr := launcher.LoadConfig(d.readFile, homeDir)
-			_ = cfg // cfg will feed providers in later tasks (scripts weight etc.)
+
+			// Currency cache
+			cacheDir := launcher.XDGCacheDir(homeDir)
+			currencyCache := currency.NewCache(
+				filepath.Join(cacheDir, "currency.json"),
+				nil, // use default HTTP client
+				nil, // use time.Now
+			)
+
+			// Units registry with optional user-defined groups merged in
+			registry := units.NewBuiltinRegistry()
+			for _, ug := range cfg.Launcher.UnitGroups {
+				g := &units.Group{Name: ug.Name}
+				for _, u := range ug.Units {
+					g.Units = append(g.Units, &units.Unit{
+						Name:    u.Name,
+						Symbols: u.Symbols,
+						Factor:  u.Factor,
+						Offset:  u.Offset,
+					})
+				}
+				registry.AddGroup(g)
+			}
 
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
+					launcher.NewUnitsProvider(registry, currencyCache),
 				},
-				ConfigErr: cfgErr,
-				CopyText:  d.copyText,
+				ConfigErr:     cfgErr,
+				CopyText:      d.copyText,
+				CurrencyCache: currencyCache,
 				HideTerminal: func() error {
 					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
 					return err

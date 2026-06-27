@@ -7,17 +7,19 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/elentok/blf/internal/launcher/currency"
 )
 
 const maxResults = 200
 
 // ModelConfig holds injectable dependencies for the launcher model.
 type ModelConfig struct {
-	Providers    []Provider
-	ConfigErr    error
-	CopyText     func(string) error
-	HideTerminal func() error
-	UseNerdFont  bool
+	Providers     []Provider
+	ConfigErr     error
+	CopyText      func(string) error
+	HideTerminal  func() error
+	UseNerdFont   bool
+	CurrencyCache *currency.Cache // optional; nil disables currency refresh
 }
 
 // Model is the bubbletea model for the launcher TUI.
@@ -47,7 +49,11 @@ func NewModel(cfg ModelConfig) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	cmds := []tea.Cmd{textinput.Blink}
+	if m.cfg.CurrencyCache != nil {
+		cmds = append(cmds, FetchRatesCmd(m.cfg.CurrencyCache))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -128,6 +134,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recomputeResults()
 			return m, cmd
 		}
+
+	case RatesFetchedMsg:
+		m.recomputeResults()
+		if msg.Err == nil && m.cfg.CurrencyCache != nil {
+			ttl := m.cfg.CurrencyCache.TTL()
+			if ttl > 0 {
+				return m, ScheduleRatesTick(ttl)
+			}
+		}
+		return m, nil
+
+	case RatesTTLMsg:
+		if m.cfg.CurrencyCache != nil {
+			return m, FetchRatesCmd(m.cfg.CurrencyCache)
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd

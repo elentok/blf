@@ -17,10 +17,25 @@ type Config struct {
 // LauncherConfig is the [launcher] section of ~/.config/blf/config.toml.
 type LauncherConfig struct {
 	// ScriptWeight is the source weight for user-defined scripts (default 1.5).
-	// Higher values rank scripts above apps when scores are otherwise equal.
 	ScriptWeight float64 `toml:"script_weight"`
 	// AppWeight is the source weight for installed applications (default 1.0).
 	AppWeight float64 `toml:"app_weight"`
+	// UnitGroups allows users to define custom unit conversion groups.
+	UnitGroups []UnitGroupConfig `toml:"unit_group"`
+}
+
+// UnitGroupConfig is a user-defined unit group in the config file.
+type UnitGroupConfig struct {
+	Name  string       `toml:"name"`
+	Units []UnitConfig `toml:"unit"`
+}
+
+// UnitConfig is one unit within a user-defined UnitGroupConfig.
+type UnitConfig struct {
+	Name    string   `toml:"name"`
+	Symbols []string `toml:"symbols"`
+	Factor  float64  `toml:"factor"`
+	Offset  float64  `toml:"offset"`
 }
 
 func defaultConfig() Config {
