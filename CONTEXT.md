@@ -37,11 +37,28 @@ The command that opens a picker of all **agent windows** (across every OS window
 **list-agents**:
 The non-interactive counterpart that lists **agent windows** with **agent status**, optionally as JSON (`blf kitty list-agents [--json]`); intended as the shared source of truth for external callers (e.g. the nvim send-to-agent feature).
 
+**launcher**:
+An always-running, full-screen TUI (`blf launcher`) that lives inside Kitty's quick-access terminal (instance-group `quick`). A single long-lived process that Cmd+2 toggles into view — staying resident is what makes it open blazingly fast (no spawn, no reload on the hot path). Presents one input box over a single ranked result list fed by multiple **launcher sources**.
+_Avoid_: "spawned per keypress" (the process is persistent; Cmd+2 only toggles visibility).
+
+**launcher source** (a.k.a. **provider**):
+One contributor of launcher results — math, unit/currency conversion, application launch, or script. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: exact > prefix > source-weight > fuzzy score).
+_Avoid_: "mode" (implies an exclusive switch you toggle between).
+
+**computational query**:
+A launcher input that resolves to a value — a math expression containing an operator/function (`1+2`, `sqrt(2)`) or a `<number><unit>` conversion (`10cm`, `123$`). A confident computational parse **suppresses** the fuzzy app/script list.
+_Contrast_: a **name-like query** (letters that don't resolve to a unit/function) is fuzzy-matched against apps + scripts. A bare number (`1`) is treated as name-like (falls through to fuzzy, e.g. `1`→1Password), except a large number also contributes a comma-formatted row above the matches.
+
+**launcher history**:
+The persisted list of launcher queries you executed (pressed Enter on) or explicitly saved (Ctrl+S). Recalled via Ctrl+P/Ctrl+N or shown as the default list when the input is empty. Recalling **populates the input and recomputes** — it never blindly re-fires the original action.
+_Avoid_: recording every keystroke-query (only executed/saved queries are history).
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).
 - `blf copy-ref <file>...` copies **File references** to the clipboard — a reference/handle, not the bytes.
 - `blf clean-url` reads a URL (from an argument or the clipboard) and prints (and, in `--clipboard` mode, writes back) the **clean URL**.
+- Pressing Enter on a selected **launcher** result performs its action — launch an app, run a script, or copy a computed value to the clipboard — and records a **launcher history** entry; a successful action then hides the quick terminal.
 
 ## Flagged ambiguities
 

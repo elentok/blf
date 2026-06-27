@@ -72,6 +72,8 @@ Start a new shell for completions to take effect.
 - `blf clean-url <url>` / `blf clean-url --clipboard`: unwrap redirect-wrapper URLs (e.g. Google search `/url?...&url=`) and strip tracking query params (`utm_*`, `gclid`, `fbclid`, etc.). Pass a URL to print the cleaned result, or use `--clipboard` to read, clean, and write the URL back to the clipboard.
 - `blf sum [-e|--echo]`: sum the first space-delimited value from each stdin line.
 - `blf version`: print the current `blf` version.
+- `blf launcher`: Terminal launcher TUI (math, unit/currency conversion, app launch, scripts). Designed to run as a long-lived process inside Kitty's quick-access terminal; Cmd+2 toggles it into view.
+- `blf launcher reindex`: rebuild the application index (`~/.cache/blf/apps.json`) manually. Run this on first use or after installing new apps.
 
 `tmux-links` behavior:
 
@@ -175,3 +177,95 @@ These mappings are only examples. Because `blf kitty new-session` and `blf kitty
 - use `--location=before --bias=25` for a left sidebar
 - use `--location=hsplit --bias=10` for a small prompt below the current window
 - use any other Kitty `launch` placement that fits your workflow
+
+`blf launcher` behavior:
+
+- Type a **math expression** (`1234*2`, `sqrt(2)*pi`, `200+10%`) → result appears immediately; Enter copies it to the clipboard.
+- Type a **`<number><unit>`** (`10cm`, `123$`) → conversions to every other unit in that group appear; Enter copies the selected row.
+- Type a **name** → fuzzy matches against installed applications and configured scripts, ranked into one list with match-position highlighting; Enter launches the app or runs the script.
+- Computational input suppresses the fuzzy app/script list; name-like input shows it. A bare small number (`1`) searches apps; a large bare number (`1000000`) also shows a comma-formatted copy row.
+- Empty input shows recent history items; Up/Down selects, Enter populates the input and recomputes without re-firing.
+- **Ctrl+P / Ctrl+N** — navigate backward/forward through history, populating the input each step.
+- **Ctrl+S** — save the current input to history without acting; a transient "saved" confirmation appears for 1.5 s.
+- **Ctrl+R** — rebuild the app index in the background; a brief loading indicator appears.
+- **Esc** — clear input and reset to the empty state (does not hide the terminal).
+- **`?`** — toggle the key-binding help footer.
+- After a successful Enter action the launcher resets and hides the quick terminal; it never exits.
+
+Quick-terminal setup (Kitty):
+
+1. Start the launcher manually the first time — open any Kitty terminal and run `blf launcher`.
+2. Bind a key in `kitty.conf` to toggle the quick terminal into and out of view:
+
+```conf
+map cmd+2 kitten quick-access-terminal --instance-group quick
+```
+
+3. Press Cmd+2 to open the quick terminal; `blf launcher` is already running and responsive.
+
+For a system-wide hotkey outside Kitty (using [skhd](https://github.com/koekeishiya/skhd)):
+
+```sh
+# ~/.skhdrc — requires allow_remote_control yes in kitty.conf
+cmd - 2 : kitty @ kitten quick-access-terminal --instance-group quick
+```
+
+Config (`~/.config/blf/config.toml`):
+
+```toml
+[launcher]
+script_weight = 2.0  # scripts rank above apps (default 1.5)
+app_weight    = 1.0  # default
+
+# Built-in scripts include playpause and clean-url.
+# [[launcher.script]] entries add to or override them.
+[[launcher.script]]
+name     = "Spotify: play/pause"
+type     = "osascript"
+platform = "mac"
+body     = "tell application \"Spotify\" to playpause"
+output   = "ignore"
+
+[[launcher.script]]
+name   = "clean clipboard URL"
+type   = "bash"
+body   = "blf clean-url --clipboard"
+output = "ignore"
+
+# [[launcher.unit_group]] entries add custom unit groups.
+# Factor is relative to the group's base unit (first unit, factor = 1.0).
+[[launcher.unit_group]]
+name = "pressure"
+
+[[launcher.unit_group.unit]]
+name    = "pascal"
+symbols = ["pa"]
+factor  = 1.0
+
+[[launcher.unit_group.unit]]
+name    = "kilopascal"
+symbols = ["kpa"]
+factor  = 1000.0
+
+[[launcher.unit_group.unit]]
+name    = "bar"
+symbols = ["bar"]
+factor  = 100000.0
+
+[[launcher.unit_group.unit]]
+name    = "psi"
+symbols = ["psi"]
+factor  = 6894.76
+
+[[launcher.unit_group.unit]]
+name    = "atmosphere"
+symbols = ["atm"]
+factor  = 101325.0
+```
+
+Data paths:
+
+- Config: `~/.config/blf/config.toml` (respects `$XDG_CONFIG_HOME`)
+- App index cache: `~/.cache/blf/apps.json` (respects `$XDG_CACHE_HOME`)
+- Currency rate cache: `~/.cache/blf/currency.json`
+- History: `~/.local/state/blf/launcher-history` (respects `$XDG_STATE_HOME`)

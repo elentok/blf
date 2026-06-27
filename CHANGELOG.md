@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.4.18] - 2026-06-27
+
+- Added `blf launcher`: a terminal launcher TUI designed to run as a long-lived process inside Kitty's quick-access terminal (toggle with Cmd+2). Provides:
+  - **Math**: evaluates expressions (`1234*2`, `sqrt(2)*pi`, `200+10%`) with comma-formatted output; Enter copies the result.
+  - **Unit conversion**: parses `<number><unit>` (`10cm`, `123$`) and shows conversions to every other unit in the group; Enter copies the selected row. Built-in groups: length, mass, temperature, speed, data, time, area, volume, plus currency.
+  - **Currency**: live rates from open.er-api.com (fawazahmed0 fallback), cached at `~/.cache/blf/currency.json` with a ~12h TTL and stale-cache fallback on network failure.
+  - **App launcher**: fuzzy search over an indexed list of installed applications with match highlighting; Enter launches the selected app.
+  - **Scripts**: named bash/osascript actions defined in config; built-ins include `playpause` and `clean-url`; user scripts add to or override them.
+  - **History**: every Enter action and Ctrl+S save is persisted to `~/.local/state/blf/launcher-history` (deduped, capped at 500). Ctrl+P/Ctrl+N navigate history; empty input shows recent entries.
+  - Config at `~/.config/blf/config.toml` (`[launcher]` section); custom `unit_group` and `script` entries supported.
+- Added `blf launcher reindex` to build or refresh the application index (`~/.cache/blf/apps.json`).
+
 ## [v0.4.17] - 2026-06-24
 
 - Added `blf kitty list-agents [--json]` to list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions with their working/idle status. Detection matches whole command words (so a path like `/private/tmp/claude-501/…` is never a false positive, while an agent behind a shell wrapper is still found); status comes from the window title's braille spinner. `--json` emits a stable `{ id, agent, status, dir, title, session }` contract for other tools.

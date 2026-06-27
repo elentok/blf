@@ -51,6 +51,8 @@ var (
 	helpBarStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Background(lipgloss.Color(colorSurface0))
 	helpTitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorPeach))
 	helpHintStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorGreen))
+	helpKeyStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorLavender))
+	helpDescStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext))
 
 	// Error notice (non-blocking config error)
 	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed))

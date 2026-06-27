@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/scripts"
@@ -374,7 +375,9 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		m.historyIdx = -1
 		m.scriptOutput = nil
 		m.recomputeResults()
-		return nil, nil // sync, don't hide
+		// Return a no-op cmd so the Enter handler takes the async path and
+		// does not reset the input or hide the terminal.
+		return func() tea.Msg { return nil }, nil
 	case ActionCopy:
 		if m.cfg.CopyText == nil {
 			return nil, fmt.Errorf("copy not available")
@@ -450,7 +453,15 @@ func (m Model) visibleResultRows() int {
 
 func (m Model) View() tea.View {
 	if m.helpMode {
-		content := m.renderHelp()
+		w := m.width
+		if w < 14 {
+			w = 14
+		}
+		h := m.height
+		if h < 6 {
+			h = 6
+		}
+		content := borderStyle.Width(w).Height(h).Render(m.renderHelp())
 		v := tea.NewView(content)
 		v.AltScreen = true
 		return v
@@ -508,11 +519,7 @@ func (m Model) renderInner() string {
 	// Status / help footer
 	footer := m.status
 	if footer == "" {
-		if m.input.Value() == "" && m.cfg.History != nil && m.cfg.History.Len() > 0 {
-			footer = "Recent  ↑↓ select  enter: recall  ctrl+p/n: navigate  esc: dismiss"
-		} else {
-			footer = "↑↓ select  enter: act  ctrl+s: save  ctrl+p/n: history  esc: dismiss  ?: help"
-		}
+		footer = "?: help"
 	}
 	sb.WriteString(helpBarStyle.Width(w).Render(footer))
 
@@ -575,20 +582,35 @@ func (m Model) renderTitle(r Result, selected bool) string {
 }
 
 func (m Model) renderHelp() string {
-	lines := []string{
-		helpTitleStyle.Render("blf launcher — help"),
-		"",
-		"  ↑ / ↓       select result",
-		"  enter        act on selected result (copy / launch / run)",
-		"  ctrl+p       recall previous history entry",
-		"  ctrl+n       recall next history entry",
-		"  ctrl+s       save current input to history",
-		"  ctrl+r       reindex apps",
-		"  esc          dismiss launcher and clear input",
-		"  ?            toggle this help",
-		"  ctrl+c       quit launcher process",
-		"",
-		helpHintStyle.Render("  press any key to close help"),
+	type binding struct{ key, desc string }
+	bindings := []binding{
+		{"↑ / ↓", "select result"},
+		{"ctrl+k / ctrl+j", "(aliases for ↑ / ↓)"},
+		{"enter", "act on selected result (copy / launch / run)"},
+		{"ctrl+p", "recall previous history entry"},
+		{"ctrl+n", "recall next history entry"},
+		{"ctrl+s", "save current input to history"},
+		{"ctrl+r", "reindex apps"},
+		{"esc", "dismiss launcher and clear input"},
+		{"?", "toggle this help"},
+		{"ctrl+c", "quit launcher process"},
 	}
-	return strings.Join(lines, "\n")
+
+	maxKeyWidth := 0
+	for _, b := range bindings {
+		if w := lipgloss.Width(b.key); w > maxKeyWidth {
+			maxKeyWidth = w
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString(helpTitleStyle.Render("blf launcher — help") + "\n\n")
+	for _, b := range bindings {
+		pad := strings.Repeat(" ", maxKeyWidth-lipgloss.Width(b.key))
+		key := helpKeyStyle.Render(b.key) + pad
+		desc := helpDescStyle.Render(b.desc)
+		sb.WriteString("  " + key + "  " + desc + "\n")
+	}
+	sb.WriteString("\n" + helpHintStyle.Render("  press any key to close help"))
+	return sb.String()
 }
