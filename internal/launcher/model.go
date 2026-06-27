@@ -103,6 +103,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc":
 			// Reset and hide the quick terminal (ADR 0002)
+			if len(m.results) > 0 {
+				role := m.results[0].Icon
+				if role == IconRoleCalc || role == IconRoleUnit || role == IconRoleCurrency {
+					m.recordHistory(m.input.Value())
+				}
+			}
 			m.input.Reset()
 			m.results = nil
 			m.selected = 0
