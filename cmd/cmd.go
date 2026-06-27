@@ -108,6 +108,7 @@ func execute(args []string, d deps) error {
 		newKittyCmd(d),
 		newDimPathCmd(d),
 		newCleanURLCmd(d),
+		newLauncherCmd(d),
 		newVersionCmd(d),
 	)
 
