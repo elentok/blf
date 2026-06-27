@@ -323,6 +323,12 @@ func (m Model) renderInner() string {
 		sb.WriteString(m.renderResult(m.results[i], i == m.selected) + "\n")
 	}
 
+	// Blank lines to push footer to the bottom of the frame
+	rendered := end - m.offset
+	for range visibleRows - rendered {
+		sb.WriteString("\n")
+	}
+
 	// Status / help footer
 	footer := m.status
 	if footer == "" {

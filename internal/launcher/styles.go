@@ -9,6 +9,7 @@ const (
 	colorSurface1  = "#45475a"
 	colorText      = "#cdd6f4"
 	colorSubtext   = "#a6adc8"
+	colorOverlay0  = "#6c7086" // dimmer than subtext, used for subtitles
 	colorLavender  = "#b4befe"
 	colorBlue      = "#89b4fa"
 	colorSapphire  = "#74c7ec"
@@ -44,7 +45,7 @@ var (
 					Bold(true)
 
 	// Subtitles
-	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext))
+	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorOverlay0)).Italic(true)
 
 	// Help / status footer
 	helpBarStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Background(lipgloss.Color(colorSurface0))
