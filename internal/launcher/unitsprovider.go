@@ -112,12 +112,7 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 
 	rates := p.currency.Rates()
 	if rates == nil {
-		// Currency service not yet loaded
-		return []Result{{
-			Title:  "loading rates…",
-			Icon:   IconRoleLoading,
-			Source: "currency",
-		}}
+		return nil
 	}
 
 	fromRate, ok := rates.USD[upper]
