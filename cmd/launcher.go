@@ -78,12 +78,15 @@ func newLauncherCmd(d deps) *cobra.Command {
 			platformScripts := scripts.FilterForPlatform(allScripts)
 			scriptsProvider := launcher.NewScriptsProvider(platformScripts, cfg.Launcher.ScriptWeight)
 
+			settingsProvider := launcher.NewSettingsProvider(cfg.Launcher.AppWeight)
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
 					launcher.NewUnitsProvider(registry, currencyCache, cfg.Launcher.Currencies),
 					appsProvider,
 					scriptsProvider,
+					settingsProvider,
 				},
 				ConfigErr:       cfgErr,
 				CopyText:        d.copyText,
@@ -97,6 +100,10 @@ func newLauncherCmd(d deps) *cobra.Command {
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)
+					return err
+				},
+				OpenTarget: func(target string) error {
+					_, err := d.runCommand("open", target)
 					return err
 				},
 				HideTerminal: func() error {

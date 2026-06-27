@@ -23,6 +23,7 @@ type ModelConfig struct {
 	CopyText        func(string) error
 	HideTerminal    func() error
 	LaunchApp       func(string) error // optional; launches an app by path
+	OpenTarget      func(string) error // optional; opens a file/URL via `open` (no -a)
 	UseNerdFont     bool
 	CurrencyCache   *currency.Cache  // optional; nil disables currency refresh
 	AppsProvider    *AppsProvider    // optional; nil disables app search
@@ -379,6 +380,17 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		m.recordHistory(m.input.Value())
 		m.status = "running…"
 		return ScriptRunCmd(s), nil
+	case ActionOpen:
+		if m.cfg.OpenTarget == nil {
+			return nil, fmt.Errorf("open not available")
+		}
+		m.recordHistory(m.input.Value())
+		target := r.Action.Target
+		openFn := m.cfg.OpenTarget
+		return func() tea.Msg {
+			err := openFn(target)
+			return AppLaunchResultMsg{AppPath: target, Err: err}
+		}, nil
 	default:
 		return nil, fmt.Errorf("action not yet implemented")
 	}

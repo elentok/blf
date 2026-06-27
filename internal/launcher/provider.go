@@ -8,6 +8,7 @@ const (
 	ActionLaunch                   // launch an application
 	ActionRun                      // run a script
 	ActionRecall                   // populate input from history (no side-effects)
+	ActionOpen                     // open a file/URL via `open` (no -a flag)
 )
 
 // Action describes the operation performed when a result is selected.
@@ -28,6 +29,7 @@ const (
 	IconRoleHistory
 	IconRoleError
 	IconRoleLoading
+	IconRoleSettings
 )
 
 // Result is one item in the launcher's ranked result list.

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/elentok/blf/internal/launcher/history"
 )
 
 // typeText feeds each rune to the model as a key press, returning the updated model.
@@ -91,6 +92,61 @@ func TestSyncEnterResetsAndHides(t *testing.T) {
 	runCmd(cmd)
 	if !hidden {
 		t.Error("expected HideTerminal to be called")
+	}
+}
+
+func TestCtrlXDeletesSelectedHistoryEntry(t *testing.T) {
+	h := history.New()
+	h.Append("alpha")
+	h.Append("beta")
+	h.Append("gamma") // most-recent first: gamma, beta, alpha
+	m := NewModel(ModelConfig{History: h})
+
+	// Empty input shows history rows; select the middle one (beta).
+	m.recomputeResults()
+	if len(m.results) != 3 {
+		t.Fatalf("expected 3 history rows, got %d", len(m.results))
+	}
+	m.selected = 1
+	if got := m.results[1].Action.Target; got != "beta" {
+		t.Fatalf("expected selected row beta, got %q", got)
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	for _, e := range h.Entries() {
+		if e == "beta" {
+			t.Fatal("expected beta removed from history")
+		}
+	}
+	if len(m.results) != 2 {
+		t.Errorf("expected 2 rows after delete, got %d", len(m.results))
+	}
+	if m.selected < 0 || m.selected >= len(m.results) {
+		t.Errorf("selection out of bounds: %d", m.selected)
+	}
+}
+
+func TestCtrlXIgnoredForNonHistoryRow(t *testing.T) {
+	h := history.New()
+	h.Append("noop")
+	m := NewModel(ModelConfig{
+		Providers: []Provider{CalcProvider{}},
+		History:   h,
+	})
+
+	// Typing a calc query shows a calc result, not a history row.
+	m = typeText(t, m, "1+1")
+	if len(m.results) == 0 || m.results[0].Action.Type != ActionCopy {
+		t.Fatalf("expected a calc (copy) result")
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	if h.Len() != 1 {
+		t.Errorf("expected history untouched, len=%d", h.Len())
 	}
 }
 
