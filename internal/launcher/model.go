@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/scripts"
 )
 
@@ -16,18 +17,23 @@ const maxResults = 200
 
 // ModelConfig holds injectable dependencies for the launcher model.
 type ModelConfig struct {
-	Providers      []Provider
-	ConfigErr      error
-	CopyText       func(string) error
-	HideTerminal   func() error
-	LaunchApp      func(string) error  // optional; launches an app by path
-	UseNerdFont    bool
-	CurrencyCache  *currency.Cache    // optional; nil disables currency refresh
-	AppsProvider   *AppsProvider      // optional; nil disables app search
-	AppsCachePath  string             // path to apps.json; empty disables refresh
-	HomeDir        string             // used by ReindexCmd
-	ScriptsProvider *ScriptsProvider  // optional; nil disables script execution
+	Providers       []Provider
+	ConfigErr       error
+	CopyText        func(string) error
+	HideTerminal    func() error
+	LaunchApp       func(string) error // optional; launches an app by path
+	UseNerdFont     bool
+	CurrencyCache   *currency.Cache  // optional; nil disables currency refresh
+	AppsProvider    *AppsProvider    // optional; nil disables app search
+	AppsCachePath   string           // path to apps.json; empty disables refresh
+	HomeDir         string           // used by ReindexCmd
+	ScriptsProvider *ScriptsProvider // optional; nil disables script execution
+	History         *history.History // optional; nil disables history
+	HistoryPath     string           // path to persist history; empty skips persistence
 }
+
+// clearStatusMsg is sent after a delay to erase a transient status message.
+type clearStatusMsg struct{}
 
 // Model is the bubbletea model for the launcher TUI.
 type Model struct {
@@ -42,6 +48,7 @@ type Model struct {
 	status            string    // transient status / error message
 	lastAppsIndexedAt time.Time // mtime of last loaded apps cache
 	scriptOutput      []Result  // non-nil after a "show" script; overrides provider results
+	historyIdx        int       // -1 = not navigating; >=0 = index into history entries
 }
 
 // NewModel creates a launcher Model ready to run.
@@ -51,8 +58,9 @@ func NewModel(cfg ModelConfig) Model {
 	_ = ti.Focus()
 
 	return Model{
-		cfg:   cfg,
-		input: ti,
+		cfg:        cfg,
+		input:      ti,
+		historyIdx: -1,
 	}
 }
 
@@ -100,6 +108,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.offset = 0
 			m.status = ""
 			m.scriptOutput = nil
+			m.historyIdx = -1
 			if m.cfg.HideTerminal != nil {
 				_ = m.cfg.HideTerminal()
 			}
@@ -156,6 +165,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case "ctrl+p":
+			if m.cfg.History == nil || m.cfg.History.Len() == 0 {
+				return m, nil
+			}
+			entries := m.cfg.History.Entries()
+			next := m.historyIdx + 1
+			if next >= len(entries) {
+				next = len(entries) - 1
+			}
+			m.historyIdx = next
+			m.input.SetValue(entries[next])
+			m.scriptOutput = nil
+			m.recomputeResults()
+			return m, nil
+
+		case "ctrl+n":
+			if m.cfg.History == nil || m.historyIdx < 0 {
+				return m, nil
+			}
+			next := m.historyIdx - 1
+			if next < 0 {
+				m.historyIdx = -1
+				m.input.SetValue("")
+			} else {
+				m.historyIdx = next
+				m.input.SetValue(m.cfg.History.Entries()[next])
+			}
+			m.scriptOutput = nil
+			m.recomputeResults()
+			return m, nil
+
+		case "ctrl+s":
+			if m.cfg.History == nil {
+				return m, nil
+			}
+			val := strings.TrimSpace(m.input.Value())
+			if val == "" {
+				return m, nil
+			}
+			m.cfg.History.Append(val)
+			m.saveHistory()
+			m.status = "saved"
+			return m, clearStatusAfter(1500 * time.Millisecond)
+
 		case "?":
 			m.helpMode = true
 			return m, nil
@@ -166,6 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input, cmd = m.input.Update(msg)
 			if m.input.Value() != prev {
 				m.scriptOutput = nil
+				m.historyIdx = -1
 			}
 			m.recomputeResults()
 			return m, cmd
@@ -258,6 +312,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.cfg.HideTerminal()
 		}
 		return m, nil
+
+	case clearStatusMsg:
+		if m.status == "saved" {
+			m.status = ""
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -275,6 +335,23 @@ func (m *Model) recomputeResults() {
 		return
 	}
 	query := m.input.Value()
+	// Empty input: show recent history instead of provider results.
+	if query == "" && m.cfg.History != nil && m.cfg.History.Len() > 0 {
+		entries := m.cfg.History.Entries()
+		m.results = make([]Result, len(entries))
+		for i, e := range entries {
+			m.results[i] = Result{
+				Title:  e,
+				Icon:   IconRoleHistory,
+				Action: Action{Type: ActionRecall, Target: e},
+			}
+		}
+		if m.selected >= len(m.results) {
+			m.selected = 0
+			m.offset = 0
+		}
+		return
+	}
 	var all []Result
 	for _, p := range m.cfg.Providers {
 		all = append(all, p.Query(query)...)
@@ -292,15 +369,23 @@ func (m *Model) recomputeResults() {
 
 func (m *Model) act(r Result) (tea.Cmd, error) {
 	switch r.Action.Type {
+	case ActionRecall:
+		m.input.SetValue(r.Action.Target)
+		m.historyIdx = -1
+		m.scriptOutput = nil
+		m.recomputeResults()
+		return nil, nil // sync, don't hide
 	case ActionCopy:
 		if m.cfg.CopyText == nil {
 			return nil, fmt.Errorf("copy not available")
 		}
+		m.recordHistory(m.input.Value())
 		return nil, m.cfg.CopyText(r.Action.Target)
 	case ActionLaunch:
 		if m.cfg.LaunchApp == nil {
 			return nil, fmt.Errorf("launch not available")
 		}
+		m.recordHistory(m.input.Value())
 		target := r.Action.Target
 		launchFn := m.cfg.LaunchApp
 		return func() tea.Msg {
@@ -315,10 +400,36 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		if !ok {
 			return nil, fmt.Errorf("script not found: %s", r.Action.Target)
 		}
+		m.recordHistory(m.input.Value())
 		m.status = "running…"
 		return ScriptRunCmd(s), nil
 	default:
 		return nil, fmt.Errorf("action not yet implemented")
+	}
+}
+
+// recordHistory appends query to history and persists it if a path is configured.
+func (m *Model) recordHistory(query string) {
+	if m.cfg.History == nil {
+		return
+	}
+	m.cfg.History.Append(strings.TrimSpace(query))
+	m.saveHistory()
+}
+
+// saveHistory persists history to disk if HistoryPath is set.
+func (m *Model) saveHistory() {
+	if m.cfg.History == nil || m.cfg.HistoryPath == "" {
+		return
+	}
+	_ = m.cfg.History.Save(m.cfg.HistoryPath)
+}
+
+// clearStatusAfter returns a Cmd that sends clearStatusMsg after d.
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(d)
+		return clearStatusMsg{}
 	}
 }
 
@@ -397,7 +508,11 @@ func (m Model) renderInner() string {
 	// Status / help footer
 	footer := m.status
 	if footer == "" {
-		footer = "↑↓ select  enter: act  esc: dismiss  ?: help"
+		if m.input.Value() == "" && m.cfg.History != nil && m.cfg.History.Len() > 0 {
+			footer = "Recent  ↑↓ select  enter: recall  ctrl+p/n: navigate  esc: dismiss"
+		} else {
+			footer = "↑↓ select  enter: act  ctrl+s: save  ctrl+p/n: history  esc: dismiss  ?: help"
+		}
 	}
 	sb.WriteString(helpBarStyle.Width(w).Render(footer))
 
@@ -465,6 +580,10 @@ func (m Model) renderHelp() string {
 		"",
 		"  ↑ / ↓       select result",
 		"  enter        act on selected result (copy / launch / run)",
+		"  ctrl+p       recall previous history entry",
+		"  ctrl+n       recall next history entry",
+		"  ctrl+s       save current input to history",
+		"  ctrl+r       reindex apps",
 		"  esc          dismiss launcher and clear input",
 		"  ?            toggle this help",
 		"  ctrl+c       quit launcher process",

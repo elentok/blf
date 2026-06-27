@@ -8,6 +8,7 @@ import (
 	"github.com/elentok/blf/internal/launcher"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/scripts"
 	"github.com/elentok/blf/internal/launcher/units"
 	"github.com/spf13/cobra"
@@ -55,6 +56,11 @@ func newLauncherCmd(d deps) *cobra.Command {
 				appsProvider.SetIndex(idx)
 			}
 
+			// History: load from state dir.
+			stateDir := launcher.XDGStateDir(homeDir)
+			historyPath := filepath.Join(stateDir, "launcher-history")
+			launcherHistory := history.Load(historyPath)
+
 			// Scripts provider: merge built-ins with user config, filter for platform.
 			userScripts := make([]scripts.Script, 0, len(cfg.Launcher.Scripts))
 			for _, sc := range cfg.Launcher.Scripts {
@@ -85,6 +91,8 @@ func newLauncherCmd(d deps) *cobra.Command {
 				AppsCachePath:   appsCachePath,
 				HomeDir:         homeDir,
 				ScriptsProvider: scriptsProvider,
+				History:         launcherHistory,
+				HistoryPath:     historyPath,
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)

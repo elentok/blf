@@ -8,6 +8,7 @@ var Icons = map[IconRole]string{
 	IconRoleCurrency: "󰀧 ", // nf-md-currency-usd
 	IconRoleApp:      "󰀻 ", // nf-md-apps
 	IconRoleScript:   "󰐊 ", // nf-md-play
+	IconRoleHistory:  "󰋚 ", // nf-md-history
 	IconRoleError:    " ", // nf-fa-exclamation_circle
 	IconRoleLoading:  " ", // nf-fa-spinner
 }
@@ -19,6 +20,7 @@ var ASCIIIcons = map[IconRole]string{
 	IconRoleCurrency: "$ ",
 	IconRoleApp:      "> ",
 	IconRoleScript:   "! ",
+	IconRoleHistory:  "* ",
 	IconRoleError:    "x ",
 	IconRoleLoading:  ". ",
 }

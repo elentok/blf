@@ -7,6 +7,7 @@ const (
 	ActionCopy   ActionType = iota // copy a computed value to clipboard
 	ActionLaunch                   // launch an application
 	ActionRun                      // run a script
+	ActionRecall                   // populate input from history (no side-effects)
 )
 
 // Action describes the operation performed when a result is selected.
@@ -24,6 +25,7 @@ const (
 	IconRoleCurrency
 	IconRoleApp
 	IconRoleScript
+	IconRoleHistory
 	IconRoleError
 	IconRoleLoading
 )
