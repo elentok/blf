@@ -22,6 +22,18 @@ type LauncherConfig struct {
 	AppWeight float64 `toml:"app_weight"`
 	// UnitGroups allows users to define custom unit conversion groups.
 	UnitGroups []UnitGroupConfig `toml:"unit_group"`
+	// Scripts lists user scripts that add to or override the built-in defaults.
+	Scripts []ScriptConfig `toml:"script"`
+}
+
+// ScriptConfig is a named runnable action in the config file.
+type ScriptConfig struct {
+	Name     string `toml:"name"`
+	Icon     string `toml:"icon"`     // optional nerd-font glyph
+	Type     string `toml:"type"`     // "bash" or "osascript"
+	Platform string `toml:"platform"` // "mac", "linux", or "" for both
+	Body     string `toml:"body"`
+	Output   string `toml:"output"` // "ignore", "show", "clipboard"
 }
 
 // UnitGroupConfig is a user-defined unit group in the config file.

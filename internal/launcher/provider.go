@@ -33,6 +33,7 @@ type Result struct {
 	Title         string
 	Subtitle      string
 	Icon          IconRole
+	IconGlyph     string  // optional: raw nerd-font glyph overrides Icon role
 	MatchRanges   []int   // highlight positions in Title from sahilm/fuzzy
 	Source        string  // provider name shown as source hint
 	Weight        float64 // source weight for ranking; higher wins

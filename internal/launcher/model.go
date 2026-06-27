@@ -9,22 +9,24 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/scripts"
 )
 
 const maxResults = 200
 
 // ModelConfig holds injectable dependencies for the launcher model.
 type ModelConfig struct {
-	Providers     []Provider
-	ConfigErr     error
-	CopyText      func(string) error
-	HideTerminal  func() error
-	LaunchApp     func(string) error // optional; launches an app by path
-	UseNerdFont   bool
-	CurrencyCache *currency.Cache // optional; nil disables currency refresh
-	AppsProvider  *AppsProvider   // optional; nil disables app search
-	AppsCachePath string          // path to apps.json; empty disables refresh
-	HomeDir       string          // used by ReindexCmd
+	Providers      []Provider
+	ConfigErr      error
+	CopyText       func(string) error
+	HideTerminal   func() error
+	LaunchApp      func(string) error  // optional; launches an app by path
+	UseNerdFont    bool
+	CurrencyCache  *currency.Cache    // optional; nil disables currency refresh
+	AppsProvider   *AppsProvider      // optional; nil disables app search
+	AppsCachePath  string             // path to apps.json; empty disables refresh
+	HomeDir        string             // used by ReindexCmd
+	ScriptsProvider *ScriptsProvider  // optional; nil disables script execution
 }
 
 // Model is the bubbletea model for the launcher TUI.
@@ -39,6 +41,7 @@ type Model struct {
 	helpMode          bool
 	status            string    // transient status / error message
 	lastAppsIndexedAt time.Time // mtime of last loaded apps cache
+	scriptOutput      []Result  // non-nil after a "show" script; overrides provider results
 }
 
 // NewModel creates a launcher Model ready to run.
@@ -96,6 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selected = 0
 			m.offset = 0
 			m.status = ""
+			m.scriptOutput = nil
 			if m.cfg.HideTerminal != nil {
 				_ = m.cfg.HideTerminal()
 			}
@@ -157,8 +161,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		default:
+			prev := m.input.Value()
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
+			if m.input.Value() != prev {
+				m.scriptOutput = nil
+			}
 			m.recomputeResults()
 			return m, cmd
 		}
@@ -211,6 +219,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.cfg.HideTerminal()
 		}
 		return m, nil
+
+	case ScriptRunMsg:
+		m.status = ""
+		if msg.Result.Err != nil {
+			m.status = "script error: " + msg.Result.Stderr
+			return m, nil
+		}
+		switch msg.Output {
+		case scripts.OutputShow:
+			lines := strings.Split(msg.Result.Stdout, "\n")
+			out := make([]Result, 0, len(lines))
+			for _, l := range lines {
+				if l == "" {
+					continue
+				}
+				out = append(out, Result{
+					Title:  l,
+					Icon:   IconRoleScript,
+					Action: Action{Type: ActionCopy, Target: l},
+				})
+			}
+			m.scriptOutput = out
+			m.recomputeResults()
+			return m, nil
+		case scripts.OutputClipboard:
+			if m.cfg.CopyText != nil {
+				_ = m.cfg.CopyText(msg.Result.Stdout)
+			}
+		}
+		// ignore or clipboard: reset and hide
+		m.input.Reset()
+		m.results = nil
+		m.selected = 0
+		m.offset = 0
+		m.scriptOutput = nil
+		if m.cfg.HideTerminal != nil {
+			_ = m.cfg.HideTerminal()
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -219,6 +266,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) recomputeResults() {
+	if m.scriptOutput != nil {
+		m.results = m.scriptOutput
+		if m.selected >= len(m.results) {
+			m.selected = 0
+			m.offset = 0
+		}
+		return
+	}
 	query := m.input.Value()
 	var all []Result
 	for _, p := range m.cfg.Providers {
@@ -252,6 +307,16 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 			err := launchFn(target)
 			return AppLaunchResultMsg{AppPath: target, Err: err}
 		}, nil
+	case ActionRun:
+		if m.cfg.ScriptsProvider == nil {
+			return nil, fmt.Errorf("scripts not available")
+		}
+		s, ok := m.cfg.ScriptsProvider.Find(r.Action.Target)
+		if !ok {
+			return nil, fmt.Errorf("script not found: %s", r.Action.Target)
+		}
+		m.status = "running…"
+		return ScriptRunCmd(s), nil
 	default:
 		return nil, fmt.Errorf("action not yet implemented")
 	}
@@ -340,7 +405,12 @@ func (m Model) renderInner() string {
 }
 
 func (m Model) renderResult(r Result, selected bool) string {
-	icon := Icon(r.Icon, m.cfg.UseNerdFont)
+	icon := ""
+	if r.IconGlyph != "" && m.cfg.UseNerdFont {
+		icon = r.IconGlyph + " "
+	} else {
+		icon = Icon(r.Icon, m.cfg.UseNerdFont)
+	}
 	w := m.width - 4
 	if w < 10 {
 		w = 10

@@ -8,6 +8,7 @@ import (
 	"github.com/elentok/blf/internal/launcher"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/scripts"
 	"github.com/elentok/blf/internal/launcher/units"
 	"github.com/spf13/cobra"
 )
@@ -54,18 +55,36 @@ func newLauncherCmd(d deps) *cobra.Command {
 				appsProvider.SetIndex(idx)
 			}
 
+			// Scripts provider: merge built-ins with user config, filter for platform.
+			userScripts := make([]scripts.Script, 0, len(cfg.Launcher.Scripts))
+			for _, sc := range cfg.Launcher.Scripts {
+				userScripts = append(userScripts, scripts.Script{
+					Name:     sc.Name,
+					Icon:     sc.Icon,
+					Type:     scripts.ScriptType(sc.Type),
+					Platform: sc.Platform,
+					Body:     sc.Body,
+					Output:   scripts.OutputMode(sc.Output),
+				})
+			}
+			allScripts := scripts.Merge(scripts.Builtins, userScripts)
+			platformScripts := scripts.FilterForPlatform(allScripts)
+			scriptsProvider := launcher.NewScriptsProvider(platformScripts, cfg.Launcher.ScriptWeight)
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
 					launcher.NewUnitsProvider(registry, currencyCache),
 					appsProvider,
+					scriptsProvider,
 				},
 				ConfigErr:     cfgErr,
 				CopyText:      d.copyText,
 				CurrencyCache: currencyCache,
-				AppsProvider:  appsProvider,
-				AppsCachePath: appsCachePath,
-				HomeDir:       homeDir,
+				AppsProvider:    appsProvider,
+				AppsCachePath:   appsCachePath,
+				HomeDir:         homeDir,
+				ScriptsProvider: scriptsProvider,
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)
