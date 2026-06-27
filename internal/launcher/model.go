@@ -2,7 +2,9 @@ package launcher
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -18,21 +20,26 @@ type ModelConfig struct {
 	ConfigErr     error
 	CopyText      func(string) error
 	HideTerminal  func() error
+	LaunchApp     func(string) error // optional; launches an app by path
 	UseNerdFont   bool
 	CurrencyCache *currency.Cache // optional; nil disables currency refresh
+	AppsProvider  *AppsProvider   // optional; nil disables app search
+	AppsCachePath string          // path to apps.json; empty disables refresh
+	HomeDir       string          // used by ReindexCmd
 }
 
 // Model is the bubbletea model for the launcher TUI.
 type Model struct {
-	cfg      ModelConfig
-	input    textinput.Model
-	results  []Result
-	selected int
-	offset   int // viewport scroll offset into results
-	width    int
-	height   int
-	helpMode bool
-	status   string // transient status / error message
+	cfg               ModelConfig
+	input             textinput.Model
+	results           []Result
+	selected          int
+	offset            int // viewport scroll offset into results
+	width             int
+	height            int
+	helpMode          bool
+	status            string    // transient status / error message
+	lastAppsIndexedAt time.Time // mtime of last loaded apps cache
 }
 
 // NewModel creates a launcher Model ready to run.
@@ -53,6 +60,9 @@ func (m Model) Init() tea.Cmd {
 	if m.cfg.CurrencyCache != nil {
 		cmds = append(cmds, FetchRatesCmd(m.cfg.CurrencyCache))
 	}
+	if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
+		cmds = append(cmds, ReindexCmd(m.cfg.HomeDir, m.cfg.AppsCachePath))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -61,6 +71,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// On show, reload apps from disk if the cache was updated externally.
+		if m.cfg.AppsProvider != nil && m.cfg.AppsCachePath != "" {
+			if info, err := os.Stat(m.cfg.AppsCachePath); err == nil {
+				if info.ModTime().After(m.lastAppsIndexedAt) {
+					return m, LoadAppsFromDiskCmd(m.cfg.AppsCachePath)
+				}
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -109,11 +127,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			result := m.results[m.selected]
-			if err := m.act(result); err != nil {
+			cmd, err := m.act(result)
+			if err != nil {
 				m.status = err.Error()
 				return m, nil
 			}
-			// Success: record input, reset, hide
+			if cmd != nil {
+				// Async action (e.g. launch): wait for result before hiding.
+				return m, cmd
+			}
+			// Sync action success: reset and hide.
 			m.input.Reset()
 			m.results = nil
 			m.selected = 0
@@ -121,6 +144,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = ""
 			if m.cfg.HideTerminal != nil {
 				_ = m.cfg.HideTerminal()
+			}
+			return m, nil
+
+		case "ctrl+r":
+			if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
+				m.status = "reindexing apps…"
+				return m, ReindexCmd(m.cfg.HomeDir, m.cfg.AppsCachePath)
 			}
 			return m, nil
 
@@ -150,6 +180,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, FetchRatesCmd(m.cfg.CurrencyCache)
 		}
 		return m, nil
+
+	case AppsReindexedMsg:
+		m.status = ""
+		if msg.Err == nil && msg.Index != nil && m.cfg.AppsProvider != nil {
+			m.cfg.AppsProvider.SetIndex(msg.Index)
+			m.lastAppsIndexedAt = msg.Index.IndexedAt
+		}
+		m.recomputeResults()
+		if m.cfg.AppsCachePath != "" {
+			return m, ScheduleAppsRefresh(30 * time.Minute)
+		}
+		return m, nil
+
+	case AppsRefreshTickMsg:
+		if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
+			return m, ReindexCmd(m.cfg.HomeDir, m.cfg.AppsCachePath)
+		}
+		return m, nil
+
+	case AppLaunchResultMsg:
+		if msg.Err != nil {
+			m.status = "launch error: " + msg.Err.Error()
+			return m, nil
+		}
+		m.input.Reset()
+		m.results = nil
+		m.selected = 0
+		m.offset = 0
+		m.status = ""
+		if m.cfg.HideTerminal != nil {
+			_ = m.cfg.HideTerminal()
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -174,15 +237,25 @@ func (m *Model) recomputeResults() {
 	}
 }
 
-func (m *Model) act(r Result) error {
+func (m *Model) act(r Result) (tea.Cmd, error) {
 	switch r.Action.Type {
 	case ActionCopy:
 		if m.cfg.CopyText == nil {
-			return fmt.Errorf("copy not available")
+			return nil, fmt.Errorf("copy not available")
 		}
-		return m.cfg.CopyText(r.Action.Target)
+		return nil, m.cfg.CopyText(r.Action.Target)
+	case ActionLaunch:
+		if m.cfg.LaunchApp == nil {
+			return nil, fmt.Errorf("launch not available")
+		}
+		target := r.Action.Target
+		launchFn := m.cfg.LaunchApp
+		return func() tea.Msg {
+			err := launchFn(target)
+			return AppLaunchResultMsg{AppPath: target, Err: err}
+		}, nil
 	default:
-		return fmt.Errorf("action not yet implemented")
+		return nil, fmt.Errorf("action not yet implemented")
 	}
 }
 

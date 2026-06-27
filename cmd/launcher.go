@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher"
+	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/units"
 	"github.com/spf13/cobra"
@@ -46,14 +47,30 @@ func newLauncherCmd(d deps) *cobra.Command {
 				registry.AddGroup(g)
 			}
 
+			// Apps provider: load cached index immediately, reindex in background via Init().
+			appsCachePath := filepath.Join(cacheDir, "apps.json")
+			appsProvider := launcher.NewAppsProvider(cfg.Launcher.AppWeight)
+			if idx, err := apps.Load(appsCachePath); err == nil && len(idx.Apps) > 0 {
+				appsProvider.SetIndex(idx)
+			}
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
 					launcher.NewUnitsProvider(registry, currencyCache),
+					appsProvider,
 				},
 				ConfigErr:     cfgErr,
 				CopyText:      d.copyText,
 				CurrencyCache: currencyCache,
+				AppsProvider:  appsProvider,
+				AppsCachePath: appsCachePath,
+				HomeDir:       homeDir,
+				LaunchApp: func(appPath string) error {
+					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
+					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)
+					return err
+				},
 				HideTerminal: func() error {
 					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
 					return err
@@ -71,12 +88,26 @@ func newLauncherCmd(d deps) *cobra.Command {
 	return cmd
 }
 
-func newLauncherReindexCmd(_ deps) *cobra.Command {
+func newLauncherReindexCmd(d deps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reindex",
 		Short: "Rebuild the application index",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("launcher reindex not yet implemented")
+			homeDir, err := d.userHomeDir()
+			if err != nil {
+				return fmt.Errorf("reindex: get home dir: %w", err)
+			}
+			idx, err := apps.Reindex(homeDir)
+			if err != nil {
+				return fmt.Errorf("reindex: %w", err)
+			}
+			cacheDir := launcher.XDGCacheDir(homeDir)
+			cachePath := filepath.Join(cacheDir, "apps.json")
+			if err := apps.Save(cachePath, idx); err != nil {
+				return fmt.Errorf("reindex: save: %w", err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "indexed %d apps → %s\n", len(idx.Apps), cachePath)
+			return nil
 		},
 	}
 }
