@@ -285,7 +285,11 @@ func (m Model) View() tea.View {
 	if w < 14 {
 		w = 14
 	}
-	content := borderStyle.Width(w).Render(inner)
+	h := m.height
+	if h < 6 {
+		h = 6
+	}
+	content := borderStyle.Width(w).Height(h).Render(inner)
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v

@@ -34,9 +34,8 @@ func (CalcProvider) Query(input string) []Result {
 		v, err := calc.Evaluate(input)
 		if err != nil {
 			return []Result{{
-				Title:  err.Error(),
-				Icon:   IconRoleError,
-				Source: "calc",
+				Title: "Invalid math expression",
+				Icon:  IconRoleCalc,
 			}}
 		}
 		formatted := FormatNumber(v)
