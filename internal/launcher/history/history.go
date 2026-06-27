@@ -72,6 +72,18 @@ func (h *History) Append(query string) {
 	}
 }
 
+// Remove deletes the first entry equal to query (case-sensitive).
+// Returns true if an entry was removed.
+func (h *History) Remove(query string) bool {
+	for i, e := range h.entries {
+		if e == query {
+			h.entries = append(h.entries[:i], h.entries[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 // Entries returns a snapshot of entries (most-recent first).
 func (h *History) Entries() []string {
 	out := make([]string, len(h.entries))

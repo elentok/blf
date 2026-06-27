@@ -200,6 +200,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "saved"
 			return m, clearStatusAfter(1500 * time.Millisecond)
 
+		case "ctrl+x":
+			// Delete the selected entry from history (only when history rows are shown).
+			if m.cfg.History == nil || len(m.results) == 0 {
+				return m, nil
+			}
+			result := m.results[m.selected]
+			if result.Action.Type != ActionRecall {
+				return m, nil
+			}
+			if m.cfg.History.Remove(result.Action.Target) {
+				m.saveHistory()
+				m.historyIdx = -1
+				m.recomputeResults()
+				// Keep the cursor near the deleted row instead of jumping to top.
+				if m.selected >= len(m.results) && len(m.results) > 0 {
+					m.selected = len(m.results) - 1
+				}
+				if m.selected < m.offset {
+					m.offset = m.selected
+				}
+			}
+			return m, nil
+
 		case "?":
 			m.helpMode = true
 			return m, nil
@@ -610,6 +633,7 @@ func (m Model) renderHelp() string {
 		{"ctrl+p", "recall previous history entry"},
 		{"ctrl+n", "recall next history entry"},
 		{"ctrl+s", "save current input to history"},
+		{"ctrl+x", "delete selected history entry"},
 		{"ctrl+r", "reindex apps"},
 		{"esc", "dismiss launcher and clear input"},
 		{"?", "toggle this help"},
