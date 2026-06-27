@@ -1,5 +1,50 @@
 package launcher
 
+import "strings"
+
+// CurrencyIcons maps ISO currency codes to dedicated Nerd Font glyphs.
+// Currencies not in this map fall back to IconRoleCurrency.
+var CurrencyIcons = map[string]string{
+	"USD": "", // nf-fa-usd
+	"EUR": "", // nf-fa-eur
+	"GBP": "", // nf-fa-gbp
+	"ILS": "", // nf-fa-ils
+}
+
+// appIconPatterns maps lowercase substrings to Nerd Font glyphs.
+// Checked in order; first match wins.
+var appIconPatterns = []struct{ sub, glyph string }{
+	{"firefox", "󰈹"},           // nf-md-firefox
+	{"chrome", "󰊯"},            // nf-md-google-chrome
+	{"spotify", "󰓇"},           // nf-md-spotify
+	{"keepass", "󰌆"},           // nf-md-key-variant
+	{"1password", "󰌆"},         // nf-md-key-variant
+	{"passwords", "󰌆"},         // nf-md-key-variant
+	{"visual studio code", "󰨞"}, // nf-md-visual-studio-code
+	{"vscode", "󰨞"},            // nf-md-visual-studio-code
+	{"terminal", "󰆍"},          // nf-md-console
+	{"slack", "󰒱"},             // nf-md-slack
+	{"obsidian", "󱓧"},          // nf-md-obsidian
+	{"notion", "󰎈"},            // nf-md-note-text
+	{"finder", "󰀶"},            // nf-md-folder
+	{"mail", "󰇮"},              // nf-md-email
+	{"calendar", "󰃭"},          // nf-md-calendar
+	{"settings", "󰒓"},          // nf-md-cog
+	{"system preferences", "󰒓"}, // nf-md-cog
+}
+
+// AppIconGlyph returns the Nerd Font glyph for an app by title substring match,
+// or "" if no pattern matches.
+func AppIconGlyph(title string) string {
+	lower := strings.ToLower(title)
+	for _, p := range appIconPatterns {
+		if strings.Contains(lower, p.sub) {
+			return p.glyph
+		}
+	}
+	return ""
+}
+
 // Icons maps semantic IconRole values to display strings.
 // Nerd Font glyphs are used when available; otherwise fall back to ASCII.
 var Icons = map[IconRole]string{

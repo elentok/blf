@@ -80,7 +80,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
-					launcher.NewUnitsProvider(registry, currencyCache),
+					launcher.NewUnitsProvider(registry, currencyCache, cfg.Launcher.Currencies),
 					appsProvider,
 					scriptsProvider,
 				},

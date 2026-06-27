@@ -104,6 +104,7 @@ func (p *AppsProvider) Query(input string) []Result {
 		results = append(results, Result{
 			Title:         app.Name,
 			Icon:          IconRoleApp,
+			IconGlyph:     AppIconGlyph(app.Name),
 			Source:        "apps",
 			Weight:        p.weight,
 			FuzzyScore:    m.Score,

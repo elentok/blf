@@ -20,6 +20,8 @@ type LauncherConfig struct {
 	ScriptWeight float64 `toml:"script_weight"`
 	// AppWeight is the source weight for installed applications (default 1.0).
 	AppWeight float64 `toml:"app_weight"`
+	// Currencies is the ordered list of ISO currency codes shown in conversion results.
+	Currencies []string `toml:"currencies"`
 	// UnitGroups allows users to define custom unit conversion groups.
 	UnitGroups []UnitGroupConfig `toml:"unit_group"`
 	// Scripts lists user scripts that add to or override the built-in defaults.
@@ -50,11 +52,14 @@ type UnitConfig struct {
 	Offset  float64  `toml:"offset"`
 }
 
+var defaultCurrencies = []string{"USD", "ILS", "GBP", "EUR"}
+
 func defaultConfig() Config {
 	return Config{
 		Launcher: LauncherConfig{
 			ScriptWeight: 1.5,
 			AppWeight:    1.0,
+			Currencies:   defaultCurrencies,
 		},
 	}
 }

@@ -42,23 +42,19 @@ var currencySymbols = map[string]string{
 	"₹": "INR",
 }
 
-// commonCurrencies is the ordered list of target currencies to show in results.
-var commonCurrencies = []string{
-	"USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF",
-	"CNY", "INR", "HKD", "SGD", "MXN", "KRW", "BRL", "SEK",
-}
-
 // UnitsProvider is a Provider that handles unit conversions and currency exchange.
 type UnitsProvider struct {
-	registry *units.Registry
-	currency *currency.Cache
+	registry   *units.Registry
+	currency   *currency.Cache
+	currencies []string // ordered ISO codes to show in currency results
 }
 
 var _ Provider = (*UnitsProvider)(nil)
 
 // NewUnitsProvider creates a UnitsProvider. currencyCache may be nil to disable currency.
-func NewUnitsProvider(registry *units.Registry, currencyCache *currency.Cache) *UnitsProvider {
-	return &UnitsProvider{registry: registry, currency: currencyCache}
+// currencies is the ordered list of ISO codes to show; nil produces no currency results.
+func NewUnitsProvider(registry *units.Registry, currencyCache *currency.Cache, currencies []string) *UnitsProvider {
+	return &UnitsProvider{registry: registry, currency: currencyCache, currencies: currencies}
 }
 
 func (p *UnitsProvider) Query(input string) []Result {
@@ -124,8 +120,8 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 		return nil
 	}
 
-	results := make([]Result, 0, len(commonCurrencies))
-	for _, code := range commonCurrencies {
+	results := make([]Result, 0, len(p.currencies))
+	for _, code := range p.currencies {
 		if code == upper {
 			continue
 		}
@@ -138,11 +134,12 @@ func (p *UnitsProvider) convertCurrency(value float64, sym string) []Result {
 		converted := value * toRate / fromRate
 		formatted := formatCurrencyAmount(converted)
 		results = append(results, Result{
-			Title:  formatted + " " + strings.ToLower(code),
-			Icon:   IconRoleCurrency,
-			Source: "currency",
-			Weight: 1.5,
-			Action: Action{Type: ActionCopy, Target: formatted},
+			Title:     formatted + " " + strings.ToLower(code),
+			Icon:      IconRoleCurrency,
+			IconGlyph: CurrencyIcons[code],
+			Source:    "currency",
+			Weight:    1.5,
+			Action:    Action{Type: ActionCopy, Target: formatted},
 		})
 	}
 	return results

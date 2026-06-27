@@ -22,17 +22,21 @@ func (CalcProvider) Query(input string) []Result {
 			return nil
 		}
 		return []Result{{
-			Title:    FormatNumber(v),
-			Subtitle: input,
-			Icon:     IconRoleCalc,
-			Source:   "calc",
-			Weight:   2.0,
-			Action:   Action{Type: ActionCopy, Target: FormatNumber(v)},
+			Title:  FormatNumber(v),
+			Icon:   IconRoleCalc,
+			Source: "calc",
+			Weight: 2.0,
+			Action: Action{Type: ActionCopy, Target: FormatNumber(v)},
 		}}
 
 	case Computational:
 		v, err := calc.Evaluate(input)
 		if err != nil {
+			// Unit/currency inputs (e.g. "10$", "5km") look Computational but
+			// are handled by UnitsProvider — don't show a calc error for them.
+			if matchesNumberUnit(input) {
+				return nil
+			}
 			return []Result{{
 				Title: "Invalid math expression",
 				Icon:  IconRoleCalc,
@@ -40,12 +44,11 @@ func (CalcProvider) Query(input string) []Result {
 		}
 		formatted := FormatNumber(v)
 		return []Result{{
-			Title:    formatted,
-			Subtitle: input,
-			Icon:     IconRoleCalc,
-			Source:   "calc",
-			Weight:   2.0,
-			Action:   Action{Type: ActionCopy, Target: formatted},
+			Title:  formatted,
+			Icon:   IconRoleCalc,
+			Source: "calc",
+			Weight: 2.0,
+			Action: Action{Type: ActionCopy, Target: formatted},
 		}}
 
 	default:

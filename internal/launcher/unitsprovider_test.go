@@ -8,7 +8,7 @@ import (
 )
 
 func TestUnitsProviderLength(t *testing.T) {
-	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil)
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	results := p.Query("5km")
 	if len(results) == 0 {
 		t.Fatal("expected results for '5km', got none")
@@ -31,7 +31,7 @@ func TestUnitsProviderLength(t *testing.T) {
 }
 
 func TestUnitsProviderTemperature(t *testing.T) {
-	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil)
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	results := p.Query("0c")
 	if len(results) == 0 {
 		t.Fatal("expected results for '0c'")
@@ -55,7 +55,7 @@ func TestUnitsProviderTemperature(t *testing.T) {
 
 func TestUnitsProviderSymbolCollision_M(t *testing.T) {
 	// "100m" should match meters (length), not minutes (time)
-	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil)
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	results := p.Query("100m")
 	if len(results) == 0 {
 		t.Fatal("expected results for '100m'")
@@ -70,7 +70,7 @@ func TestUnitsProviderSymbolCollision_M(t *testing.T) {
 
 func TestUnitsProviderSymbolCollision_Min(t *testing.T) {
 	// "60min" should match minutes (time), not something in length
-	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil)
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	results := p.Query("60min")
 	if len(results) == 0 {
 		t.Fatal("expected results for '60min'")
@@ -84,7 +84,7 @@ func TestUnitsProviderSymbolCollision_Min(t *testing.T) {
 }
 
 func TestUnitsProviderNonUnit(t *testing.T) {
-	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil)
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	// Pure math expression should return nil from UnitsProvider
 	results := p.Query("1+2")
 	if len(results) != 0 {
