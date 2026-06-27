@@ -6,7 +6,7 @@ var Icons = map[IconRole]string{
 	IconRoleCalc:     "󰃬 ", // nf-md-calculator
 	IconRoleUnit:     "󱉸 ", // nf-md-ruler
 	IconRoleCurrency: "󰀧 ", // nf-md-currency-usd
-	IconRoleApp:      " ", // nf-fa-desktop
+	IconRoleApp:      "󰀻 ", // nf-md-apps
 	IconRoleScript:   " ", // nf-fa-terminal
 	IconRoleError:    " ", // nf-fa-exclamation_circle
 	IconRoleLoading:  " ", // nf-fa-spinner

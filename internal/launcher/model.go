@@ -8,7 +8,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/elentok/blf/internal/launcher/currency"
 )
 
@@ -45,7 +44,6 @@ type Model struct {
 // NewModel creates a launcher Model ready to run.
 func NewModel(cfg ModelConfig) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Type to search or calculate…"
 	ti.Prompt = inputPromptStyle.Render("> ")
 	_ = ti.Focus()
 
@@ -283,10 +281,9 @@ func (m Model) View() tea.View {
 	}
 
 	inner := m.renderInner()
-	// Wrap in outer rounded border
-	w := m.width - 2 // account for border
-	if w < 10 {
-		w = 10
+	w := m.width
+	if w < 14 {
+		w = 14
 	}
 	content := borderStyle.Width(w).Render(inner)
 	v := tea.NewView(content)
@@ -342,28 +339,18 @@ func (m Model) renderResult(r Result, selected bool) string {
 	// Title with fuzzy-match highlights
 	title := m.renderTitle(r, selected)
 
-	// Subtitle (right-padded)
+	// Subtitle — plain text for selected rows to avoid an embedded ANSI reset
+	// cancelling the Width(w) background fill.
 	subtitle := ""
 	if r.Subtitle != "" {
-		subtitle = " " + subtitleStyle.Render(r.Subtitle)
-	}
-
-	// Source hint (right-aligned)
-	source := ""
-	if r.Source != "" {
-		source = sourceStyle.Render("[" + r.Source + "]")
+		if selected {
+			subtitle = " " + r.Subtitle
+		} else {
+			subtitle = " " + subtitleStyle.Render(r.Subtitle)
+		}
 	}
 
 	line := icon + title + subtitle
-	lineWidth := lipgloss.Width(line)
-	sourceWidth := lipgloss.Width(source)
-	if source != "" && lineWidth+sourceWidth+2 <= w {
-		padding := w - lineWidth - sourceWidth
-		if padding < 1 {
-			padding = 1
-		}
-		line += strings.Repeat(" ", padding) + source
-	}
 
 	if selected {
 		return resultSelectedStyle.Width(w).Render(line)

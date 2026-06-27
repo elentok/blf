@@ -35,17 +35,16 @@ var (
 	// Result rows
 	resultNormalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorText))
 	resultSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(colorBase)).
-				Background(lipgloss.Color(colorLavender))
+				Foreground(lipgloss.Color(colorText)).
+				Background(lipgloss.Color(colorSurface1))
 	resultHighlightStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorPeach)).Bold(true)
 	resultSelectedHighlightStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(colorBase)).
-					Background(lipgloss.Color(colorLavender)).
+					Foreground(lipgloss.Color(colorPeach)).
+					Background(lipgloss.Color(colorSurface1)).
 					Bold(true)
 
-	// Subtitles and source hints
+	// Subtitles
 	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext))
-	sourceStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSurface1))
 
 	// Help / status footer
 	helpBarStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Background(lipgloss.Color(colorSurface0))
