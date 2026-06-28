@@ -18,6 +18,7 @@ func newKittyCmd(d deps) *cobra.Command {
 		newKittyGotoOSWindowCmd(d),
 		newKittyTargetsCmd(d),
 		newKittyListAgentsCmd(d),
+		newKittySetAgentStateCmd(d),
 		newKittyGotoAgentCmd(d),
 		newKittyPreviewAgentCmd(d),
 		newKittyNewSessionCmd(d),
@@ -96,6 +97,17 @@ func newKittyListAgentsCmd(d deps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Output as JSON")
 	return cmd
+}
+
+func newKittySetAgentStateCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   internalkitty.SetAgentStateCmd + " <working|waiting|idle>",
+		Short: "Publish the calling window's agent status as a Kitty user var",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.SetAgentState(args[0], kittyDepsFromCmd(d))
+		},
+	}
 }
 
 func newKittyGotoAgentCmd(d deps) *cobra.Command {

@@ -12,6 +12,7 @@ const (
 	GotoOSWindowCmd       = "goto-os-window"
 	TargetsCmd            = "targets"
 	ListAgentsCmd         = "list-agents"
+	SetAgentStateCmd      = "set-agent-state"
 	GotoAgentCmd          = "goto-agent"
 	PreviewAgentCmd       = "__preview-agent"
 	NewSessionCmd         = "new-session"
