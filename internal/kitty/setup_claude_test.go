@@ -71,6 +71,7 @@ func TestReconcileClaudeHooksInstallsCanonicalSet(t *testing.T) {
 	want := map[string]string{
 		"UserPromptSubmit": "blf kitty set-agent-state working",
 		"PreToolUse":       "blf kitty set-agent-state working",
+		"PostToolUse":      "blf kitty set-agent-state working",
 		"Notification":     "blf kitty set-agent-state waiting",
 		"Stop":             "blf kitty set-agent-state idle",
 	}
@@ -84,10 +85,12 @@ func TestReconcileClaudeHooksInstallsCanonicalSet(t *testing.T) {
 		}
 	}
 
-	// PreToolUse is the only tool event and must carry matcher "*".
-	pre := eventGroups(t, got, "PreToolUse")[0].(map[string]any)
-	if pre["matcher"] != "*" {
-		t.Fatalf("PreToolUse matcher = %v, want *", pre["matcher"])
+	// Tool events must carry matcher "*".
+	for _, event := range []string{"PreToolUse", "PostToolUse"} {
+		g := eventGroups(t, got, event)[0].(map[string]any)
+		if g["matcher"] != "*" {
+			t.Fatalf("event %q matcher = %v, want *", event, g["matcher"])
+		}
 	}
 	// Non-tool events take no matcher.
 	for _, event := range []string{"UserPromptSubmit", "Notification", "Stop"} {
@@ -122,14 +125,14 @@ func TestReconcileClaudeHooksIsIdempotent(t *testing.T) {
 }
 
 func TestReconcileClaudeHooksPrunesStaleEventAndRemovesEmptyKey(t *testing.T) {
-	// A managed hook lingering under a since-renamed event must be removed, and
-	// the now-empty event key dropped.
+	// A managed hook lingering under a since-removed event (one no longer in the
+	// canonical set) must be pruned, and the now-empty event key dropped.
 	input := map[string]any{
 		"hooks": map[string]any{
-			"PostToolUse": []any{
+			"SubagentStop": []any{
 				map[string]any{
 					"hooks": []any{
-						map[string]any{"type": "command", "command": "blf kitty set-agent-state working"},
+						map[string]any{"type": "command", "command": "blf kitty set-agent-state idle"},
 					},
 				},
 			},
@@ -138,8 +141,8 @@ func TestReconcileClaudeHooksPrunesStaleEventAndRemovesEmptyKey(t *testing.T) {
 
 	got := reconcileClaudeHooks(input)
 	hooks := got["hooks"].(map[string]any)
-	if _, ok := hooks["PostToolUse"]; ok {
-		t.Fatalf("stale PostToolUse event should be removed: %#v", hooks["PostToolUse"])
+	if _, ok := hooks["SubagentStop"]; ok {
+		t.Fatalf("stale SubagentStop event should be removed: %#v", hooks["SubagentStop"])
 	}
 	// Canonical set still installed.
 	if cmds := eventCommands(t, got, "Stop"); !contains(cmds, "blf kitty set-agent-state idle") {

@@ -16,8 +16,8 @@ import (
 const managedCommandMarker = "blf kitty set-agent-state"
 
 // managedHook is one canonical Claude Code hook setup-claude installs. Non-tool
-// events (UserPromptSubmit/Notification/Stop) take no matcher; PreToolUse
-// matches every tool with "*".
+// events (UserPromptSubmit/Notification/Stop) take no matcher; the tool events
+// (PreToolUse/PostToolUse) match every tool with "*".
 type managedHook struct {
 	event   string
 	matcher string
@@ -25,11 +25,16 @@ type managedHook struct {
 }
 
 // managedHooks is the canonical hook set. Keeping the agent's reported state in
-// sync: working while a prompt is being handled and during each tool call,
-// waiting when Claude asks for input, idle when it stops. See ADR 0004.
+// sync: working while a prompt is being handled and around each tool call,
+// waiting when Claude asks for input, idle when it stops. PostToolUse is what
+// clears "waiting" after the user answers a question/permission prompt — the
+// question tool completing is the reliable re-engagement signal, since answering
+// through the selector is not a UserPromptSubmit. After the final tool,
+// PostToolUse sets working but Stop fires last and wins (idle). See ADR 0004.
 var managedHooks = []managedHook{
 	{event: "UserPromptSubmit", command: "blf kitty set-agent-state working"},
 	{event: "PreToolUse", matcher: "*", command: "blf kitty set-agent-state working"},
+	{event: "PostToolUse", matcher: "*", command: "blf kitty set-agent-state working"},
 	{event: "Notification", command: "blf kitty set-agent-state waiting"},
 	{event: "Stop", command: "blf kitty set-agent-state idle"},
 }
