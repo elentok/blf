@@ -62,13 +62,15 @@ var (
 	waitingStatusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
 	idleStatusStyle    = lipgloss.NewStyle().Faint(true)
 	agentNameStyle     = lipgloss.NewStyle().Faint(true)
+	titleStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
 )
 
-// Nerd Font status glyphs (Material Design convention, nf-md-*).
+// Nerd Font status glyphs (Material Design convention, nf-md-*). Working has no
+// glyph (a plain space) so the listing stays quiet while an agent is busy.
 const (
-	workingGlyph = "\U000F08FF" // U+F08FF
-	waitingGlyph = "\U0000F0F3" // U+F0F3
-	idleGlyph    = "\U0000F49E" // U+F49E
+	workingGlyph = " "
+	waitingGlyph = " "
+	idleGlyph    = " "
 )
 
 // ListAgents lists every agent window across all OS windows and sessions,
@@ -192,14 +194,14 @@ func detectStatus(title string) Status {
 	return StatusIdle
 }
 
-// cleanTitle strips a leading braille spinner (the transient working marker) and
-// surrounding whitespace so the displayed/serialized title is the agent's task
-// summary without status noise.
+// cleanTitle strips leading status decorations (a braille spinner — the
+// transient working marker — or Claude's "✳" prefix) and surrounding whitespace
+// so the displayed/serialized title is the agent's task summary without noise.
 func cleanTitle(title string) string {
 	trimmed := strings.TrimLeft(title, " \t")
 	for len(trimmed) > 0 {
 		r, size := utf8.DecodeRuneInString(trimmed)
-		if r >= 0x2800 && r <= 0x28FF {
+		if (r >= 0x2800 && r <= 0x28FF) || r == '✳' {
 			trimmed = strings.TrimLeft(trimmed[size:], " \t")
 			continue
 		}
@@ -294,14 +296,14 @@ func formatAgentChoices(agents []Agent) string {
 	return b.String()
 }
 
-// formatAgentRow is the visible row: <status>  <dir>  <title>  <agent(dim)>.
+// formatAgentRow is the visible row: <status> <dir>: <title(blue)> (<agent(dim)>).
 func formatAgentRow(agent Agent) string {
-	return strings.Join([]string{
+	return fmt.Sprintf("%s %s: %s (%s)",
 		statusGlyph(agent.Status),
 		agent.Dir,
-		agent.Title,
+		titleStyle.Render(agent.Title),
 		agentNameStyle.Render(agent.Name),
-	}, "  ")
+	)
 }
 
 func statusGlyph(status Status) string {

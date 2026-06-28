@@ -121,6 +121,9 @@ func TestCleanTitle(t *testing.T) {
 	if got := cleanTitle("Reviewing draw_tab"); got != "Reviewing draw_tab" {
 		t.Fatalf("cleanTitle = %q", got)
 	}
+	if got := cleanTitle("✳ Reviewing draw_tab"); got != "Reviewing draw_tab" {
+		t.Fatalf("cleanTitle = %q", got)
+	}
 }
 
 // agentsLS builds a `kitty @ ls` JSON payload with the given windows in a
