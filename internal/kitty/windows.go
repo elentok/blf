@@ -74,6 +74,7 @@ func ParseOSWindows(data []byte) ([]OSWindow, error) {
 					HasActivitySinceLastFocus: rawWindow.HasActivitySinceLastFocus,
 					LastFocusedAt:             rawWindow.LastFocusedAt,
 					Cwd:                       rawWindow.Cwd,
+					UserVars:                  rawWindow.UserVars,
 				})
 			}
 

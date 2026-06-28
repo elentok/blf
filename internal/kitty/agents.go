@@ -14,15 +14,22 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Status is the coarse working/idle state of an agent window. It is derived
-// solely from the window's OSC title (see detectStatus); there is deliberately
-// no "waiting"/"blocked" state.
+// Status is the working/waiting/idle state of an agent window. When the agent
+// reports its own state via the AGENT_STATE user var that value is
+// authoritative (see statusForAgent); otherwise status falls back to the
+// window's OSC title (see detectStatus), which can only distinguish working
+// from idle — never waiting.
 type Status string
 
 const (
 	StatusWorking Status = "working"
+	StatusWaiting Status = "waiting"
 	StatusIdle    Status = "idle"
 )
+
+// agentStateUserVar is the Kitty per-window user var an agent sets to report
+// its own status; when present and recognized it overrides the title signal.
+const agentStateUserVar = "AGENT_STATE"
 
 // Agent is a Kitty window running a known AI coding agent. The JSON field names
 // are the stable contract consumed by external callers (e.g. the nvim
@@ -52,8 +59,16 @@ var knownAgents = map[string]struct{}{
 
 var (
 	workingStatusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true)
+	waitingStatusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
 	idleStatusStyle    = lipgloss.NewStyle().Faint(true)
 	agentNameStyle     = lipgloss.NewStyle().Faint(true)
+)
+
+// Nerd Font status glyphs (Material Design convention, nf-md-*).
+const (
+	workingGlyph = "\U000F08FF" // U+F08FF
+	waitingGlyph = "\U0000F0F3" // U+F0F3
+	idleGlyph    = "\U0000F49E" // U+F49E
 )
 
 // ListAgents lists every agent window across all OS windows and sessions,
@@ -83,7 +98,7 @@ func ListAgents(d Deps) ([]Agent, error) {
 				agents = append(agents, Agent{
 					ID:            window.ID,
 					Name:          name,
-					Status:        statusForAgent(name, window.Title),
+					Status:        statusForAgent(name, window.Title, window.UserVars),
 					Dir:           agentDir(window),
 					Title:         cleanTitle(window.Title),
 					Session:       agentSession(window, tab),
@@ -131,13 +146,35 @@ func matchAgentToken(tokens []string) (string, bool) {
 	return "", false
 }
 
-// statusForAgent reports whether an agent is working or idle. OpenCode has no
-// title status signal, so it always reads idle (known limitation).
-func statusForAgent(name, title string) Status {
+// statusForAgent reports an agent's status. The agent's own AGENT_STATE user
+// var is authoritative when it holds a recognized value
+// (working/waiting/idle); otherwise status falls back to the OSC title, which
+// can only yield working or idle. OpenCode has no title signal, so without a
+// user var it always reads idle (known limitation).
+func statusForAgent(name, title string, userVars map[string]string) Status {
+	if state, ok := statusFromUserVars(userVars); ok {
+		return state
+	}
 	if name == "opencode" {
 		return StatusIdle
 	}
 	return detectStatus(title)
+}
+
+// statusFromUserVars returns the agent-reported status when AGENT_STATE holds a
+// recognized value; ok is false for a missing, empty, or unrecognized var so
+// the caller falls back to the title signal.
+func statusFromUserVars(userVars map[string]string) (Status, bool) {
+	switch Status(userVars[agentStateUserVar]) {
+	case StatusWorking:
+		return StatusWorking, true
+	case StatusWaiting:
+		return StatusWaiting, true
+	case StatusIdle:
+		return StatusIdle, true
+	default:
+		return "", false
+	}
 }
 
 // detectStatus derives status from a window title only: a leading braille
@@ -209,13 +246,25 @@ func currentWindowID(d Deps) int {
 	return id
 }
 
+// statusRank orders the status tiers for sorting: waiting (most urgent) first,
+// then working, then idle.
+func statusRank(status Status) int {
+	switch status {
+	case StatusWaiting:
+		return 0
+	case StatusWorking:
+		return 1
+	default:
+		return 2
+	}
+}
+
 func sortAgents(agents []Agent) {
 	sort.SliceStable(agents, func(i, j int) bool {
 		left, right := agents[i], agents[j]
-		leftWorking := left.Status == StatusWorking
-		rightWorking := right.Status == StatusWorking
-		if leftWorking != rightWorking {
-			return leftWorking
+		leftRank, rightRank := statusRank(left.Status), statusRank(right.Status)
+		if leftRank != rightRank {
+			return leftRank < rightRank
 		}
 		return left.LastFocusedAt > right.LastFocusedAt
 	})
@@ -256,10 +305,14 @@ func formatAgentRow(agent Agent) string {
 }
 
 func statusGlyph(status Status) string {
-	if status == StatusWorking {
-		return workingStatusStyle.Render("●")
+	switch status {
+	case StatusWorking:
+		return workingStatusStyle.Render(workingGlyph)
+	case StatusWaiting:
+		return waitingStatusStyle.Render(waitingGlyph)
+	default:
+		return idleStatusStyle.Render(idleGlyph)
 	}
-	return idleStatusStyle.Render("○")
 }
 
 // parseAgentSelection extracts the Kitty window id from a selected fzf line

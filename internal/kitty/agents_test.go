@@ -79,21 +79,35 @@ func TestDetectAgentName(t *testing.T) {
 
 func TestStatusForAgent(t *testing.T) {
 	tests := []struct {
-		name  string
-		agent string
-		title string
-		want  Status
+		name     string
+		agent    string
+		title    string
+		userVars map[string]string
+		want     Status
 	}{
+		// Title-only fallback (no user var) — today's behavior.
 		{name: "braille spinner means working", agent: "claude", title: "⠉ Reviewing draw_tab", want: StatusWorking},
 		{name: "no spinner means idle", agent: "claude", title: "Reviewing draw_tab", want: StatusIdle},
 		{name: "non-braille decoration is idle", agent: "claude", title: "✳ Ready", want: StatusIdle},
 		{name: "opencode is always idle even with spinner", agent: "opencode", title: "⠉ Working", want: StatusIdle},
 		{name: "empty title is idle", agent: "codex", title: "", want: StatusIdle},
+
+		// AGENT_STATE user var is authoritative when recognized.
+		{name: "waiting var wins over idle title", agent: "claude", title: "Reviewing draw_tab", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
+		{name: "waiting var wins over spinner title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
+		{name: "working var wins over idle title", agent: "claude", title: "Reviewing", userVars: map[string]string{"AGENT_STATE": "working"}, want: StatusWorking},
+		{name: "idle var wins over spinner title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "idle"}, want: StatusIdle},
+		{name: "waiting var wins for opencode", agent: "opencode", title: "", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
+
+		// Unknown / empty var falls back to the title signal.
+		{name: "unknown var falls back to title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "bogus"}, want: StatusWorking},
+		{name: "empty var falls back to title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": ""}, want: StatusWorking},
+		{name: "unrelated vars fall back to title", agent: "claude", title: "Reviewing", userVars: map[string]string{"OTHER": "waiting"}, want: StatusIdle},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := statusForAgent(tc.agent, tc.title); got != tc.want {
+			if got := statusForAgent(tc.agent, tc.title, tc.userVars); got != tc.want {
 				t.Fatalf("statusForAgent = %q, want %q", got, tc.want)
 			}
 		})
@@ -187,6 +201,38 @@ func TestListAgentsDropsCurrentWindowAndSorts(t *testing.T) {
 	}
 }
 
+func TestListAgentsSortsWaitingFirst(t *testing.T) {
+	uv := func(state string) map[string]string { return map[string]string{"AGENT_STATE": state} }
+	data := agentsLS(
+		rawWindow{ID: 100, LastReportedCmdline: "claude", Title: "idle old", UserVars: uv("idle"), LastFocusedAt: 10},
+		rawWindow{ID: 101, LastReportedCmdline: "claude", Title: "working", UserVars: uv("working"), LastFocusedAt: 20},
+		rawWindow{ID: 102, LastReportedCmdline: "claude", Title: "waiting old", UserVars: uv("waiting"), LastFocusedAt: 30},
+		rawWindow{ID: 103, LastReportedCmdline: "claude", Title: "idle new", UserVars: uv("idle"), LastFocusedAt: 99},
+		rawWindow{ID: 104, LastReportedCmdline: "claude", Title: "waiting new", UserVars: uv("waiting"), LastFocusedAt: 40},
+	)
+	d := depsWithLS(t, data, map[string]string{})
+
+	agents, err := ListAgents(d)
+	if err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+
+	var gotIDs []int
+	for _, a := range agents {
+		gotIDs = append(gotIDs, a.ID)
+	}
+	// waiting (by recency: 104>102) -> working (101) -> idle (by recency: 103>100).
+	want := []int{104, 102, 101, 103, 100}
+	if len(gotIDs) != len(want) {
+		t.Fatalf("agent ids = %v, want %v", gotIDs, want)
+	}
+	for i := range want {
+		if gotIDs[i] != want[i] {
+			t.Fatalf("agent ids = %v, want %v", gotIDs, want)
+		}
+	}
+}
+
 func TestListAgentsKeepsCurrentWindowWhenEnvUnset(t *testing.T) {
 	data := agentsLS(
 		rawWindow{ID: 100, LastReportedCmdline: "claude", Title: "one", Cwd: "/home/me/a"},
@@ -236,12 +282,20 @@ func TestFormatAgentChoicesAndSelectionRoundTrip(t *testing.T) {
 
 func TestStatusGlyphDiffersByStatus(t *testing.T) {
 	working := ansiPattern.ReplaceAllString(statusGlyph(StatusWorking), "")
+	waiting := ansiPattern.ReplaceAllString(statusGlyph(StatusWaiting), "")
 	idle := ansiPattern.ReplaceAllString(statusGlyph(StatusIdle), "")
-	if working != "●" {
-		t.Fatalf("working glyph = %q, want ●", working)
+
+	if working != workingGlyph {
+		t.Fatalf("working glyph = %q, want %q", working, workingGlyph)
 	}
-	if idle != "○" {
-		t.Fatalf("idle glyph = %q, want ○", idle)
+	if waiting != waitingGlyph {
+		t.Fatalf("waiting glyph = %q, want %q", waiting, waitingGlyph)
+	}
+	if idle != idleGlyph {
+		t.Fatalf("idle glyph = %q, want %q", idle, idleGlyph)
+	}
+	if working == waiting || working == idle || waiting == idle {
+		t.Fatalf("status glyphs are not distinct: working=%q waiting=%q idle=%q", working, waiting, idle)
 	}
 }
 
@@ -289,6 +343,30 @@ func TestListAgentsCommandJSONContract(t *testing.T) {
 	}
 	if obj["session"] != "work" {
 		t.Fatalf("session = %v, want work", obj["session"])
+	}
+}
+
+func TestListAgentsCommandJSONExposesWaiting(t *testing.T) {
+	data := agentsLS(
+		rawWindow{ID: 100, LastReportedCmdline: "claude", Title: "Reviewing", UserVars: map[string]string{"AGENT_STATE": "waiting"}, LastFocusedAt: 5},
+	)
+	d := depsWithLS(t, data, map[string]string{})
+	var out bytes.Buffer
+	d.Stdout = &out
+
+	if err := ListAgentsCommand(true, d); err != nil {
+		t.Fatalf("ListAgentsCommand: %v", err)
+	}
+
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out.String())
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(got))
+	}
+	if got[0]["status"] != "waiting" {
+		t.Fatalf("status = %v, want waiting", got[0]["status"])
 	}
 }
 

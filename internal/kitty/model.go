@@ -33,6 +33,7 @@ type Window struct {
 	HasActivitySinceLastFocus bool
 	LastFocusedAt             float64
 	Cwd                       string
+	UserVars                  map[string]string
 }
 
 type Session struct {
@@ -71,6 +72,7 @@ type rawWindow struct {
 	HasActivitySinceLastFocus bool                   `json:"has_activity_since_last_focus"`
 	LastFocusedAt             float64                `json:"last_focused_at"`
 	Cwd                       string                 `json:"cwd"`
+	UserVars                  map[string]string      `json:"user_vars"`
 }
 
 type rawForegroundProcess struct {
