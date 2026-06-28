@@ -13,6 +13,7 @@ const (
 	TargetsCmd            = "targets"
 	ListAgentsCmd         = "list-agents"
 	SetAgentStateCmd      = "set-agent-state"
+	SetupClaudeCmd        = "setup-claude"
 	GotoAgentCmd          = "goto-agent"
 	PreviewAgentCmd       = "__preview-agent"
 	NewSessionCmd         = "new-session"

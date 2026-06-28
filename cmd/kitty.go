@@ -19,6 +19,7 @@ func newKittyCmd(d deps) *cobra.Command {
 		newKittyTargetsCmd(d),
 		newKittyListAgentsCmd(d),
 		newKittySetAgentStateCmd(d),
+		newKittySetupClaudeCmd(d),
 		newKittyGotoAgentCmd(d),
 		newKittyPreviewAgentCmd(d),
 		newKittyNewSessionCmd(d),
@@ -108,6 +109,20 @@ func newKittySetAgentStateCmd(d deps) *cobra.Command {
 			return internalkitty.SetAgentState(args[0], kittyDepsFromCmd(d))
 		},
 	}
+}
+
+func newKittySetupClaudeCmd(d deps) *cobra.Command {
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   internalkitty.SetupClaudeCmd,
+		Short: "Install agent-state hooks into ~/.claude/settings.json (idempotent)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return internalkitty.SetupClaude(dryRun, kittyDepsFromCmd(d))
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print the resulting changes without writing")
+	return cmd
 }
 
 func newKittyGotoAgentCmd(d deps) *cobra.Command {
