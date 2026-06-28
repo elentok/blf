@@ -35,7 +35,7 @@ var managedHooks = []managedHook{
 	{event: "UserPromptSubmit", command: "blf kitty set-agent-state working"},
 	{event: "PreToolUse", matcher: "*", command: "blf kitty set-agent-state working"},
 	{event: "PostToolUse", matcher: "*", command: "blf kitty set-agent-state working"},
-	{event: "Notification", command: "blf kitty set-agent-state waiting"},
+	{event: "Notification", command: "blf kitty set-agent-state waiting --only-if-working"},
 	{event: "Stop", command: "blf kitty set-agent-state idle"},
 }
 

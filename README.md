@@ -58,8 +58,10 @@ Start a new shell for completions to take effect.
 - `blf kitty ls`: print a readable tree for `kitty @ ls`, including OS windows, tabs, windows, cmdlines, and foreground processes.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
 - `blf kitty targets`: open an interactive Kitty overlay to navigate and act on detected targets from the current window.
-- `blf kitty list-agents [--json]`: list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions, each with its working/idle status. Add `--json` for a machine-readable list (the source of truth for other tools).
+- `blf kitty list-agents [--json]`: list open AI agent windows (`claude`, `codex`, `opencode`, `cursor-agent`) across all OS windows and sessions, each with its working/waiting/idle status. Add `--json` for a machine-readable list (the source of truth for other tools).
 - `blf kitty goto-agent`: pick an open AI agent window with `fzf` (showing each agent's status, directory, and title, with a live screen preview) and focus the selected window, pulling its tab and OS window forward.
+- `blf kitty set-agent-state <working|waiting|idle> [--only-if-working]`: report the calling Kitty window's agent status by writing the `AGENT_STATE` user var. Meant to be called from an agent's event hooks; no-ops silently outside Kitty and prints nothing. `--only-if-working` writes only when the window is currently `working` (used by the `Notification` hook to ignore the ~60s idle nag).
+- `blf kitty setup-claude [--dry-run]`: idempotently install the agent-state hooks into the global `~/.claude/settings.json` so Claude Code reports `working`/`waiting`/`idle`. `--dry-run` prints the diff without writing.
 - `blf kitty new-session`: prompt for a session name, reuse an existing live session with the same name, otherwise create or recreate `~/.local/share/kitty/sessions/<name>.kitty-session` and switch to it.
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
@@ -118,16 +120,21 @@ bind-key t run 'blf tmux-targets'
 `kitty list-agents` behavior:
 
 - Detects an agent window by whole command-word matching: the first token of the window's `last_reported_cmdline`, falling back to a foreground process's command word. A path that merely contains an agent's name (e.g. `/private/tmp/claude-501/…`) is never matched, and an agent launched behind a shell wrapper (e.g. `/bin/sh /usr/bin/command claude`) still is.
-- Status is derived from the window title: a leading braille-spinner rune means `working`, otherwise `idle`. OpenCode has no title status signal and always reads `idle`.
-- Lists agents across every OS window and session, drops the currently-focused window, and sorts working agents first, then by most recently focused.
+- Status is taken from the window's `AGENT_STATE` user var when present (`working`/`waiting`/`idle`, set by the agent via `set-agent-state`); this is authoritative. Otherwise it falls back to the window title: a leading braille-spinner rune means `working`, otherwise `idle` (the title can never yield `waiting`). OpenCode has no title status signal and, without the user var, always reads `idle`.
+- Lists agents across every OS window and session, drops the currently-focused window, and sorts `waiting` first, then `working`, then by most recently focused.
 - `--json` emits an array of `{ id, agent, status, dir, title, session }` objects; these field names are the stable contract for external callers.
 
 `kitty goto-agent` behavior:
 
-- Builds the same agent list as `list-agents` (working-first, dropping the currently-focused window) and presents it in an `fzf` picker.
-- The picker hides the Kitty window id in a tab-delimited field and shows `<status>  <dir>  <title>  <agent>`; the preview pane runs `kitty @ get-text` to show a live snapshot of the highlighted agent's screen.
+- Builds the same agent list as `list-agents` (waiting-first, dropping the currently-focused window) and presents it in an `fzf` picker.
+- The picker hides the Kitty window id in a tab-delimited field and shows `<status> <dir>: <title> (<agent>)`, with the title highlighted; the preview pane runs `kitty @ get-text` to show a live snapshot of the highlighted agent's screen.
 - Selecting an agent focuses its window with `kitten @ focus-window` (which pulls the window's tab and OS window forward). With no agents open it shows a `No agent windows` Kitty error.
 - Runs directly in the current terminal; bind it to a Kitty mapping to launch it where you want (e.g. a new tab or overlay).
+
+`kitty set-agent-state` / `setup-claude` behavior:
+
+- `set-agent-state <working|waiting|idle>` validates the state, then runs `kitty @ set-user-vars AGENT_STATE=<state>` against the calling window (`KITTY_WINDOW_ID`). It no-ops silently when not run inside Kitty and prints nothing to stdout, so it is safe to wire into a Claude Code `UserPromptSubmit` hook (whose stdout is injected into the model's context). With `--only-if-working` it first reads the window's current `AGENT_STATE` (via `kitty @ ls --match id:<id>`) and writes only if it is `working`.
+- `setup-claude` reconciles the canonical hook set into the global `~/.claude/settings.json`: `UserPromptSubmit`, `PreToolUse`, and `PostToolUse` → `working`, `Notification` → `waiting --only-if-working`, `Stop` → `idle`. `PostToolUse` is what clears `waiting` after you answer a question or permission prompt. `Notification` fires both for real input requests and as Claude Code's ~60s idle nag, so `--only-if-working` keeps the former (which only happens mid-task) and drops the latter (so a finished, idle agent is not flipped back to `waiting`). The reconcile is a narrow match on the `blf kitty set-agent-state` command, so it never touches unrelated hooks, and re-running it is a no-op. `--dry-run` prints the diff and writes nothing.
 
 ```conf
 map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"

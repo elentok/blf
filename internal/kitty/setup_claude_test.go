@@ -72,7 +72,7 @@ func TestReconcileClaudeHooksInstallsCanonicalSet(t *testing.T) {
 		"UserPromptSubmit": "blf kitty set-agent-state working",
 		"PreToolUse":       "blf kitty set-agent-state working",
 		"PostToolUse":      "blf kitty set-agent-state working",
-		"Notification":     "blf kitty set-agent-state waiting",
+		"Notification":     "blf kitty set-agent-state waiting --only-if-working",
 		"Stop":             "blf kitty set-agent-state idle",
 	}
 	for event, command := range want {
@@ -243,7 +243,7 @@ func TestSetupClaudeMissingFileWritesCanonical(t *testing.T) {
 	if err := json.Unmarshal(wroteData, &got); err != nil {
 		t.Fatalf("written file is not valid JSON: %v\n%s", err, wroteData)
 	}
-	if cmds := eventCommands(t, got, "Notification"); !contains(cmds, "blf kitty set-agent-state waiting") {
+	if cmds := eventCommands(t, got, "Notification"); !contains(cmds, "blf kitty set-agent-state waiting --only-if-working") {
 		t.Fatalf("written settings missing canonical Notification hook: %v", cmds)
 	}
 }

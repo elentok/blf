@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.5.0] - 2026-06-29
+
+- Added a **`waiting`** agent status to `blf kitty list-agents` / `goto-agent`, alongside the existing `working` and `idle`. An agent reports its own state by pushing a Kitty per-window user var `AGENT_STATE` (`working`/`waiting`/`idle`), which blf reads from the same free `kitty @ ls` payload. When the var is present it is authoritative; otherwise blf falls back to the OSC-title spinner heuristic (which can only distinguish `working` from `idle`). The listing now sorts `waiting` first, then `working`, then `idle`.
+- Added `blf kitty set-agent-state <working|waiting|idle> [--only-if-working]`: writes `AGENT_STATE` on the calling Kitty window (via `KITTY_WINDOW_ID`). No-ops silently outside Kitty and prints nothing to stdout (so it is safe to call from a Claude Code `UserPromptSubmit` hook, whose stdout is injected into the model's context). `--only-if-working` applies the write only when the window is currently `working`, so the `Notification` hook can ignore Claude Code's ~60s idle nag (which would otherwise flip a finished, idle agent back to `waiting`).
+- Added `blf kitty setup-claude [--dry-run]`: idempotently installs the agent-state hooks into the global `~/.claude/settings.json` (`UserPromptSubmit`/`PreToolUse`/`PostToolUse` → working, `Notification` → `waiting --only-if-working`, `Stop` → idle). Reconciliation is a narrow match on the `blf kitty set-agent-state` command, so unrelated hooks (including other `blf kitty …` hooks) are never touched. `--dry-run` prints the resulting diff and writes nothing.
+- Cleaned up the agent listing UI: rows now render as `<status> <dir>: <title> (<agent>)` with the title highlighted in blue, the `✳` prefix stripped from Claude titles, and a quiet (glyph-less) working state.
+
 ## [v0.4.18] - 2026-06-27
 
 - Added `blf launcher`: a terminal launcher TUI designed to run as a long-lived process inside Kitty's quick-access terminal (toggle with Cmd+2). Provides:

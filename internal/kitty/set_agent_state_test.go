@@ -29,7 +29,7 @@ func TestSetAgentStateValidStateIssuesCommand(t *testing.T) {
 				Stderr: &strings.Builder{},
 			}
 
-			if err := SetAgentState(state, d); err != nil {
+			if err := SetAgentState(state, false, d); err != nil {
 				t.Fatalf("SetAgentState(%q) returned error: %v", state, err)
 			}
 			if calls != 1 {
@@ -64,7 +64,7 @@ func TestSetAgentStateInvalidStateIssuesNoCommand(t *testing.T) {
 		Stderr: &strings.Builder{},
 	}
 
-	if err := SetAgentState("bogus", d); err == nil {
+	if err := SetAgentState("bogus", false, d); err == nil {
 		t.Fatal("SetAgentState(\"bogus\") returned nil error, want non-nil")
 	}
 	if stdout.String() != "" {
@@ -95,11 +95,64 @@ func TestSetAgentStateNoWindowIDIsSilentNoop(t *testing.T) {
 				Stderr: &strings.Builder{},
 			}
 
-			if err := SetAgentState("working", d); err != nil {
+			if err := SetAgentState("working", false, d); err != nil {
 				t.Fatalf("SetAgentState returned error: %v", err)
 			}
 			if stdout.String() != "" {
 				t.Fatalf("stdout = %q, want empty", stdout.String())
+			}
+		})
+	}
+}
+
+// onlyIfWorkingDeps wires LookupEnv/RunCommand so that an `ls --match id:42`
+// returns a window whose AGENT_STATE is current, and records any
+// set-user-vars write. The bool reports whether a write happened.
+func onlyIfWorkingDeps(t *testing.T, current string, wrote *bool) Deps {
+	t.Helper()
+	return Deps{
+		LookupEnv: func(key string) (string, bool) {
+			if key != "KITTY_WINDOW_ID" {
+				t.Fatalf("unexpected env lookup: %q", key)
+			}
+			return "42", true
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			switch {
+			case len(args) >= 2 && args[1] == "ls":
+				return agentsLS(rawWindow{ID: 42, UserVars: map[string]string{"AGENT_STATE": current}}), nil
+			case len(args) >= 2 && args[1] == "set-user-vars":
+				*wrote = true
+				return nil, nil
+			default:
+				t.Fatalf("unexpected command: %s %v", name, args)
+				return nil, nil
+			}
+		},
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+}
+
+func TestSetAgentStateOnlyIfWorkingWritesWhenWorking(t *testing.T) {
+	var wrote bool
+	if err := SetAgentState("waiting", true, onlyIfWorkingDeps(t, "working", &wrote)); err != nil {
+		t.Fatalf("SetAgentState returned error: %v", err)
+	}
+	if !wrote {
+		t.Fatal("expected a set-user-vars write when current state is working")
+	}
+}
+
+func TestSetAgentStateOnlyIfWorkingSkipsWhenNotWorking(t *testing.T) {
+	for _, current := range []string{"idle", "waiting", ""} {
+		t.Run("current="+current, func(t *testing.T) {
+			var wrote bool
+			if err := SetAgentState("waiting", true, onlyIfWorkingDeps(t, current, &wrote)); err != nil {
+				t.Fatalf("SetAgentState returned error: %v", err)
+			}
+			if wrote {
+				t.Fatalf("expected no write when current state is %q", current)
 			}
 		})
 	}

@@ -101,14 +101,19 @@ func newKittyListAgentsCmd(d deps) *cobra.Command {
 }
 
 func newKittySetAgentStateCmd(d deps) *cobra.Command {
-	return &cobra.Command{
+	var onlyIfWorking bool
+
+	cmd := &cobra.Command{
 		Use:   internalkitty.SetAgentStateCmd + " <working|waiting|idle>",
 		Short: "Publish the calling window's agent status as a Kitty user var",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return internalkitty.SetAgentState(args[0], kittyDepsFromCmd(d))
+			return internalkitty.SetAgentState(args[0], onlyIfWorking, kittyDepsFromCmd(d))
 		},
 	}
+	cmd.Flags().BoolVar(&onlyIfWorking, "only-if-working", false,
+		"Apply only when the window's current state is working (used by the Notification hook to ignore the ~60s idle nag)")
+	return cmd
 }
 
 func newKittySetupClaudeCmd(d deps) *cobra.Command {

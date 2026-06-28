@@ -35,11 +35,16 @@ The agent **pushes its own status** as a Kitty per-window user var
   `kitty @ set-user-vars AGENT_STATE=<state>` (defaults to the calling window via
   `KITTY_WINDOW_ID`; no-ops silently outside Kitty). Agents invoke it from their
   event hooks. For Claude Code: `UserPromptSubmit`, `PreToolUse` and
-  `PostToolUse` → working, `Notification` → waiting, `Stop` → idle. `PostToolUse`
-  is what clears **waiting** after the user answers a question or permission
-  prompt — the tool completing is the reliable re-engagement signal, since
-  answering through the selector is not a `UserPromptSubmit`. After the final
-  tool, `PostToolUse` sets working but `Stop` fires last and wins (idle).
+  `PostToolUse` → working, `Notification` → `waiting --only-if-working`,
+  `Stop` → idle. `PostToolUse` is what clears **waiting** after the user answers a
+  question or permission prompt — the tool completing is the reliable
+  re-engagement signal, since answering through the selector is not a
+  `UserPromptSubmit`. After the final tool, `PostToolUse` sets working but `Stop`
+  fires last and wins (idle). `Notification` fires both when Claude needs input
+  **and** as a ~60s idle nag, so `--only-if-working` gates the write to escalate
+  only from **working** — a real permission/question only arrives mid-task, while
+  the nag arrives once the agent is already idle, so the gate keeps the former and
+  drops the latter (which would otherwise flip a finished agent back to waiting).
 - **Reader**: when `user_vars["AGENT_STATE"]` is present it is authoritative;
   otherwise blf falls back to today's OSC-title spinner detection.
 
