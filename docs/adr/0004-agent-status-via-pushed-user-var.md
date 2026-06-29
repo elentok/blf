@@ -45,8 +45,11 @@ The agent **pushes its own status** as a Kitty per-window user var
   only from **working** — a real permission/question only arrives mid-task, while
   the nag arrives once the agent is already idle, so the gate keeps the former and
   drops the latter (which would otherwise flip a finished agent back to waiting).
-- **Reader**: when `user_vars["AGENT_STATE"]` is present it is authoritative;
-  otherwise blf falls back to today's OSC-title spinner detection.
+- **Reader**: a live OSC-title braille spinner means **working** and wins
+  outright — it is the continuously-emitted ground truth, so it corrects a var
+  that went stale on a missed transition. Otherwise a recognized
+  `user_vars["AGENT_STATE"]` owns status (it is the only source of **waiting**),
+  and with neither signal blf falls back to plain title detection.
 
 blf owns the **vocabulary and the read**; each agent owns **when** it transitions.
 
@@ -60,8 +63,10 @@ blf owns the **vocabulary and the read**; each agent owns **when** it transition
 - **Graceful degradation.** Agents without a wired hook never report **waiting**
   and fall back to working/idle; OpenCode (no title signal either) stays idle.
 - **The agent is trusted to be honest** about its own state, and to fire the
-  resume (`PreToolUse`/`PostToolUse`) hook — a missed transition leaves a stale
-  var until the next event.
+  resume (`PreToolUse`/`PostToolUse`) hook. A missed transition leaves a stale
+  var, but the live title spinner self-corrects a stale **idle**/**waiting**
+  back to **working** while the agent is generating; the var only goes
+  uncorrected once the spinner stops.
 - **`set-agent-state` must print nothing to stdout.** A Claude Code
   `UserPromptSubmit` hook's stdout is injected into the model's context, so any
   confirmation output would silently pollute every prompt. The command writes

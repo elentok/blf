@@ -148,12 +148,22 @@ func matchAgentToken(tokens []string) (string, bool) {
 	return "", false
 }
 
-// statusForAgent reports an agent's status. The agent's own AGENT_STATE user
-// var is authoritative when it holds a recognized value
-// (working/waiting/idle); otherwise status falls back to the OSC title, which
-// can only yield working or idle. OpenCode has no title signal, so without a
-// user var it always reads idle (known limitation).
+// statusForAgent reports an agent's status, combining two signals:
+//
+//   - The OSC title's leading braille spinner is the *live* "working" signal —
+//     the agent emits it continuously while generating, and drops it when it
+//     stops. It overrides AGENT_STATE because that var is event-driven (set from
+//     hooks) and goes stale when a working→idle transition is missed.
+//   - The AGENT_STATE user var is the only source of **waiting** (the title
+//     can't express it), so it owns status whenever there is no live spinner.
+//
+// Precedence: live spinner → working; else a recognized AGENT_STATE var; else
+// the title fallback. OpenCode has no title signal, so it never reports working
+// from the title and reads idle without a user var (known limitation).
 func statusForAgent(name, title string, userVars map[string]string) Status {
+	if name != "opencode" && detectStatus(title) == StatusWorking {
+		return StatusWorking
+	}
 	if state, ok := statusFromUserVars(userVars); ok {
 		return state
 	}

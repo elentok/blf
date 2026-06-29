@@ -92,12 +92,15 @@ func TestStatusForAgent(t *testing.T) {
 		{name: "opencode is always idle even with spinner", agent: "opencode", title: "⠉ Working", want: StatusIdle},
 		{name: "empty title is idle", agent: "codex", title: "", want: StatusIdle},
 
-		// AGENT_STATE user var is authoritative when recognized.
+		// AGENT_STATE user var owns status when there is no live spinner.
 		{name: "waiting var wins over idle title", agent: "claude", title: "Reviewing draw_tab", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
-		{name: "waiting var wins over spinner title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
 		{name: "working var wins over idle title", agent: "claude", title: "Reviewing", userVars: map[string]string{"AGENT_STATE": "working"}, want: StatusWorking},
-		{name: "idle var wins over spinner title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "idle"}, want: StatusIdle},
 		{name: "waiting var wins for opencode", agent: "opencode", title: "", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWaiting},
+
+		// Live spinner overrides a stale var (the missed working→idle fix).
+		{name: "spinner overrides stale idle var", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "idle"}, want: StatusWorking},
+		{name: "spinner overrides waiting var", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "waiting"}, want: StatusWorking},
+		{name: "opencode spinner does not override idle var", agent: "opencode", title: "⠉ Working", userVars: map[string]string{"AGENT_STATE": "idle"}, want: StatusIdle},
 
 		// Unknown / empty var falls back to the title signal.
 		{name: "unknown var falls back to title", agent: "claude", title: "⠉ Reviewing", userVars: map[string]string{"AGENT_STATE": "bogus"}, want: StatusWorking},
