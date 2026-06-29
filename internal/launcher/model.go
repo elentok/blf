@@ -192,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Sync action success: reset and hide.
 			return m, m.resetAndHide()
 
-		case "ctrl+u":
+		case "ctrl+shift+r":
 			if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
 				m.status = "reindexing apps…"
 				m.updateFooter()
@@ -644,7 +644,7 @@ func (m Model) renderHelp() string {
 		{"ctrl+f", "recall next history entry"},
 		{"ctrl+s", "save current input to history"},
 		{"ctrl+x", "delete selected history entry"},
-		{"ctrl+u", "reindex apps"},
+		{"ctrl+shift+r", "reindex apps"},
 		{"esc", "dismiss launcher and clear input"},
 		{"?", "toggle this help"},
 		{"ctrl+c", "quit launcher process"},
