@@ -4,7 +4,13 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-- Replaced the `fzf`-based `goto-agent` picker with a self-owned bubbletea v2 TUI fuzzy picker. The new picker renders inline (no subprocess), fuzzy-filters by dir/title/agent name as you type, moves with ↑/↓ or ctrl-k/ctrl-j, opens the selected agent window on Enter, and shows `No agent windows` in-TUI instead of a Kitty error. The hidden `__preview-agent` subcommand has been removed.
+## [v0.5.1] - 2026-06-29
+
+- **`goto-agent` picker**: replaced the `fzf`-based picker with a self-owned bubbletea v2 TUI. The new picker renders inline (no subprocess), fuzzy-filters agents by dir/title/agent name as you type, shows a live split-pane preview of the selected agent's screen on the right, and auto-refreshes the agent list every second with a braille spinner for working agents. Selection is ID-stable across refreshes (cursor follows the same agent). The hidden `__preview-agent` subcommand has been removed.
+- **`launcher` keybindings** updated to match fzf/goto-agent conventions:
+  - **Ctrl+P / Ctrl+N** — now navigate the result list (↑/↓ aliases), consistent with goto-agent. Ctrl+K / Ctrl+J remain as additional aliases.
+  - **Ctrl+R / Ctrl+F** — navigate history backward/forward (was Ctrl+P / Ctrl+N).
+  - **Ctrl+Shift+R** — reindex apps (was Ctrl+R).
 
 ## [v0.5.0] - 2026-06-29
 

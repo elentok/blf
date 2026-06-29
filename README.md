@@ -192,9 +192,10 @@ These mappings are only examples. Because `blf kitty new-session` and `blf kitty
 - Type a **name** → fuzzy matches against installed applications and configured scripts, ranked into one list with match-position highlighting; Enter launches the app or runs the script.
 - Computational input suppresses the fuzzy app/script list; name-like input shows it. A bare small number (`1`) searches apps; a large bare number (`1000000`) also shows a comma-formatted copy row.
 - Empty input shows recent history items; Up/Down selects, Enter populates the input and recomputes without re-firing.
-- **Ctrl+P / Ctrl+N** — navigate backward/forward through history, populating the input each step.
+- **↑/↓, Ctrl+K/J, Ctrl+P/N** — navigate the result list.
+- **Ctrl+R / Ctrl+F** — navigate backward/forward through history, populating the input each step.
 - **Ctrl+S** — save the current input to history without acting; a transient "saved" confirmation appears for 1.5 s.
-- **Ctrl+R** — rebuild the app index in the background; a brief loading indicator appears.
+- **Ctrl+Shift+R** — rebuild the app index in the background; a brief loading indicator appears.
 - **Esc** — clear input and reset to the empty state (does not hide the terminal).
 - **`?`** — toggle the key-binding help footer.
 - After a successful Enter action the launcher resets and hides the quick terminal; it never exits.
