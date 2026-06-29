@@ -344,7 +344,7 @@ func (m agentPickerModel) renderHelp() string {
 		"  type         filter agents by dir / title / agent",
 		"  ↑ / k        move up",
 		"  ↓ / j        move down",
-		"  ctrl+k/j     same as ↑/↓",
+		"  ctrl+p/n     same as ↑/↓",
 		"  enter        focus selected agent window",
 		"  esc          cancel without focusing",
 		"  ?            toggle this help",

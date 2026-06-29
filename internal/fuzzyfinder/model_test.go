@@ -15,6 +15,10 @@ func press(t *testing.T, m Model, key string) Model {
 		msg = tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
 		msg = tea.KeyPressMsg{Code: tea.KeyDown}
+	case "ctrl+p":
+		msg = tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}
+	case "ctrl+n":
+		msg = tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}
 	case "ctrl+k":
 		msg = tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl}
 	case "ctrl+j":
@@ -79,16 +83,16 @@ func TestNavUpMovesSelection(t *testing.T) {
 	}
 }
 
-func TestCtrlJCtrlKAliases(t *testing.T) {
+func TestCtrlPCtrlNAliases(t *testing.T) {
 	m := newTestModel(3, 20)
 
-	m = press(t, m, "ctrl+j")
+	m = press(t, m, "ctrl+n")
 	if m.Selected() != 1 {
-		t.Errorf("ctrl+j: expected 1, got %d", m.Selected())
+		t.Errorf("ctrl+n: expected 1, got %d", m.Selected())
 	}
-	m = press(t, m, "ctrl+k")
+	m = press(t, m, "ctrl+p")
 	if m.Selected() != 0 {
-		t.Errorf("ctrl+k: expected 0, got %d", m.Selected())
+		t.Errorf("ctrl+p: expected 0, got %d", m.Selected())
 	}
 }
 

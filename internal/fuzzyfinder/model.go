@@ -67,7 +67,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up", "ctrl+k":
+		case "up", "ctrl+p", "ctrl+k":
 			if m.selected > 0 {
 				m.selected--
 				if m.selected < m.offset {
@@ -76,7 +76,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "down", "ctrl+j":
+		case "down", "ctrl+n", "ctrl+j":
 			if m.selected < m.itemCount-1 {
 				m.selected++
 				visible := m.visibleRows()
