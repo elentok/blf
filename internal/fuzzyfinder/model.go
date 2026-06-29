@@ -185,6 +185,21 @@ func (m *Model) SetSize(w, h int) {
 	m.height = h
 }
 
+// SetQuery sets the text input value without processing it as a key event.
+func (m *Model) SetQuery(s string) {
+	m.input.SetValue(s)
+}
+
+// Offset returns the current viewport scroll offset.
+func (m Model) Offset() int {
+	return m.offset
+}
+
+// SetFooter updates the footer text rendered at the bottom of the widget.
+func (m *Model) SetFooter(s string) {
+	m.cfg.Footer = s
+}
+
 // visibleRows returns how many result rows fit within the current height.
 // Overhead: border-top(1) + input(1) + separator(1) + footer(1) + border-bottom(1) = 5.
 func (m Model) visibleRows() int {

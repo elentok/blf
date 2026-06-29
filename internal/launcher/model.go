@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/elentok/blf/internal/fuzzyfinder"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/scripts"
@@ -35,16 +35,31 @@ type ModelConfig struct {
 	HideDelay       time.Duration    // delay before hiding the terminal (see resetAndHide); 0 = immediate
 }
 
+// inputProxy mirrors the widget query via a shared *string pointer so tests
+// can call m.input.Value() / m.input.SetValue() without the launcher owning a
+// separate textinput.
+type inputProxy struct {
+	queryRef  *string
+	widgetRef *fuzzyfinder.Model
+}
+
+func (p inputProxy) Value() string     { return *p.queryRef }
+func (p inputProxy) SetValue(s string) { *p.queryRef = s; p.widgetRef.SetQuery(s) }
+func (p inputProxy) Reset()            { *p.queryRef = ""; p.widgetRef.SetQuery("") }
+
 // clearStatusMsg is sent after a delay to erase a transient status message.
 type clearStatusMsg struct{}
 
 // Model is the bubbletea model for the launcher TUI.
 type Model struct {
 	cfg               ModelConfig
-	input             textinput.Model
+	input             inputProxy       // delegates to widget; satisfies test field access
+	widget            fuzzyfinder.Model
+	resultsRef        *[]Result
+	widthRef          *int
 	results           []Result
 	selected          int
-	offset            int // viewport scroll offset into results
+	offset            int // kept for test compat; reset to 0 in resetAndHide
 	width             int
 	height            int
 	helpMode          bool
@@ -56,19 +71,42 @@ type Model struct {
 
 // NewModel creates a launcher Model ready to run.
 func NewModel(cfg ModelConfig) Model {
-	ti := textinput.New()
-	ti.Prompt = inputPromptStyle.Render("> ")
-	_ = ti.Focus()
+	queryRef := new(string)
+	resultsRef := new([]Result)
+	widthRef := new(int)
 
-	return Model{
+	m := Model{
 		cfg:        cfg,
-		input:      ti,
 		historyIdx: -1,
+		resultsRef: resultsRef,
+		widthRef:   widthRef,
 	}
+
+	useNerdFont := cfg.UseNerdFont
+	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
+		RenderRow: func(i int, sel bool) string {
+			results := *resultsRef
+			if i >= len(results) {
+				return ""
+			}
+			w := max(*widthRef-4, 10)
+			return renderResultRow(results[i], sel, w, useNerdFont)
+		},
+		Footer:    "?: help",
+		ItemCount: 0,
+	})
+
+	m.input = inputProxy{queryRef: queryRef, widgetRef: &m.widget}
+
+	if cfg.ConfigErr != nil {
+		m.widget.SetFooter("config: " + cfg.ConfigErr.Error())
+	}
+
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textinput.Blink}
+	cmds := []tea.Cmd{m.widget.Init()}
 	if m.cfg.CurrencyCache != nil {
 		cmds = append(cmds, FetchRatesCmd(m.cfg.CurrencyCache))
 	}
@@ -83,6 +121,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		*m.widthRef = msg.Width
+		m.widget.SetSize(msg.Width, msg.Height)
 		// On show, reload apps from disk if the cache was updated externally.
 		if m.cfg.AppsProvider != nil && m.cfg.AppsCachePath != "" {
 			if info, err := os.Stat(m.cfg.AppsCachePath); err == nil {
@@ -119,6 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selected < m.offset {
 					m.offset = m.selected
 				}
+				m.widget.SetSelected(m.selected)
 			}
 			return m, nil
 
@@ -129,6 +170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selected >= m.offset+visibleRows {
 					m.offset = m.selected - visibleRows + 1
 				}
+				m.widget.SetSelected(m.selected)
 			}
 			return m, nil
 
@@ -140,6 +182,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd, err := m.act(result)
 			if err != nil {
 				m.status = err.Error()
+				m.updateFooter()
 				return m, nil
 			}
 			if cmd != nil {
@@ -152,6 +195,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+r":
 			if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
 				m.status = "reindexing apps…"
+				m.updateFooter()
 				return m, ReindexCmd(m.cfg.HomeDir, m.cfg.AppsCachePath)
 			}
 			return m, nil
@@ -198,6 +242,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cfg.History.Append(val)
 			m.saveHistory()
 			m.status = "saved"
+			m.updateFooter()
 			return m, clearStatusAfter(1500 * time.Millisecond)
 
 		case "ctrl+x":
@@ -220,6 +265,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.selected < m.offset {
 					m.offset = m.selected
 				}
+				m.widget.SetSelected(m.selected)
 			}
 			return m, nil
 
@@ -230,8 +276,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			prev := m.input.Value()
 			var cmd tea.Cmd
-			m.input, cmd = m.input.Update(msg)
-			if m.input.Value() != prev {
+			m.widget, cmd = m.widget.Update(msg)
+			newQuery := m.widget.Query()
+			if newQuery != prev {
+				*m.input.queryRef = newQuery
 				m.scriptOutput = nil
 				m.historyIdx = -1
 			}
@@ -262,6 +310,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastAppsIndexedAt = msg.Index.IndexedAt
 		}
 		m.recomputeResults()
+		m.updateFooter()
 		if m.cfg.AppsCachePath != "" {
 			return m, ScheduleAppsRefresh(30 * time.Minute)
 		}
@@ -276,6 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AppLaunchResultMsg:
 		if msg.Err != nil {
 			m.status = "launch error: " + msg.Err.Error()
+			m.updateFooter()
 			return m, nil
 		}
 		return m, m.resetAndHide()
@@ -284,6 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = ""
 		if msg.Result.Err != nil {
 			m.status = "script error: " + msg.Result.Stderr
+			m.updateFooter()
 			return m, nil
 		}
 		switch msg.Output {
@@ -314,12 +365,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearStatusMsg:
 		if m.status == "saved" {
 			m.status = ""
+			m.updateFooter()
 		}
 		return m, nil
 	}
 
 	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
+	m.widget, cmd = m.widget.Update(msg)
 	return m, cmd
 }
 
@@ -330,6 +382,7 @@ func (m *Model) recomputeResults() {
 			m.selected = 0
 			m.offset = 0
 		}
+		m.syncWidget()
 		return
 	}
 	query := m.input.Value()
@@ -348,6 +401,7 @@ func (m *Model) recomputeResults() {
 			m.selected = 0
 			m.offset = 0
 		}
+		m.syncWidget()
 		return
 	}
 	var all []Result
@@ -362,6 +416,25 @@ func (m *Model) recomputeResults() {
 	if m.selected >= len(m.results) {
 		m.selected = 0
 		m.offset = 0
+	}
+	m.syncWidget()
+}
+
+// syncWidget keeps the fuzzyfinder widget in sync with m.results and m.selected.
+func (m *Model) syncWidget() {
+	*m.resultsRef = m.results
+	m.widget.SetItemCount(max(len(m.results), 1))
+	m.widget.SetSelected(m.selected)
+}
+
+// updateFooter updates the widget footer to reflect the current status/configErr.
+func (m *Model) updateFooter() {
+	if m.status != "" {
+		m.widget.SetFooter(m.status)
+	} else if m.cfg.ConfigErr != nil {
+		m.widget.SetFooter("config: " + m.cfg.ConfigErr.Error())
+	} else {
+		m.widget.SetFooter("?: help")
 	}
 }
 
@@ -402,6 +475,7 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		}
 		m.recordHistory(m.input.Value())
 		m.status = "running…"
+		m.updateFooter()
 		return ScriptRunCmd(s), nil
 	case ActionOpen:
 		if m.cfg.OpenTarget == nil {
@@ -454,6 +528,10 @@ func (m *Model) resetAndHide() tea.Cmd {
 	m.status = ""
 	m.scriptOutput = nil
 	m.historyIdx = -1
+	m.widget.SetSelected(0)
+	m.widget.SetItemCount(1)
+	*m.resultsRef = nil
+	m.updateFooter()
 
 	hide := m.cfg.HideTerminal
 	if hide == nil {
@@ -478,14 +556,9 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 }
 
 // visibleResultRows returns how many result rows fit in the current terminal.
+// Layout: border top (1) + input (1) + separator (1) + footer (1) + border bottom (1) = 5 overhead.
 func (m Model) visibleResultRows() int {
-	// Layout: border top (1) + input (1) + separator (1) + footer (1) + border bottom (1) = 5 overhead
-	// Plus config-error row if present
-	overhead := 5
-	if m.cfg.ConfigErr != nil {
-		overhead++
-	}
-	n := m.height - overhead
+	n := m.height - 5
 	if n < 1 {
 		n = 1
 	}
@@ -494,93 +567,30 @@ func (m Model) visibleResultRows() int {
 
 func (m Model) View() tea.View {
 	if m.helpMode {
-		w := m.width
-		if w < 14 {
-			w = 14
-		}
-		h := m.height
-		if h < 6 {
-			h = 6
-		}
+		w := max(m.width, 14)
+		h := max(m.height, 6)
 		content := borderStyle.Width(w).Height(h).Render(m.renderHelp())
 		v := tea.NewView(content)
 		v.AltScreen = true
 		return v
 	}
 
-	inner := m.renderInner()
-	w := m.width
-	if w < 14 {
-		w = 14
-	}
-	h := m.height
-	if h < 6 {
-		h = 6
-	}
-	content := borderStyle.Width(w).Height(h).Render(inner)
+	content := m.widget.View()
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }
 
-func (m Model) renderInner() string {
-	var sb strings.Builder
-
-	// Config error notice (non-blocking)
-	if m.cfg.ConfigErr != nil {
-		sb.WriteString(errorStyle.Render("config: "+m.cfg.ConfigErr.Error()) + "\n")
-	}
-
-	// Input line
-	sb.WriteString(m.input.View() + "\n")
-
-	// Separator
-	w := m.width - 4 // border (2) + padding (2)
-	if w < 1 {
-		w = 1
-	}
-	sb.WriteString(separatorStyle.Render(strings.Repeat("─", w)) + "\n")
-
-	// Results viewport
-	visibleRows := m.visibleResultRows()
-	end := m.offset + visibleRows
-	if end > len(m.results) {
-		end = len(m.results)
-	}
-	for i := m.offset; i < end; i++ {
-		sb.WriteString(m.renderResult(m.results[i], i == m.selected) + "\n")
-	}
-
-	// Blank lines to push footer to the bottom of the frame
-	rendered := end - m.offset
-	for range visibleRows - rendered {
-		sb.WriteString("\n")
-	}
-
-	// Status / help footer
-	footer := m.status
-	if footer == "" {
-		footer = "?: help"
-	}
-	sb.WriteString(helpBarStyle.Width(w).Render(footer))
-
-	return sb.String()
-}
-
-func (m Model) renderResult(r Result, selected bool) string {
+// renderResultRow renders a single result row; used by the fuzzyfinder RenderRow callback.
+func renderResultRow(r Result, selected bool, w int, useNerdFont bool) string {
 	icon := ""
-	if r.IconGlyph != "" && m.cfg.UseNerdFont {
+	if r.IconGlyph != "" && useNerdFont {
 		icon = r.IconGlyph + " "
 	} else {
-		icon = Icon(r.Icon, m.cfg.UseNerdFont)
-	}
-	w := m.width - 4
-	if w < 10 {
-		w = 10
+		icon = Icon(r.Icon, useNerdFont)
 	}
 
-	// Title with fuzzy-match highlights
-	title := m.renderTitle(r, selected)
+	title := renderTitleStr(r, selected)
 
 	subtitle := ""
 	if r.Subtitle != "" {
@@ -595,12 +605,11 @@ func (m Model) renderResult(r Result, selected bool) string {
 	return resultNormalStyle.Width(w).Render(line)
 }
 
-// renderTitle renders the result title, highlighting fuzzy match positions.
-func (m Model) renderTitle(r Result, selected bool) string {
+// renderTitleStr renders the result title, highlighting fuzzy match positions.
+func renderTitleStr(r Result, selected bool) string {
 	if len(r.MatchRanges) == 0 {
 		return r.Title
 	}
-	// Build a set of highlight positions
 	pos := make(map[int]bool, len(r.MatchRanges))
 	for _, p := range r.MatchRanges {
 		pos[p] = true
