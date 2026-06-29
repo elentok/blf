@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [v0.5.2] - 2026-06-29
+
+- **`goto-agent` picker** now highlights the fuzzy-matched characters as you type, across all searchable fields (dir, title, and agent name) — previously matches weren't highlighted at all.
+- Fixed active-row alignment in the `goto-agent` picker: the working spinner is padded to match the wider idle/waiting glyphs, and each status glyph now carries its trailing space so text no longer shifts between rows or sits flush against the directory.
+- Extracted a shared `Highlight` primitive in `fuzzyfinder` so the launcher and `goto-agent` picker render match highlighting and the selection background identically.
+
 ## [v0.5.1] - 2026-06-29
 
 - **`goto-agent` picker**: replaced the `fzf`-based picker with a self-owned bubbletea v2 TUI. The new picker renders inline (no subprocess), fuzzy-filters agents by dir/title/agent name as you type, shows a live split-pane preview of the selected agent's screen on the right, and auto-refreshes the agent list every second with a braille spinner for working agents. Selection is ID-stable across refreshes (cursor follows the same agent). The hidden `__preview-agent` subcommand has been removed.
