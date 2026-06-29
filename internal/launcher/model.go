@@ -84,13 +84,12 @@ func NewModel(cfg ModelConfig) Model {
 
 	useNerdFont := cfg.UseNerdFont
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
-		RenderRow: func(i int, sel bool) string {
+		RenderRow: func(i int, _ bool) string {
 			results := *resultsRef
 			if i >= len(results) {
 				return ""
 			}
-			w := max(*widthRef-4, 10)
-			return renderResultRow(results[i], sel, w, useNerdFont)
+			return renderResultRow(results[i], useNerdFont)
 		},
 		Footer:    "?: help",
 		ItemCount: 0,
@@ -581,8 +580,9 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// renderResultRow renders a single result row; used by the fuzzyfinder RenderRow callback.
-func renderResultRow(r Result, selected bool, w int, useNerdFont bool) string {
+// renderResultRow renders a single result row; used by the fuzzyfinder
+// RenderRow callback. The active-row gutter is owned by the widget.
+func renderResultRow(r Result, useNerdFont bool) string {
 	icon := ""
 	if r.IconGlyph != "" && useNerdFont {
 		icon = r.IconGlyph + " "
@@ -590,47 +590,12 @@ func renderResultRow(r Result, selected bool, w int, useNerdFont bool) string {
 		icon = Icon(r.Icon, useNerdFont)
 	}
 
-	title := renderTitleStr(r, selected)
-
-	subtitle := ""
-	if r.Subtitle != "" {
-		subtitle = " " + subtitleStyle.Render(r.Subtitle)
-	}
-
-	line := icon + title + subtitle
-
-	if selected {
-		return resultSelectedStyle.Width(w).Render(line)
-	}
-	return resultNormalStyle.Width(w).Render(line)
-}
-
-// renderTitleStr renders the result title, highlighting fuzzy match positions.
-func renderTitleStr(r Result, selected bool) string {
-	if len(r.MatchRanges) == 0 {
-		return r.Title
-	}
-	pos := make(map[int]bool, len(r.MatchRanges))
-	for _, p := range r.MatchRanges {
-		pos[p] = true
-	}
-	runes := []rune(r.Title)
-	var sb strings.Builder
-	for i, ch := range runes {
-		s := string(ch)
-		if pos[i] {
-			if selected {
-				sb.WriteString(resultSelectedHighlightStyle.Render(s))
-			} else {
-				sb.WriteString(resultHighlightStyle.Render(s))
-			}
-		} else if selected {
-			sb.WriteString(resultSelectedStyle.Render(s))
-		} else {
-			sb.WriteString(s)
-		}
-	}
-	return sb.String()
+	return fuzzyfinder.RenderItem(fuzzyfinder.Item{
+		Icon:        icon,
+		Title:       r.Title,
+		Subtitle:    r.Subtitle,
+		MatchRanges: r.MatchRanges,
+	})
 }
 
 func (m Model) renderHelp() string {

@@ -9,8 +9,11 @@ import (
 
 // Config holds the configuration for a Model.
 type Config struct {
-	// RenderRow renders row i. selected is true when i is the selected index.
-	// The returned string should be a single line with no trailing newline.
+	// RenderRow renders the content of row i (no gutter, no trailing newline).
+	// selected is true when i is the selected index; the widget renders the
+	// active-row gutter marker itself, so most rows ignore selected. Consumers
+	// with the common icon/title/subtitle shape should build an Item and call
+	// RenderItem rather than styling content by hand.
 	RenderRow func(i int, selected bool) string
 	// Footer is displayed in the footer bar.
 	Footer string
@@ -106,11 +109,11 @@ func (m Model) View() string {
 	visible := m.visibleRows()
 	end := min(m.offset+visible, m.itemCount)
 	for i := m.offset; i < end; i++ {
-		row := ""
+		content := ""
 		if m.cfg.RenderRow != nil {
-			row = m.cfg.RenderRow(i, i == m.selected)
+			content = m.cfg.RenderRow(i, i == m.selected)
 		}
-		sb.WriteString(row + "\n")
+		sb.WriteString(gutter(i == m.selected) + content + "\n")
 	}
 
 	// Blank lines to pin the footer at the bottom of the frame.

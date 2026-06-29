@@ -69,12 +69,12 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 		RenderRow: func(i int, selected bool) string {
 			display := *displayRef
 			if len(display) == 0 {
-				return fuzzyfinder.RowNormalStyle.Render("  No agent windows")
+				return fuzzyfinder.RowNormalStyle.Render("No agent windows")
 			}
 			if i >= len(display) {
 				return ""
 			}
-			return renderAgentPickerRow(display[i], selected, *spinnerFrameRef)
+			return renderAgentPickerRow(display[i], *spinnerFrameRef)
 		},
 		Footer:    "type: filter  ↑/↓: move  enter: open  esc: cancel  ?: help",
 		ItemCount: max(len(agents), 1),
@@ -87,18 +87,13 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 	return m
 }
 
-func renderAgentPickerRow(agent Agent, selected bool, spinnerFrame int) string {
-	cursor := "  "
-	if selected {
-		cursor = fuzzyfinder.HighlightStyle.Render("▶ ")
-	}
+func renderAgentPickerRow(agent Agent, spinnerFrame int) string {
 	glyph := statusGlyph(agent.Status)
 	if agent.Status == StatusWorking {
 		frame := spinnerFrames[spinnerFrame%len(spinnerFrames)]
 		glyph = workingStatusStyle.Render(frame)
 	}
-	return fmt.Sprintf("%s%s %s: %s (%s)",
-		cursor,
+	return fmt.Sprintf("%s %s: %s (%s)",
 		glyph,
 		agent.Dir,
 		titleStyle.Render(agent.Title),

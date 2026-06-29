@@ -33,19 +33,8 @@ var (
 	// Separator line between input and results
 	separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSurface1))
 
-	// Result rows
-	resultNormalStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorText))
-	resultSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(colorText)).
-				Background(lipgloss.Color(colorSurface1))
-	resultHighlightStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorPeach)).Bold(true)
-	resultSelectedHighlightStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(colorPeach)).
-					Background(lipgloss.Color(colorSurface1)).
-					Bold(true)
-
-	// Subtitles
-	subtitleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorOverlay0)).Italic(true)
+	// Result-row content styling now lives in internal/fuzzyfinder (RenderItem);
+	// the launcher only supplies icons and the raw result fields.
 
 	// Help / status footer
 	helpBarStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Background(lipgloss.Color(colorSurface0))
