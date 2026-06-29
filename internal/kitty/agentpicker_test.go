@@ -280,13 +280,13 @@ func TestRenderPreviewFitsFrame(t *testing.T) {
 
 func TestAgentPickerSpinnerFrameAdvances(t *testing.T) {
 	m := newAgentPickerModel(testPickerAgents(), Deps{})
-	initial := *m.spinnerFrameRef
+	initial := *m.spinner.frameRef
 
-	next, _ := m.Update(agentSpinnerTickMsg{})
+	next, _ := m.Update(spinnerTickMsg{})
 	m = next.(agentPickerModel)
 
-	after := *m.spinnerFrameRef
-	expected := (initial + 1) % len(spinnerFrames)
+	after := *m.spinner.frameRef
+	expected := (initial + 1) % len(arcSpinnerFrames)
 	if after != expected {
 		t.Errorf("expected spinner frame %d, got %d", expected, after)
 	}

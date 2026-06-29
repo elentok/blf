@@ -13,14 +13,12 @@ import (
 	"github.com/elentok/blf/internal/fuzzyfinder"
 )
 
-var spinnerFrames = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
+var arcSpinnerFrames = []string{"◜", "◠", "◝", "◞", "◡", "◟"}
 
 type agentDataTickMsg struct {
 	agents []Agent
 	err    error
 }
-
-type agentSpinnerTickMsg struct{}
 
 type agentPreviewReadyMsg struct {
 	text       string
@@ -37,8 +35,8 @@ var previewPaneStyle = lipgloss.NewStyle().
 // It embeds the fuzzyfinder widget and holds the list of agents.
 type agentPickerModel struct {
 	allAgents          []Agent
-	displayRef         *[]Agent // pointer kept alive across Update copies for the RenderRow closure
-	spinnerFrameRef    *int     // pointer kept alive across Update copies for the RenderRow closure
+	displayRef *[]Agent // pointer kept alive across Update copies for the RenderRow closure
+	spinner    Spinner
 	widget             fuzzyfinder.Model
 	selectedID         int // agent ID to focus after exit (set on enter)
 	highlightedAgentID int // agent ID of the currently highlighted row, for ID-stable selection
@@ -57,13 +55,13 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 	sortAgents(agents)
 	displayRef := new([]Agent)
 	*displayRef = agents
-	spinnerFrameRef := new(int)
+	spinner := newSpinner(arcSpinnerFrames, 100*time.Millisecond)
 
 	m := agentPickerModel{
-		allAgents:       agents,
-		displayRef:      displayRef,
-		spinnerFrameRef: spinnerFrameRef,
-		deps:            d,
+		allAgents:  agents,
+		displayRef: displayRef,
+		spinner:    spinner,
+		deps:       d,
 	}
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
 		RenderRow: func(i int, selected bool) string {
@@ -74,7 +72,7 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 			if i >= len(display) {
 				return ""
 			}
-			return renderAgentPickerRow(display[i], *spinnerFrameRef)
+			return renderAgentPickerRow(display[i], spinner.Frame())
 		},
 		Footer:    "type: filter  ↑/↓: move  enter: open  esc: cancel  ?: help",
 		ItemCount: max(len(agents), 1),
@@ -87,11 +85,10 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 	return m
 }
 
-func renderAgentPickerRow(agent Agent, spinnerFrame int) string {
+func renderAgentPickerRow(agent Agent, spinnerFrame string) string {
 	glyph := statusGlyph(agent.Status)
 	if agent.Status == StatusWorking {
-		frame := spinnerFrames[spinnerFrame%len(spinnerFrames)]
-		glyph = workingStatusStyle.Render(frame)
+		glyph = workingStatusStyle.Render(spinnerFrame) + " "
 	}
 	return fmt.Sprintf("%s %s: %s (%s)",
 		glyph,
@@ -105,7 +102,7 @@ func (m agentPickerModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.widget.Init(),
 		agentDataFetchCmd(m.deps),
-		agentSpinnerTickCmd(),
+		m.spinner.TickCmd(),
 	)
 }
 
@@ -126,12 +123,6 @@ func agentDataTickCmd(d Deps) tea.Cmd {
 	}
 }
 
-func agentSpinnerTickCmd() tea.Cmd {
-	return func() tea.Msg {
-		<-time.After(100 * time.Millisecond)
-		return agentSpinnerTickMsg{}
-	}
-}
 
 // agentPreviewFetchCmd debounces preview fetching. sleepMS=0 for immediate fetch.
 func agentPreviewFetchCmd(agentID int, d Deps, debounceID int, sleepMS int) tea.Cmd {
@@ -159,9 +150,9 @@ func (m agentPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(previewCmd, agentDataTickCmd(m.deps))
 
-	case agentSpinnerTickMsg:
-		*m.spinnerFrameRef = (*m.spinnerFrameRef + 1) % len(spinnerFrames)
-		return m, agentSpinnerTickCmd()
+	case spinnerTickMsg:
+		m.spinner.Advance()
+		return m, m.spinner.TickCmd()
 
 	case agentPreviewReadyMsg:
 		if msg.debounceID == m.previewDebounceID {
