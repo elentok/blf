@@ -53,7 +53,7 @@ type clearStatusMsg struct{}
 // Model is the bubbletea model for the launcher TUI.
 type Model struct {
 	cfg               ModelConfig
-	input             inputProxy       // delegates to widget; satisfies test field access
+	input             inputProxy // delegates to widget; satisfies test field access
 	widget            fuzzyfinder.Model
 	resultsRef        *[]Result
 	widthRef          *int
@@ -84,12 +84,12 @@ func NewModel(cfg ModelConfig) Model {
 
 	useNerdFont := cfg.UseNerdFont
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
-		RenderRow: func(i int, _ bool) string {
+		RenderRow: func(i int, selected bool) string {
 			results := *resultsRef
 			if i >= len(results) {
 				return ""
 			}
-			return renderResultRow(results[i], useNerdFont)
+			return renderResultRow(results[i], useNerdFont, selected)
 		},
 		Footer:    "?: help",
 		ItemCount: 0,
@@ -582,7 +582,7 @@ func (m Model) View() tea.View {
 
 // renderResultRow renders a single result row; used by the fuzzyfinder
 // RenderRow callback. The active-row gutter is owned by the widget.
-func renderResultRow(r Result, useNerdFont bool) string {
+func renderResultRow(r Result, useNerdFont bool, selected bool) string {
 	icon := ""
 	if r.IconGlyph != "" && useNerdFont {
 		icon = r.IconGlyph + " "
@@ -595,6 +595,7 @@ func renderResultRow(r Result, useNerdFont bool) string {
 		Title:       r.Title,
 		Subtitle:    r.Subtitle,
 		MatchRanges: r.MatchRanges,
+		Selected:    selected,
 	})
 }
 

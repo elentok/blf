@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Config holds the configuration for a Model.
@@ -113,7 +114,15 @@ func (m Model) View() string {
 		if m.cfg.RenderRow != nil {
 			content = m.cfg.RenderRow(i, i == m.selected)
 		}
-		sb.WriteString(gutter(i == m.selected) + content + "\n")
+		row := gutter(i == m.selected) + content
+		if i == m.selected {
+			// Pad remaining width with selection background.
+			pad := max(w-lipgloss.Width(row), 0)
+			if pad > 0 {
+				row += rowSelectedPad.Render(strings.Repeat(" ", pad))
+			}
+		}
+		sb.WriteString(row + "\n")
 	}
 
 	// Blank lines to pin the footer at the bottom of the frame.

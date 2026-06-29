@@ -1,13 +1,12 @@
 package kitty
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/elentok/blf/internal/fuzzyfinder"
@@ -35,8 +34,9 @@ var previewPaneStyle = lipgloss.NewStyle().
 // It embeds the fuzzyfinder widget and holds the list of agents.
 type agentPickerModel struct {
 	allAgents          []Agent
-	displayRef *[]Agent // pointer kept alive across Update copies for the RenderRow closure
-	spinner    Spinner
+	displayRef         *[]Agent // pointer kept alive across Update copies for the RenderRow closure
+	queryRef           *string  // current query, kept alive for the RenderRow closure (drives match highlighting)
+	spinner            Spinner
 	widget             fuzzyfinder.Model
 	selectedID         int // agent ID to focus after exit (set on enter)
 	highlightedAgentID int // agent ID of the currently highlighted row, for ID-stable selection
@@ -55,11 +55,13 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 	sortAgents(agents)
 	displayRef := new([]Agent)
 	*displayRef = agents
+	queryRef := new(string)
 	spinner := newSpinner(arcSpinnerFrames, 100*time.Millisecond)
 
 	m := agentPickerModel{
 		allAgents:  agents,
 		displayRef: displayRef,
+		queryRef:   queryRef,
 		spinner:    spinner,
 		deps:       d,
 	}
@@ -72,7 +74,7 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 			if i >= len(display) {
 				return ""
 			}
-			return renderAgentPickerRow(display[i], spinner.Frame())
+			return renderAgentPickerRow(display[i], *queryRef, spinner.Frame(), selected)
 		},
 		Footer:    "type: filter  ↑/↓: move  enter: open  esc: cancel  ?: help",
 		ItemCount: max(len(agents), 1),
@@ -85,17 +87,70 @@ func newAgentPickerModel(agents []Agent, d Deps) agentPickerModel {
 	return m
 }
 
-func renderAgentPickerRow(agent Agent, spinnerFrame string) string {
-	glyph := statusGlyph(agent.Status)
-	if agent.Status == StatusWorking {
-		glyph = workingStatusStyle.Render(spinnerFrame) + " "
+// agentSearchable is the text matched against the query; the visible row's
+// fields (dir, title, name) line up with this string's rune offsets, separated
+// by a single space, so global match ranges map cleanly onto each field.
+func agentSearchable(a Agent) string {
+	return a.Dir + " " + a.Title + " " + a.Name
+}
+
+// renderAgentPickerRow renders one row as "{glyph} {dir}: {title} ({name})",
+// highlighting the runes that fuzzy-matched query. Match positions are computed
+// against agentSearchable and split back into per-field local ranges so each
+// field is highlighted independently via the shared fuzzyfinder.Highlight.
+func renderAgentPickerRow(agent Agent, query, spinnerFrame string, selected bool) string {
+	ranges, _ := fuzzyfinder.MatchRanges(query, agentSearchable(agent))
+
+	// Split global match ranges into per-field local rune indices. Layout:
+	// dir [0,d)  space@d  title [d+1,d+1+t)  space@d+1+t  name [d+2+t, …).
+	d := len([]rune(agent.Dir))
+	t := len([]rune(agent.Title))
+	titleStart := d + 1
+	nameStart := d + 1 + t + 1
+	var dirR, titleR, nameR []int
+	for _, p := range ranges {
+		switch {
+		case p < d:
+			dirR = append(dirR, p)
+		case p >= titleStart && p < titleStart+t:
+			titleR = append(titleR, p-titleStart)
+		case p >= nameStart:
+			nameR = append(nameR, p-nameStart)
+		}
 	}
-	return fmt.Sprintf("%s %s: %s (%s)",
-		glyph,
-		agent.Dir,
-		titleStyle.Render(agent.Title),
-		agentNameStyle.Render(agent.Name),
-	)
+
+	plain := lipgloss.NewStyle()
+	sep := func(s string) string { return fuzzyfinder.Highlight(s, nil, plain, selected) }
+
+	return agentStatusGlyph(agent, spinnerFrame, selected) +
+		fuzzyfinder.Highlight(agent.Dir, dirR, plain, selected) +
+		sep(": ") +
+		fuzzyfinder.Highlight(agent.Title, titleR, titleStyle, selected) +
+		sep(" (") +
+		fuzzyfinder.Highlight(agent.Name, nameR, agentNameStyle, selected) +
+		sep(")")
+}
+
+// agentStatusGlyph renders the leading status glyph plus its trailing space.
+// Working uses the live spinner frame; the trailing space is part of the styled
+// run so the selection background stays continuous on the active row.
+func agentStatusGlyph(agent Agent, spinnerFrame string, selected bool) string {
+	var style lipgloss.Style
+	var g string
+	switch agent.Status {
+	case StatusWorking:
+		// The arc spinner frame is one cell wide; the idle/waiting nerd glyphs are
+		// wider, so pad with a space to keep all rows' text left-aligned.
+		style, g = workingStatusStyle, spinnerFrame+" "
+	case StatusWaiting:
+		style, g = waitingStatusStyle, waitingGlyph
+	default:
+		style, g = idleStatusStyle, idleGlyph
+	}
+	if selected {
+		style = style.Background(fuzzyfinder.SelectedBg)
+	}
+	return style.Render(g + " ")
 }
 
 func (m agentPickerModel) Init() tea.Cmd {
@@ -122,7 +177,6 @@ func agentDataTickCmd(d Deps) tea.Cmd {
 		return agentDataTickMsg{agents: agents, err: err}
 	}
 }
-
 
 // agentPreviewFetchCmd debounces preview fetching. sleepMS=0 for immediate fetch.
 func agentPreviewFetchCmd(agentID int, d Deps, debounceID int, sleepMS int) tea.Cmd {
@@ -206,13 +260,13 @@ func (m agentPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *agentPickerModel) recomputeFilter() {
 	query := m.widget.Query()
+	*m.queryRef = query
 	var display []Agent
 	if query == "" {
 		display = m.allAgents
 	} else {
 		for _, a := range m.allAgents {
-			searchable := a.Dir + " " + a.Title + " " + a.Name
-			if _, ok := fuzzyfinder.MatchRanges(query, searchable); ok {
+			if _, ok := fuzzyfinder.MatchRanges(query, agentSearchable(a)); ok {
 				display = append(display, a)
 			}
 		}
@@ -235,13 +289,13 @@ func (m *agentPickerModel) applyDataRefresh(agents []Agent) tea.Cmd {
 	m.allAgents = agents
 
 	query := m.widget.Query()
+	*m.queryRef = query
 	var display []Agent
 	if query == "" {
 		display = agents
 	} else {
 		for _, a := range agents {
-			searchable := a.Dir + " " + a.Title + " " + a.Name
-			if _, ok := fuzzyfinder.MatchRanges(query, searchable); ok {
+			if _, ok := fuzzyfinder.MatchRanges(query, agentSearchable(a)); ok {
 				display = append(display, a)
 			}
 		}
