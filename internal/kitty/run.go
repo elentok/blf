@@ -85,12 +85,7 @@ func GotoOSWindow(id string, d Deps) error {
 }
 
 func GotoAgent(d Deps) error {
-	agents, err := ListAgents(d)
-	if err != nil {
-		return err
-	}
-
-	m := newAgentPickerModel(agents)
+	m := newAgentPickerModel(nil, d)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
 	if err != nil {
