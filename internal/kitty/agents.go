@@ -282,20 +282,6 @@ func FormatAgents(agents []Agent) string {
 	return b.String()
 }
 
-// formatAgentChoices renders the fzf input: each line is the Kitty window id in
-// a hidden tab-delimited field followed by the visible row (sessions-picker
-// --delimiter/--with-nth pattern).
-func formatAgentChoices(agents []Agent) string {
-	var b strings.Builder
-	for _, agent := range agents {
-		b.WriteString(strconv.Itoa(agent.ID))
-		b.WriteByte('\t')
-		b.WriteString(formatAgentRow(agent))
-		b.WriteByte('\n')
-	}
-	return b.String()
-}
-
 // formatAgentRow is the visible row: <status> <dir>: <title(blue)> (<agent(dim)>).
 func formatAgentRow(agent Agent) string {
 	return fmt.Sprintf("%s %s: %s (%s)",
@@ -317,27 +303,6 @@ func statusGlyph(status Status) string {
 	}
 }
 
-// parseAgentSelection extracts the Kitty window id from a selected fzf line
-// (round-trips formatAgentChoices).
-func parseAgentSelection(line string) (string, error) {
-	plain := ansiPattern.ReplaceAllString(strings.TrimSpace(line), "")
-	if plain == "" {
-		return "", nil
-	}
-	id, _, found := strings.Cut(plain, "\t")
-	if !found {
-		return "", invalidAgentSelection(plain)
-	}
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", invalidAgentSelection(plain)
-	}
-	if _, err := strconv.Atoi(id); err != nil {
-		return "", invalidAgentSelection(plain)
-	}
-	return id, nil
-}
-
 // RenderAgentPreview returns a screen snapshot of an agent window for the fzf
 // preview pane.
 func RenderAgentPreview(id string, d Deps) (string, error) {
@@ -350,10 +315,6 @@ func RenderAgentPreview(id string, d Deps) (string, error) {
 		return "", fmt.Errorf("get text for kitty agent window %s: %w", id, err)
 	}
 	return string(out), nil
-}
-
-func invalidAgentSelection(selection string) error {
-	return fmt.Errorf("invalid kitty agent selection %q", selection)
 }
 
 // ListAgentsCommand backs `blf kitty list-agents [--json]`.

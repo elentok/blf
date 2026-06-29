@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- Replaced the `fzf`-based `goto-agent` picker with a self-owned bubbletea v2 TUI fuzzy picker. The new picker renders inline (no subprocess), fuzzy-filters by dir/title/agent name as you type, moves with ↑/↓ or ctrl-k/ctrl-j, opens the selected agent window on Enter, and shows `No agent windows` in-TUI instead of a Kitty error. The hidden `__preview-agent` subcommand has been removed.
+
 ## [v0.5.0] - 2026-06-29
 
 - Added a **`waiting`** agent status to `blf kitty list-agents` / `goto-agent`, alongside the existing `working` and `idle`. An agent reports its own state by pushing a Kitty per-window user var `AGENT_STATE` (`working`/`waiting`/`idle`), which blf reads from the same free `kitty @ ls` payload. When the var is present it is authoritative; otherwise blf falls back to the OSC-title spinner heuristic (which can only distinguish `working` from `idle`). The listing now sorts `waiting` first, then `working`, then `idle`.

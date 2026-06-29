@@ -251,38 +251,6 @@ func TestListAgentsKeepsCurrentWindowWhenEnvUnset(t *testing.T) {
 	}
 }
 
-func TestFormatAgentChoicesAndSelectionRoundTrip(t *testing.T) {
-	agents := []Agent{
-		{ID: 101, Name: "codex", Status: StatusWorking, Dir: "proj-b", Title: "busy"},
-		{ID: 100, Name: "claude", Status: StatusIdle, Dir: "proj-a", Title: "idle"},
-	}
-
-	choices := formatAgentChoices(agents)
-	lines := strings.Split(strings.TrimRight(choices, "\n"), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected 2 choice lines, got %d: %q", len(lines), choices)
-	}
-
-	// Hidden id field is the first tab-delimited column.
-	id, rest, found := strings.Cut(lines[0], "\t")
-	if !found || id != "101" {
-		t.Fatalf("first line id field = %q (found=%v)", id, found)
-	}
-	plainRest := ansiPattern.ReplaceAllString(rest, "")
-	if !strings.Contains(plainRest, "proj-b") || !strings.Contains(plainRest, "busy") || !strings.Contains(plainRest, "codex") {
-		t.Fatalf("row missing expected fields: %q", plainRest)
-	}
-
-	// Selection round-trips back to the id.
-	gotID, err := parseAgentSelection(lines[0])
-	if err != nil {
-		t.Fatalf("parseAgentSelection: %v", err)
-	}
-	if gotID != "101" {
-		t.Fatalf("parseAgentSelection = %q, want 101", gotID)
-	}
-}
-
 func TestStatusGlyphDiffersByStatus(t *testing.T) {
 	working := ansiPattern.ReplaceAllString(statusGlyph(StatusWorking), "")
 	waiting := ansiPattern.ReplaceAllString(statusGlyph(StatusWaiting), "")
@@ -391,35 +359,6 @@ func TestRenderAgentPreviewUsesGetText(t *testing.T) {
 	}
 	if gotArgs != "kitty @ get-text --match id:42 --extent screen" {
 		t.Fatalf("command = %q", gotArgs)
-	}
-}
-
-func TestGotoAgentEmptyShowsError(t *testing.T) {
-	var calls []string
-	d := Deps{
-		LookupEnv: func(string) (string, bool) { return "", false },
-		RunCommand: func(name string, args ...string) ([]byte, error) {
-			calls = append(calls, name+" "+strings.Join(args, " "))
-			if name == "kitty" && strings.Join(args, " ") == "@ ls" {
-				return agentsLS(), nil
-			}
-			return []byte{}, nil
-		},
-	}
-
-	if err := GotoAgent(d); err != nil {
-		t.Fatalf("GotoAgent: %v", err)
-	}
-
-	want := `kitten @ action show_error "blf kitty goto-agent" "No agent windows"`
-	found := false
-	for _, c := range calls {
-		if c == want {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("expected show_error call, got %v", calls)
 	}
 }
 

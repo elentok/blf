@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 const (
@@ -15,7 +17,6 @@ const (
 	SetAgentStateCmd      = "set-agent-state"
 	SetupClaudeCmd        = "setup-claude"
 	GotoAgentCmd          = "goto-agent"
-	PreviewAgentCmd       = "__preview-agent"
 	NewSessionCmd         = "new-session"
 	SessionsCmd           = "sessions"
 	DeleteSessionCmd      = "delete-session"
@@ -88,33 +89,25 @@ func GotoAgent(d Deps) error {
 	if err != nil {
 		return err
 	}
-	if len(agents) == 0 {
-		return ShowError(d, "blf kitty goto-agent", "No agent windows")
+
+	m := newAgentPickerModel(agents)
+	p := tea.NewProgram(m)
+	final, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("run agent picker: %w", err)
 	}
 
-	id, err := pickAgent(agents, d)
-	if err != nil {
-		return err
-	}
-	if id == "" {
+	picker, ok := final.(agentPickerModel)
+	if !ok || picker.selectedID == 0 {
 		return nil
 	}
 
+	id := strconv.Itoa(picker.selectedID)
 	if _, err := d.RunCommand("kitten", "@", "focus-window", "--match", "id:"+id); err != nil {
 		return fmt.Errorf("focus kitty agent window %s: %w", id, err)
 	}
 
 	return nil
-}
-
-func PreviewAgent(id string, d Deps) error {
-	preview, err := RenderAgentPreview(id, d)
-	if err != nil {
-		return err
-	}
-
-	_, err = io.WriteString(d.Stdout, preview)
-	return err
 }
 
 func NewSession(d Deps) error {

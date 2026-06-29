@@ -126,9 +126,9 @@ bind-key t run 'blf tmux-targets'
 
 `kitty goto-agent` behavior:
 
-- Builds the same agent list as `list-agents` (waiting-first, dropping the currently-focused window) and presents it in an `fzf` picker.
-- The picker hides the Kitty window id in a tab-delimited field and shows `<status> <dir>: <title> (<agent>)`, with the title highlighted; the preview pane runs `kitty @ get-text` to show a live snapshot of the highlighted agent's screen.
-- Selecting an agent focuses its window with `kitten @ focus-window` (which pulls the window's tab and OS window forward). With no agents open it shows a `No agent windows` Kitty error.
+- Builds the same agent list as `list-agents` (waiting-first, dropping the currently-focused window) and presents it in a self-owned bubbletea TUI fuzzy picker.
+- Type to fuzzy-filter by dir, title, or agent name; ↑/↓ (or ctrl-k/ctrl-j) to move; Enter to focus the selected agent; Esc to cancel; ? for help. Shows `No agent windows` inside the TUI when there are no agents open.
+- Selecting an agent focuses its window with `kitten @ focus-window` (which pulls the window's tab and OS window forward).
 - Runs directly in the current terminal; bind it to a Kitty mapping to launch it where you want (e.g. a new tab or overlay).
 
 `kitty set-agent-state` / `setup-claude` behavior:

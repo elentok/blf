@@ -110,46 +110,6 @@ func parseSessionSelection(line string) (string, error) {
 	return path, nil
 }
 
-const agentPreviewWindow = "right,60%,wrap,<70(down,50%,wrap)"
-
-func pickAgent(agents []Agent, d Deps) (string, error) {
-	previewCmd, err := agentPreviewCommand(d)
-	if err != nil {
-		return "", err
-	}
-
-	cmd := exec.Command(
-		"fzf",
-		"--layout=reverse",
-		"--ansi",
-		"--bind", fzfNavigationBind,
-		"--delimiter", "\t",
-		"--with-nth", "2",
-		"--preview", previewCmd,
-		"--preview-window", agentPreviewWindow,
-	)
-	cmd.Stdin = strings.NewReader(formatAgentChoices(agents))
-	cmd.Stderr = d.Stderr
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	err = cmd.Run()
-	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && (exitErr.ExitCode() == 1 || exitErr.ExitCode() == 130) {
-			return "", nil
-		}
-		return "", fmt.Errorf("run fzf: %w", err)
-	}
-
-	return parseAgentSelection(stdout.String())
-}
-
-func agentPreviewCommand(d Deps) (string, error) {
-	return sessionSubcommand(d, PreviewAgentCmd+" {1}")
-}
-
 func pickOSWindow(windows []OSWindow, d Deps) (string, error) {
 	cmd := exec.Command("fzf", "--layout=reverse", "--bind", fzfNavigationBind, "--ansi")
 	cmd.Stdin = strings.NewReader(FormatOSWindows(windows))

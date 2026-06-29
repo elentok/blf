@@ -21,7 +21,6 @@ func newKittyCmd(d deps) *cobra.Command {
 		newKittySetAgentStateCmd(d),
 		newKittySetupClaudeCmd(d),
 		newKittyGotoAgentCmd(d),
-		newKittyPreviewAgentCmd(d),
 		newKittyNewSessionCmd(d),
 		newKittySessionsCmd(d),
 		newKittyDeleteSessionCmd(d),
@@ -136,18 +135,6 @@ func newKittyGotoAgentCmd(d deps) *cobra.Command {
 		Short: "Pick an open AI agent window and focus it",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return internalkitty.GotoAgent(kittyDepsFromCmd(d))
-		},
-	}
-}
-
-func newKittyPreviewAgentCmd(d deps) *cobra.Command {
-	return &cobra.Command{
-		Use:    internalkitty.PreviewAgentCmd + " <id>",
-		Short:  "Preview an agent window's screen",
-		Hidden: true,
-		Args:   cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return internalkitty.PreviewAgent(args[0], kittyDepsFromCmd(d))
 		},
 	}
 }
