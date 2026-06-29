@@ -153,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.resetAndHide()
 
-		case "up", "ctrl+k":
+		case "up", "ctrl+k", "ctrl+p":
 			if m.selected > 0 {
 				m.selected--
 				if m.selected < m.offset {
@@ -163,7 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "down", "ctrl+j":
+		case "down", "ctrl+j", "ctrl+n":
 			if m.selected < len(m.results)-1 {
 				m.selected++
 				visibleRows := m.visibleResultRows()
@@ -192,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Sync action success: reset and hide.
 			return m, m.resetAndHide()
 
-		case "ctrl+r":
+		case "ctrl+u":
 			if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
 				m.status = "reindexing apps…"
 				m.updateFooter()
@@ -200,7 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "ctrl+p":
+		case "ctrl+r":
 			if m.cfg.History == nil || m.cfg.History.Len() == 0 {
 				return m, nil
 			}
@@ -215,7 +215,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recomputeResults()
 			return m, nil
 
-		case "ctrl+n":
+		case "ctrl+f":
 			if m.cfg.History == nil || m.historyIdx < 0 {
 				return m, nil
 			}
@@ -638,12 +638,13 @@ func (m Model) renderHelp() string {
 	bindings := []binding{
 		{"↑ / ↓", "select result"},
 		{"ctrl+k / ctrl+j", "(aliases for ↑ / ↓)"},
+		{"ctrl+p / ctrl+n", "(aliases for ↑ / ↓)"},
 		{"enter", "act on selected result (copy / launch / run)"},
-		{"ctrl+p", "recall previous history entry"},
-		{"ctrl+n", "recall next history entry"},
+		{"ctrl+r", "recall previous history entry"},
+		{"ctrl+f", "recall next history entry"},
 		{"ctrl+s", "save current input to history"},
 		{"ctrl+x", "delete selected history entry"},
-		{"ctrl+r", "reindex apps"},
+		{"ctrl+u", "reindex apps"},
 		{"esc", "dismiss launcher and clear input"},
 		{"?", "toggle this help"},
 		{"ctrl+c", "quit launcher process"},
