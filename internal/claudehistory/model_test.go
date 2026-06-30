@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -15,6 +16,15 @@ func testProjects() []claude.Project {
 		{Label: "myproject", Subtitle: "~/work/myproject", Cwd: "/home/alice/work/myproject"},
 		{Label: "otherproject", Subtitle: "~/work/otherproject", Cwd: "/home/alice/work/otherproject"},
 		{Label: "blf", Subtitle: "~/dev/blf", Cwd: "/home/alice/dev/blf"},
+	}
+}
+
+func testConversations() []claude.Conversation {
+	now := time.Now()
+	return []claude.Conversation{
+		{Title: "Fix the bug", SessionID: "s1", LastAccessed: now.Add(-1 * time.Hour)},
+		{Title: "Add a feature", SessionID: "s2", LastAccessed: now.Add(-2 * time.Hour)},
+		{Title: "Refactor code", SessionID: "s3", LastAccessed: now.Add(-3 * time.Hour)},
 	}
 }
 
@@ -56,6 +66,12 @@ func loadProjects(m Model, projects []claude.Project) Model {
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = next.(Model)
 	next, _ = m.Update(projectsLoadedMsg{projects: projects})
+	return next.(Model)
+}
+
+// loadConversations injects conversations into the model via conversationsLoadedMsg.
+func loadConversations(m Model, convs []claude.Conversation) Model {
+	next, _ := m.Update(conversationsLoadedMsg{conversations: convs})
 	return next.(Model)
 }
 
@@ -150,13 +166,94 @@ func TestHistoryModelProjectsErrorShown(t *testing.T) {
 	}
 }
 
-func TestHistoryModelEnterIsNoOp(t *testing.T) {
+func TestHistoryModelEnterTransitionsToConversations(t *testing.T) {
 	m := New("")
 	m = loadProjects(m, testProjects())
-	// Enter should not panic and model should remain on projects page.
 	m = modelPress(m, "enter")
+	if m.page != pageConversations {
+		t.Errorf("expected pageConversations after enter, got %d", m.page)
+	}
+}
+
+func TestHistoryModelEscFromConversationsGoesBack(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	if m.page != pageConversations {
+		t.Fatalf("expected pageConversations after enter, got %d", m.page)
+	}
+	m = modelPress(m, "esc")
 	if m.page != pageProjects {
-		t.Errorf("expected pageProjects after enter stub, got %d", m.page)
+		t.Errorf("expected pageProjects after esc, got %d", m.page)
+	}
+}
+
+func TestHistoryModelConversationsLoaded(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	m = loadConversations(m, testConversations())
+
+	display := *m.convDisplayRef
+	if len(display) != 3 {
+		t.Fatalf("expected 3 conversations, got %d", len(display))
+	}
+}
+
+func TestHistoryModelConversationsViewShowsTitles(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	// set window size so rows render
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+	m = loadConversations(m, testConversations())
+
+	view := viewStr(m)
+	if !strings.Contains(view, "Fix the bug") {
+		t.Errorf("view should contain 'Fix the bug', got:\n%s", view)
+	}
+	if !strings.Contains(view, "Add a feature") {
+		t.Errorf("view should contain 'Add a feature', got:\n%s", view)
+	}
+}
+
+func TestHistoryModelConversationsEmptyState(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	m = loadConversations(m, nil)
+
+	view := viewStr(m)
+	if !strings.Contains(view, "No conversations found") {
+		t.Errorf("empty state should show 'No conversations found', got:\n%s", view)
+	}
+}
+
+func TestHistoryModelConversationsLoadingState(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter") // loading starts, no msg injected yet
+
+	view := viewStr(m)
+	if !strings.Contains(view, "Loading...") {
+		t.Errorf("loading state should show 'Loading...', got:\n%s", view)
+	}
+}
+
+func TestHistoryModelConversationsFuzzyFilter(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	m = loadConversations(m, testConversations())
+	m = modelType(m, "bug")
+
+	display := *m.convDisplayRef
+	if len(display) != 1 {
+		t.Fatalf("expected 1 match for 'bug', got %d", len(display))
+	}
+	if display[0].Title != "Fix the bug" {
+		t.Errorf("expected 'Fix the bug', got %q", display[0].Title)
 	}
 }
 
