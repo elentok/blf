@@ -71,6 +71,7 @@ Start a new shell for completions to take effect.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
 - `blf claude-statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line.
+- `blf claude history`: TUI for browsing Claude Code conversation history — list projects, drill into a project's conversations, grep across transcripts, export to markdown, and resume a session.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -143,6 +144,13 @@ bind-key t run 'blf tmux-targets'
 ```conf
 map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 ```
+
+`claude history` behavior:
+
+- Opens on a fuzzy-filterable list of Claude Code projects (`~/.claude/projects`); type to filter, ↑/↓ to move, Enter to drill into a project's conversations, `ctrl+f` to jump straight to grep, Esc to quit.
+- The conversations page lists each project's sessions by title (falling back to the session ID) with relative and absolute last-accessed times; Enter exports the conversation to markdown and opens it in `$EDITOR` (falling back to `nvim`/`vi`), `ctrl+r` resumes it with `claude --resume <session-id>`, Esc goes back.
+- `ctrl+f` opens transcript grep search (ripgrep-backed) with a live preview pane; `ctrl+g` toggles between project and global scope, Enter opens the matched conversation at that line, `ctrl+r` resumes its session, Esc goes back.
+- Filtering and search use the shared `fuzzyfinder` widget, including multi-word AND matching (e.g. `one two` matches rows containing both words in any order) and match highlighting.
 
 `kitty ls` behavior:
 

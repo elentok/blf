@@ -2,12 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [v0.6.0] - 2026-06-30
 
+- Added **`blf claude history`**: a TUI for browsing Claude Code conversation history. Lists projects, then conversations within a project (title, relative/absolute last-accessed time), with markdown export and a resume action that reopens a conversation's Claude session directly.
+- Added transcript search to `claude history` (`ctrl+f`): greps across conversations with ripgrep, toggling between project and global scope, with a live preview pane and its own resume action.
+- **`fuzzyfinder`** (the shared picker behind `launcher`, `goto-agent`, and `claude history`) now supports multi-word AND matching, so a query like `one two` matches rows containing both words in any order.
+- Fixed `fuzzyfinder` list rows wrapping onto a second line when their content was wider than the available width (e.g. long conversation titles in `claude history`), which pushed the footer off the bottom of the frame; rows are now truncated with `…` to fit.
+- **`launcher`** app scanning is now recursive and shows each app's parent folder as a subtitle, so apps nested in subfolders are found and easier to disambiguate.
 - **`launcher` history hints**: math and currency entries in the history list now show their computed result as a dimmed-italic subtitle (`10+20 = 30`, `1$ = 2.987 ₪, 0.79 £, 0.92 €`). Currency lines use each currency's symbol where one exists (now including `₪` for ILS) and its ISO code otherwise, computed live from the current rates each time the list is shown. Non-currency unit conversions and bare numbers get no hint.
 - The `₪` shekel symbol is now recognized as a currency unit, so `100₪` parses as a currency query.
 - Currency amounts now drop trailing zeros (`2.987 ₪` instead of `2.9870 ₪`), keeping at least two decimals for amounts ≥ 1.
 - Capped `launcher` history at 30 entries (was 500); existing histories are trimmed to the newest 30 on next load.
+- Added a project logo to the README.
 
 ## [v0.5.3] - 2026-06-30
 
