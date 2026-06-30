@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -93,13 +94,56 @@ func GotoAgent(d Deps) error {
 	}
 
 	picker, ok := final.(agentPickerModel)
-	if !ok || picker.selectedID == 0 {
+	if !ok || picker.selected == nil {
 		return nil
 	}
 
-	id := strconv.Itoa(picker.selectedID)
+	return focusAgent(*picker.selected, d)
+}
+
+// focusAgent focuses the given agent's window, first switching to its Kitty
+// session when that session differs from the active one. Focusing a window in
+// another session without switching first makes Kitty graft the tab onto the
+// current session, where it vanishes on the next tab change — so the session
+// switch must happen before focus-window.
+func focusAgent(agent Agent, d Deps) error {
+	if err := switchToAgentSession(agent, d); err != nil {
+		return err
+	}
+
+	id := strconv.Itoa(agent.ID)
 	if _, err := d.RunCommand("kitten", "@", "focus-window", "--match", "id:"+id); err != nil {
 		return fmt.Errorf("focus kitty agent window %s: %w", id, err)
+	}
+
+	return nil
+}
+
+// switchToAgentSession switches to the agent's session when it differs from the
+// active session. It is best-effort about resolving the session file: an agent
+// with no session, or whose session has no matching file on disk, is left to
+// focus-window alone. A failed goto_session is a real failure and is returned.
+func switchToAgentSession(agent Agent, d Deps) error {
+	if strings.TrimSpace(agent.Session) == "" {
+		return nil
+	}
+
+	windows, err := ListOSWindows(d)
+	if err != nil {
+		return err
+	}
+	if agent.Session == activeSessionName(windows) {
+		return nil
+	}
+
+	sessions, err := ListSessions(d)
+	if err != nil {
+		return err
+	}
+	for _, session := range sessions {
+		if session.Name == agent.Session {
+			return gotoSession(session.Path, d)
+		}
 	}
 
 	return nil

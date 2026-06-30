@@ -124,8 +124,8 @@ func TestAgentPickerEnterRecordsID(t *testing.T) {
 	agents := []Agent{{ID: 42, Status: StatusIdle, Name: "claude", Dir: "proj", Title: "task"}}
 	m := newAgentPickerModel(agents, Deps{})
 	m = pickerPress(m, "enter")
-	if m.selectedID != 42 {
-		t.Errorf("expected selectedID=42, got %d", m.selectedID)
+	if m.selected == nil || m.selected.ID != 42 {
+		t.Errorf("expected selected ID=42, got %v", m.selected)
 	}
 }
 
@@ -133,16 +133,16 @@ func TestAgentPickerEnterSelectsFirstVisibleAfterSort(t *testing.T) {
 	// After sort, waiting (ID 2) is first.
 	m := newAgentPickerModel(testPickerAgents(), Deps{})
 	m = pickerPress(m, "enter")
-	if m.selectedID != 2 {
-		t.Errorf("expected selectedID=2 (waiting agent), got %d", m.selectedID)
+	if m.selected == nil || m.selected.ID != 2 {
+		t.Errorf("expected selected ID=2 (waiting agent), got %v", m.selected)
 	}
 }
 
 func TestAgentPickerEnterOnEmptyDoesNotSelect(t *testing.T) {
 	m := newAgentPickerModel(nil, Deps{})
 	m = pickerPress(m, "enter")
-	if m.selectedID != 0 {
-		t.Errorf("expected selectedID=0 for empty state, got %d", m.selectedID)
+	if m.selected != nil {
+		t.Errorf("expected nil selected for empty state, got %v", m.selected)
 	}
 }
 
@@ -173,8 +173,8 @@ func TestAgentPickerEnterAfterNavSelectsCorrectAgent(t *testing.T) {
 	display := *m.displayRef
 	wantID := display[1].ID // second in sorted order
 	m = pickerPress(m, "enter")
-	if m.selectedID != wantID {
-		t.Errorf("expected selectedID=%d, got %d", wantID, m.selectedID)
+	if m.selected == nil || m.selected.ID != wantID {
+		t.Errorf("expected selected ID=%d, got %v", wantID, m.selected)
 	}
 }
 

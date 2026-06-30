@@ -97,6 +97,96 @@ func TestGotoOSWindowWithExplicitID(t *testing.T) {
 	}
 }
 
+func TestFocusAgentCrossSessionSwitchesFirst(t *testing.T) {
+	var commands []string
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		ReadDir: func(string) ([]os.DirEntry, error) {
+			return []os.DirEntry{doctorDirEntry{name: "work.kitty-session"}}, nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			if name == "kitty" && strings.Join(args, " ") == "@ ls" {
+				return []byte(`[
+					{"id":1,"is_active":true,"tabs":[{"id":10,"is_active":true,"is_focused":true,"title":"shell","session_name":"home"}]}
+				]`), nil
+			}
+			return []byte{}, nil
+		},
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+
+	agent := Agent{ID: 42, Session: "work"}
+	if err := focusAgent(agent, d); err != nil {
+		t.Fatalf("focusAgent returned error: %v", err)
+	}
+
+	want := strings.Join([]string{
+		"kitty @ ls",
+		"kitten @ action goto_session /Users/test/.local/share/kitty/sessions/work.kitty-session",
+		"kitten @ focus-window --match id:42",
+	}, "\n")
+	if got := strings.Join(commands, "\n"); got != want {
+		t.Fatalf("commands =\n%s\nwant =\n%s", got, want)
+	}
+}
+
+func TestFocusAgentSameSessionFocusesOnly(t *testing.T) {
+	var commands []string
+	d := Deps{
+		UserHomeDir: func() (string, error) { return "/Users/test", nil },
+		ReadDir: func(string) ([]os.DirEntry, error) {
+			return []os.DirEntry{doctorDirEntry{name: "home.kitty-session"}}, nil
+		},
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			if name == "kitty" && strings.Join(args, " ") == "@ ls" {
+				return []byte(`[
+					{"id":1,"is_active":true,"tabs":[{"id":10,"is_active":true,"is_focused":true,"title":"shell","session_name":"home"}]}
+				]`), nil
+			}
+			return []byte{}, nil
+		},
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+
+	agent := Agent{ID: 42, Session: "home"}
+	if err := focusAgent(agent, d); err != nil {
+		t.Fatalf("focusAgent returned error: %v", err)
+	}
+
+	want := strings.Join([]string{
+		"kitty @ ls",
+		"kitten @ focus-window --match id:42",
+	}, "\n")
+	if got := strings.Join(commands, "\n"); got != want {
+		t.Fatalf("commands =\n%s\nwant =\n%s", got, want)
+	}
+}
+
+func TestFocusAgentNoSessionFocusesOnly(t *testing.T) {
+	var commands []string
+	d := Deps{
+		RunCommand: func(name string, args ...string) ([]byte, error) {
+			commands = append(commands, name+" "+strings.Join(args, " "))
+			return []byte{}, nil
+		},
+		Stdout: &strings.Builder{},
+		Stderr: &strings.Builder{},
+	}
+
+	agent := Agent{ID: 42, Session: ""}
+	if err := focusAgent(agent, d); err != nil {
+		t.Fatalf("focusAgent returned error: %v", err)
+	}
+
+	if got := strings.Join(commands, "\n"); got != "kitten @ focus-window --match id:42" {
+		t.Fatalf("commands = %v", commands)
+	}
+}
+
 func TestNewSessionCreatesAndSwitches(t *testing.T) {
 	var commands []string
 	out := &strings.Builder{}

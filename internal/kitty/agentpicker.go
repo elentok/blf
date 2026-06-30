@@ -38,8 +38,8 @@ type agentPickerModel struct {
 	queryRef           *string  // current query, kept alive for the RenderRow closure (drives match highlighting)
 	spinner            Spinner
 	widget             fuzzyfinder.Model
-	selectedID         int // agent ID to focus after exit (set on enter)
-	highlightedAgentID int // agent ID of the currently highlighted row, for ID-stable selection
+	selected           *Agent // agent to focus after exit (set on enter; nil when cancelled)
+	highlightedAgentID int    // agent ID of the currently highlighted row, for ID-stable selection
 	helpMode           bool
 	deps               Deps
 	width              int
@@ -224,7 +224,8 @@ func (m agentPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(display) > 0 {
 				sel := m.widget.Selected()
 				if sel < len(display) {
-					m.selectedID = display[sel].ID
+					agent := display[sel]
+					m.selected = &agent
 				}
 			}
 			return m, tea.Quit
