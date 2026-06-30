@@ -117,7 +117,9 @@ func (m Model) View() string {
 		if m.cfg.RenderRow != nil {
 			content = m.cfg.RenderRow(i, i == m.selected)
 		}
-		row := gutter(i == m.selected) + content
+		g := gutter(i == m.selected)
+		content = ansi.Truncate(content, max(w-lipgloss.Width(g), 0), "…")
+		row := g + content
 		if i == m.selected {
 			// Pad remaining width with selection background.
 			pad := max(w-lipgloss.Width(row), 0)
