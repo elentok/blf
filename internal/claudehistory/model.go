@@ -2,6 +2,8 @@ package claudehistory
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -27,6 +29,13 @@ type conversationsLoadedMsg struct {
 	conversations []claude.Conversation
 	err           error
 }
+
+type convExportedMsg struct {
+	path string
+	err  error
+}
+
+type editorFinishedMsg struct{ err error }
 
 // Model is the root bubbletea model for the claude history TUI.
 type Model struct {
@@ -150,6 +159,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		*m.convDisplayRef = msg.conversations
 		m.convWidget.SetItemCount(max(len(msg.conversations), 1))
 		return m, nil
+
+	case convExportedMsg:
+		if msg.err != nil {
+			m.conversationsErr = msg.err
+			return m, nil
+		}
+		editor := resolveEditor()
+		return m, tea.ExecProcess(exec.Command(editor, msg.path), func(err error) tea.Msg {
+			return editorFinishedMsg{err: err}
+		})
+
+	case editorFinishedMsg:
+		return m, nil
 	}
 
 	if key, ok := msg.(tea.KeyMsg); ok {
@@ -168,7 +190,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				return m.exitConversations()
 			case "enter":
-				return m, nil // stub — next slice wires export
+				return m.openConversation()
 			}
 		}
 	}
@@ -220,6 +242,47 @@ func (m Model) enterConversations() (tea.Model, tea.Cmd) {
 func (m Model) exitConversations() (tea.Model, tea.Cmd) {
 	m.page = pageProjects
 	return m, nil
+}
+
+func (m Model) openConversation() (tea.Model, tea.Cmd) {
+	display := *m.convDisplayRef
+	sel := m.convWidget.Selected()
+	if len(display) == 0 || sel >= len(display) {
+		return m, nil
+	}
+	conv := display[sel]
+	return m, exportConvCmd(conv)
+}
+
+func exportConvCmd(conv claude.Conversation) tea.Cmd {
+	return func() tea.Msg {
+		md, err := claude.ExportMarkdown(conv.Path)
+		if err != nil {
+			return convExportedMsg{err: err}
+		}
+		f, err := os.CreateTemp("", "claude-history-*.md")
+		if err != nil {
+			return convExportedMsg{err: err}
+		}
+		if _, err := f.WriteString(md); err != nil {
+			f.Close()
+			return convExportedMsg{err: err}
+		}
+		f.Close()
+		return convExportedMsg{path: f.Name()}
+	}
+}
+
+func resolveEditor() string {
+	if e := os.Getenv("EDITOR"); e != "" {
+		return e
+	}
+	for _, e := range []string{"nvim", "vi"} {
+		if _, err := exec.LookPath(e); err == nil {
+			return e
+		}
+	}
+	return "vi"
 }
 
 func (m *Model) recomputeFilter() {
