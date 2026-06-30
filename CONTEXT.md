@@ -61,12 +61,31 @@ _Avoid_: treating it as a re-fire of the original action (it is display-only; th
 The shared embedded TUI widget (built on bubbletea v2 + lipgloss) that owns a query input box, a ranked/scrollable/fuzzy-highlighted result list, selection cursor, and the border/footer chrome. Consumers (the **launcher**, the **goto-agent** picker) embed it and own their own item type, ranking, per-row rendering, preview pane, actions, and any live-refresh tickers. Lives in `internal/fuzzyfinder`.
 _Avoid_: conflating it with the fzf-based `pick*` shell-outs (`pickSession`, `pickOSWindow`) — those launch the external `fzf` process; the **fuzzy finder** is self-owned Go, which is what lets it refresh live (spinners, status changes).
 
+**claude history**:
+An interactive TUI (`blf claude history`) for browsing the Claude Code transcript store under `$CLAUDE_CONFIG_DIR`/`~/.claude/projects`. A single bubbletea program with three in-TUI pages (**project** list → **conversation** list → **live grep**) plus an external editor handoff for the **conversation export**. Lives under the `blf claude` command group alongside `claude statusline` (an alias of the existing `claude-statusline`).
+
+**project** (claude history):
+One directory under the projects root, representing all Claude Code **conversations** that ran in a single working directory. Identified by the real `cwd` read from a transcript line — never by reverse-engineering the lossy dash-encoded directory name. Displayed as `basename(cwd)` with the `~`-collapsed path; **worktree** projects (cwd under `/.claude/worktrees/`) are labelled distinctly so they don't collide with their parent project.
+_Avoid_: deriving the name from the directory string (it collapses both `/` and `.` to `-` and can't be reversed).
+
+**conversation** (a.k.a. **session**):
+One `.jsonl` transcript file — a single Claude Code session. Its title is the recorded `aiTitle`, falling back to the last prompt, then the first user message, then the sessionId.
+
+**live grep** (claude history):
+The claude history page that runs `rg` over the raw transcript files on each (debounced) keystroke and renders each match as a decoded, human-readable snippet with the query highlighted, plus a preview pane showing the matched message in context. Scope is contextual: global when opened from the **project** list, single-**project** when opened from the **conversation** list, toggleable in-page.
+_Avoid_: "search" (too generic — this is incremental ripgrep over JSON transcripts with decoded rendering).
+
+**conversation export**:
+The rendering of a **conversation**'s `.jsonl` into Markdown (chronological role-headed turns; thinking folded, tool results truncated; system/meta noise stripped), opened in `$EDITOR` from inside the TUI. The entry point for previewing a conversation's full content.
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).
 - `blf copy-ref <file>...` copies **File references** to the clipboard — a reference/handle, not the bytes.
 - `blf clean-url` reads a URL (from an argument or the clipboard) and prints (and, in `--clipboard` mode, writes back) the **clean URL**.
 - Pressing Enter on a selected **launcher** result performs its action — launch an app, run a script, or copy a computed value to the clipboard — and records a **launcher history** entry; a successful action then hides the quick terminal.
+- A **project** contains one or more **conversations**; selecting a project lists its conversations, and selecting a conversation produces its **conversation export** in `$EDITOR`.
+- **claude history** and the **launcher**/**goto-agent** picker all embed the same **fuzzy finder** widget; claude history runs several instances behind a page state machine, with **live grep** supplying its own `rg`-ranked items rather than the widget's fuzzy ranking.
 
 ## Flagged ambiguities
 
