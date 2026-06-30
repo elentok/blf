@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sahilm/fuzzy"
+	"github.com/elentok/blf/internal/fuzzyfinder"
 )
 
 type settingPane struct {
@@ -84,7 +84,7 @@ func (p *SettingsProvider) Query(input string) []Result {
 		return nil
 	}
 
-	matches := fuzzy.Find(q, p.names)
+	matches := fuzzyfinder.Find(q, p.names)
 	results := make([]Result, 0, len(matches))
 	for _, m := range matches {
 		pane := p.panes[m.Index]

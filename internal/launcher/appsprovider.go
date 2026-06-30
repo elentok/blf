@@ -5,8 +5,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sahilm/fuzzy"
 
+	"github.com/elentok/blf/internal/fuzzyfinder"
 	"github.com/elentok/blf/internal/launcher/apps"
 )
 
@@ -95,7 +95,7 @@ func (p *AppsProvider) Query(input string) []Result {
 		names[i] = a.Name
 	}
 
-	matches := fuzzy.Find(q, names)
+	matches := fuzzyfinder.Find(q, names)
 	results := make([]Result, 0, len(matches))
 	for _, m := range matches {
 		app := p.index.Apps[m.Index]

@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sahilm/fuzzy"
 
+	"github.com/elentok/blf/internal/fuzzyfinder"
 	"github.com/elentok/blf/internal/launcher/scripts"
 )
 
@@ -61,7 +61,7 @@ func (p *ScriptsProvider) Query(input string) []Result {
 		names[i] = s.Name
 	}
 
-	matches := fuzzy.Find(q, names)
+	matches := fuzzyfinder.Find(q, names)
 	results := make([]Result, 0, len(matches))
 	for _, m := range matches {
 		s := p.scripts[m.Index]

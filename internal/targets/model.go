@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/sahilm/fuzzy"
 
+	"github.com/elentok/blf/internal/fuzzyfinder"
 	"github.com/elentok/blf/internal/platform"
 )
 
@@ -580,7 +580,7 @@ func (m *model) recomputeFilter() {
 	for i, t := range m.targets {
 		candidates[i] = t.Text
 	}
-	matches := fuzzy.Find(m.query, candidates)
+	matches := fuzzyfinder.Find(m.query, candidates)
 	m.filteredIdx = make([]int, 0, len(matches))
 	for _, match := range matches {
 		m.filteredIdx = append(m.filteredIdx, match.Index)
