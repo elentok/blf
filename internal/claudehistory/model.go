@@ -86,21 +86,34 @@ type Model struct {
 	convProjectDir       string // project dir of the open conversations page
 
 	// grep page state
-	grepWidget       fuzzyfinder.Model
-	grepResults      []claude.GrepResult
-	grepSeq          int
-	grepRunning      bool
-	grepErr          error
-	rgNotFound       bool
-	grepFromPage     page
-	grepScope        grepScope
-	grepScopeProjDir string // dir for grepScopeProject
+	grepWidget           fuzzyfinder.Model
+	grepResults          []claude.GrepResult
+	grepResultsRef       *[]claude.GrepResult
+	grepSeq              int
+	grepRunning          bool
+	grepErr              error
+	rgNotFound           bool
+	grepFromPage         page
+	grepScope            grepScope
+	grepScopeProjDir     string // dir for grepScopeProject
+	widthRef             *int
+	grepPreviewBoxHeight int // total preview frame height (border included), set on resize
 
 	width  int
 	height int
 }
 
-const grepPreviewHeight = 8
+// grepPreviewBoxHeight returns the total preview frame height (border
+// included) as a third of the available terminal height, clamped so both the
+// results list and the preview stay usable on small and large terminals.
+func grepPreviewBoxHeight(termHeight int) int {
+	h := termHeight / 3
+	h = min(max(h, 8), 20)
+	if termHeight-h < 6 {
+		h = max(termHeight-6, 3)
+	}
+	return h
+}
 
 // New creates a new history Model. It returns a model that starts on the
 // projects page and immediately triggers an async load of projects.
@@ -113,12 +126,17 @@ func New(projectsRoot string) Model {
 	*convDisplayRef = nil
 	convQueryRef := new(string)
 
+	grepResultsRef := new([]claude.GrepResult)
+	widthRef := new(int)
+
 	m := Model{
 		page:           pageProjects,
 		displayRef:     displayRef,
 		queryRef:       queryRef,
 		convDisplayRef: convDisplayRef,
 		convQueryRef:   convQueryRef,
+		grepResultsRef: grepResultsRef,
+		widthRef:       widthRef,
 	}
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
 		RenderRow: func(i int, selected bool) string {
@@ -151,10 +169,11 @@ func New(projectsRoot string) Model {
 
 	m.grepWidget = fuzzyfinder.New(fuzzyfinder.Config{
 		RenderRow: func(i int, selected bool) string {
-			return renderGrepRow(&m, i, selected)
+			return renderGrepRow(grepResultsRef, widthRef, i, selected)
 		},
 		Footer:    "type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  esc: back",
 		ItemCount: 1,
+		Prompt:    "grep ",
 	})
 
 	return m
@@ -189,9 +208,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		*m.widthRef = msg.Width
 		m.widget.SetSize(msg.Width, msg.Height)
 		m.convWidget.SetSize(msg.Width, msg.Height)
-		m.grepWidget.SetSize(msg.Width, max(msg.Height-grepPreviewHeight, 4))
+		m.grepPreviewBoxHeight = grepPreviewBoxHeight(msg.Height)
+		m.grepWidget.SetSize(msg.Width, max(msg.Height-m.grepPreviewBoxHeight, 4))
 		return m, nil
 
 	case projectsLoadedMsg:
@@ -234,6 +255,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len([]rune(msg.query)) < 3 {
 			m.grepResults = nil
+			*m.grepResultsRef = nil
 			m.grepRunning = false
 			m.grepWidget.SetItemCount(1)
 			return m, nil
@@ -261,6 +283,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.grepResults = msg.results
+		*m.grepResultsRef = msg.results
 		m.grepWidget.SetItemCount(max(len(msg.results), 1))
 		m.grepWidget.SetSelected(0)
 		return m, nil
@@ -389,6 +412,7 @@ func (m Model) enterGrep() (tea.Model, tea.Cmd) {
 	m.grepFromPage = m.page
 	m.page = pageGrep
 	m.grepResults = nil
+	*m.grepResultsRef = nil
 	m.grepErr = nil
 	m.grepRunning = false
 	m.grepSeq++
@@ -422,6 +446,7 @@ func (m Model) toggleGrepScope() (tea.Model, tea.Cmd) {
 	// Re-run the current query with the new scope.
 	m.grepSeq++
 	m.grepResults = nil
+	*m.grepResultsRef = nil
 	m.grepWidget.SetItemCount(1)
 	m.grepWidget.SetSelected(0)
 	query := m.grepWidget.Query()
@@ -610,23 +635,26 @@ func (m Model) viewGrepPage() string {
 }
 
 func (m Model) renderGrepPreview() string {
+	boxHeight := max(m.grepPreviewBoxHeight, 3)
+	box := previewStyle.Width(max(m.width, 20)).Height(boxHeight)
+
 	if len(m.grepResults) == 0 {
 		query := m.grepWidget.Query()
 		if query == "" {
-			return previewStyle.Render("Type to search across transcripts")
+			return box.Render("Type to search across transcripts")
 		}
 		if len([]rune(query)) < 3 {
-			return previewStyle.Render("Enter at least 3 characters")
+			return box.Render("Enter at least 3 characters")
 		}
 		if m.grepRunning {
-			return previewStyle.Render("Searching…")
+			return box.Render("Searching…")
 		}
-		return previewStyle.Render("No results")
+		return box.Render("No results")
 	}
 
 	sel := m.grepWidget.Selected()
 	if sel >= len(m.grepResults) {
-		return previewStyle.Render("")
+		return box.Render("")
 	}
 
 	r := m.grepResults[sel]
@@ -635,41 +663,41 @@ func (m Model) renderGrepPreview() string {
 		text = r.Snippet
 	}
 
-	// Wrap to width and truncate to preview height.
-	w := max(m.width-4, 20)
-	lines := wrapText(text, w)
-	maxLines := max(grepPreviewHeight-1, 1)
-	if len(lines) > maxLines {
-		lines = lines[:maxLines]
+	// content lines = box height minus top/bottom border.
+	contentHeight := max(boxHeight-2, 1)
+	bodyMaxLines := contentHeight
+
+	titleLine := ""
+	if r.ConvTitle != "" {
+		titleLine = fuzzyfinder.SubtitleStyle.Render("conversation: " + r.ConvTitle)
+		bodyMaxLines = max(contentHeight-1, 0)
 	}
 
-	title := ""
-	if r.ConvTitle != "" {
-		title = fuzzyfinder.SubtitleStyle.Render(r.ConvTitle) + "\n"
+	w := max(m.width-4, 20)
+	lines := wrapText(text, w)
+	if len(lines) > bodyMaxLines {
+		lines = lines[:bodyMaxLines]
 	}
-	return title + previewStyle.Render(strings.Join(lines, "\n"))
+
+	content := strings.Join(lines, "\n")
+	if titleLine != "" {
+		if content != "" {
+			content = titleLine + "\n" + content
+		} else {
+			content = titleLine
+		}
+	}
+	return box.Render(content)
 }
 
 // renderGrepRow renders a single grep result row.
-func renderGrepRow(m *Model, i int, selected bool) string {
-	if len(m.grepResults) == 0 {
-		q := m.grepWidget.Query()
-		if q == "" {
-			return fuzzyfinder.RowNormalStyle.Render("Type to search…")
-		}
-		if len([]rune(q)) < 3 {
-			return fuzzyfinder.RowNormalStyle.Render("Enter at least 3 characters…")
-		}
-		if m.grepRunning {
-			return fuzzyfinder.RowNormalStyle.Render("Searching…")
-		}
-		return fuzzyfinder.RowNormalStyle.Render("No results")
-	}
-	if i >= len(m.grepResults) {
+func renderGrepRow(resultsRef *[]claude.GrepResult, widthRef *int, i int, selected bool) string {
+	results := *resultsRef
+	if len(results) == 0 || i >= len(results) {
 		return ""
 	}
 
-	r := m.grepResults[i]
+	r := results[i]
 	plain := lipgloss.NewStyle()
 
 	projLabel := claude.GrepResultProjectLabel(r.FilePath)
@@ -681,7 +709,32 @@ func renderGrepRow(m *Model, i int, selected bool) string {
 	}
 	convStr := fuzzyfinder.Highlight(convTitle+" · ", nil, fuzzyfinder.SubtitleStyle, selected)
 
-	snippetStr := fuzzyfinder.Highlight(r.Snippet, r.SnippetHL, plain, selected)
+	// Truncate snippet to fit terminal width.
+	// Widget overhead: border+padding (4) + gutter (2) = 6 columns.
+	snippet := r.Snippet
+	hl := r.SnippetHL
+	termWidth := *widthRef
+	if termWidth > 0 {
+		prefixLen := len([]rune(projLabel)) + 3 + len([]rune(convTitle)) + 3
+		available := termWidth - prefixLen - 6
+		snippetRunes := []rune(snippet)
+		if available <= 0 {
+			snippet = ""
+			hl = nil
+		} else if len(snippetRunes) > available {
+			cut := max(available-1, 0)
+			snippet = string(snippetRunes[:cut]) + "…"
+			var trimmedHL []int
+			for _, idx := range hl {
+				if idx < cut {
+					trimmedHL = append(trimmedHL, idx)
+				}
+			}
+			hl = trimmedHL
+		}
+	}
+
+	snippetStr := fuzzyfinder.Highlight(snippet, hl, plain, selected)
 
 	return projStr + convStr + snippetStr
 }

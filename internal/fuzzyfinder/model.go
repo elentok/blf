@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Config holds the configuration for a Model.
@@ -20,6 +21,8 @@ type Config struct {
 	Footer string
 	// ItemCount is the initial number of items.
 	ItemCount int
+	// Prompt is shown before the input chevron. Defaults to "" (just "> ").
+	Prompt string
 }
 
 // Model is an embedded TUI widget that renders a query input box, a scrollable
@@ -44,7 +47,7 @@ type Model struct {
 // New returns a Model ready to embed.
 func New(cfg Config) Model {
 	ti := textinput.New()
-	ti.Prompt = inputPromptStyle.Render("> ")
+	ti.Prompt = inputPromptStyle.Render(cfg.Prompt + "> ")
 	_ = ti.Focus()
 	return Model{
 		cfg:       cfg,
@@ -131,7 +134,7 @@ func (m Model) View() string {
 		sb.WriteString("\n")
 	}
 
-	footer := m.cfg.Footer
+	footer := ansi.Truncate(m.cfg.Footer, w, "…")
 	sb.WriteString(helpBarStyle.Width(w).Render(footer))
 
 	bw := max(m.width, 14)

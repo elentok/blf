@@ -20,6 +20,7 @@ var ErrRgNotFound = errors.New("ripgrep (rg) not found in PATH — brew install 
 type GrepResult struct {
 	FilePath  string // path to the .jsonl file
 	LineNum   int    // 1-indexed line in the file
+	SessionID string // session ID (from ConversationMeta)
 	ConvTitle string // conversation title (from ConversationMeta)
 	Snippet   string // decoded single-line snippet centered on the match
 	SnippetHL []int  // rune indices in Snippet for highlighting
@@ -111,6 +112,7 @@ func GrepTranscripts(query string, dirs []string) ([]GrepResult, error) {
 		results = append(results, GrepResult{
 			FilePath:  r.filePath,
 			LineNum:   r.lineNum,
+			SessionID: convCache[r.filePath].SessionID,
 			ConvTitle: convCache[r.filePath].Title,
 			Snippet:   snippet,
 			SnippetHL: hl,
@@ -162,7 +164,9 @@ func GrepDecodeMatch(rawLine []byte, query string) (snippet string, highlights [
 	}
 
 	preview = text
-	snippet, highlights = centerSnippet(text, query)
+	// Normalize whitespace for the single-line snippet (collapse newlines/tabs to spaces).
+	snippetText := strings.Join(strings.Fields(text), " ")
+	snippet, highlights = centerSnippet(snippetText, query)
 	return snippet, highlights, preview
 }
 
