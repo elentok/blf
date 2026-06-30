@@ -78,6 +78,9 @@ _Avoid_: "search" (too generic — this is incremental ripgrep over JSON transcr
 **conversation export**:
 The rendering of a **conversation**'s `.jsonl` into Markdown (chronological role-headed turns; thinking folded, tool results truncated; system/meta noise stripped), opened in `$EDITOR` from inside the TUI. The entry point for previewing a conversation's full content.
 
+**resume** (claude history):
+The ctrl+r action on the **conversation** list and **live grep** pages: suspends the TUI and runs `claude --resume <sessionId>` in the owning **project**'s `cwd`, returning to claude history when the resumed session exits. Same suspend/exec/return shape as the **conversation export**'s editor handoff, but execs `claude` itself instead of `$EDITOR`. Not offered on the **project** list, since a project row aggregates many conversations rather than naming one.
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).

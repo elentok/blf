@@ -48,6 +48,8 @@ type convExportedMsg struct {
 
 type editorFinishedMsg struct{ err error }
 
+type resumeFinishedMsg struct{ err error }
+
 type grepDebounceMsg struct {
 	seq   int
 	query string
@@ -84,6 +86,7 @@ type Model struct {
 	conversationsErr     error
 	conversationsLoading bool
 	convProjectDir       string // project dir of the open conversations page
+	convProjectCwd       string // project cwd of the open conversations page
 
 	// grep page state
 	grepWidget           fuzzyfinder.Model
@@ -163,7 +166,7 @@ func New(projectsRoot string) Model {
 			}
 			return renderConversationRow(display[i], *convQueryRef, selected)
 		},
-		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  esc: back",
+		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  ctrl+r: resume  esc: back",
 		ItemCount: 1,
 	})
 
@@ -171,7 +174,7 @@ func New(projectsRoot string) Model {
 		RenderRow: func(i int, selected bool) string {
 			return renderGrepRow(grepResultsRef, widthRef, i, selected)
 		},
-		Footer:    "type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  esc: back",
+		Footer:    "type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  ctrl+r: resume  esc: back",
 		ItemCount: 1,
 		Prompt:    "grep ",
 	})
@@ -249,6 +252,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorFinishedMsg:
 		return m, nil
 
+	case resumeFinishedMsg:
+		if msg.err != nil {
+			if m.page == pageGrep {
+				m.grepErr = msg.err
+			} else {
+				m.conversationsErr = msg.err
+			}
+		}
+		return m, nil
+
 	case grepDebounceMsg:
 		if msg.seq != m.grepSeq || msg.query != m.grepWidget.Query() {
 			return m, nil // stale
@@ -324,6 +337,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.openConversation()
 			case "ctrl+f":
 				return m.enterGrep()
+			case "ctrl+r":
+				return m.resumeConversation()
 			}
 		case pageGrep:
 			switch key.String() {
@@ -335,6 +350,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.openGrepResult()
 			case "ctrl+g":
 				return m.toggleGrepScope()
+			case "ctrl+r":
+				return m.resumeGrepResult()
 			}
 		}
 	}
@@ -382,6 +399,7 @@ func (m Model) enterConversations() (tea.Model, tea.Cmd) {
 	p := display[sel]
 	m.page = pageConversations
 	m.convProjectDir = p.Dir
+	m.convProjectCwd = p.Cwd
 	m.allConversations = nil
 	*m.convDisplayRef = nil
 	*m.convQueryRef = ""
@@ -406,6 +424,20 @@ func (m Model) openConversation() (tea.Model, tea.Cmd) {
 	}
 	conv := display[sel]
 	return m, exportConvCmd(conv)
+}
+
+func (m Model) resumeConversation() (tea.Model, tea.Cmd) {
+	display := *m.convDisplayRef
+	sel := m.convWidget.Selected()
+	if len(display) == 0 || sel >= len(display) {
+		return m, nil
+	}
+	conv := display[sel]
+	if conv.SessionID == "" {
+		m.conversationsErr = errors.New("conversation has no session ID to resume")
+		return m, nil
+	}
+	return m, resumeSessionCmd(conv.SessionID, m.convProjectCwd)
 }
 
 func (m Model) enterGrep() (tea.Model, tea.Cmd) {
@@ -489,6 +521,49 @@ func (m Model) openGrepResult() (tea.Model, tea.Cmd) {
 		f.Close()
 		return grepExportedMsg{path: f.Name(), query: query, editor: editor}
 	}
+}
+
+func (m Model) resumeGrepResult() (tea.Model, tea.Cmd) {
+	if len(m.grepResults) == 0 {
+		return m, nil
+	}
+	sel := m.grepWidget.Selected()
+	if sel >= len(m.grepResults) {
+		return m, nil
+	}
+	result := m.grepResults[sel]
+	if result.SessionID == "" {
+		m.grepErr = errors.New("grep result has no session ID to resume")
+		return m, nil
+	}
+	cwd, ok := m.projectCwdForFile(result.FilePath)
+	if !ok {
+		m.grepErr = errors.New("could not find project for grep result")
+		return m, nil
+	}
+	return m, resumeSessionCmd(result.SessionID, cwd)
+}
+
+// projectCwdForFile returns the Cwd of the project containing filePath, by
+// matching filePath's parent directory against m.allProjects.
+func (m Model) projectCwdForFile(filePath string) (string, bool) {
+	dir := filepath.Dir(filePath)
+	for _, p := range m.allProjects {
+		if p.Dir == dir {
+			return p.Cwd, true
+		}
+	}
+	return "", false
+}
+
+// resumeSessionCmd suspends the TUI and runs `claude --resume <sessionID>`
+// in cwd, returning to the TUI when it exits.
+func resumeSessionCmd(sessionID, cwd string) tea.Cmd {
+	cmd := exec.Command("claude", "--resume", sessionID)
+	cmd.Dir = cwd
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return resumeFinishedMsg{err: err}
+	})
 }
 
 func (m *Model) startGrepDebounce() tea.Cmd {
@@ -623,7 +698,7 @@ func (m Model) viewGrepPage() string {
 	if m.grepScope == grepScopeProject {
 		scopeLabel = "project"
 	}
-	footer := fmt.Sprintf("scope: %s  type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  esc: back", scopeLabel)
+	footer := fmt.Sprintf("scope: %s  type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  ctrl+r: resume  esc: back", scopeLabel)
 	if m.grepRunning {
 		footer = "searching…  " + footer
 	}
