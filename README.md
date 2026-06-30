@@ -1,7 +1,7 @@
 # blf
 
 <p align="center">
-  <img src="docs/logo-web.png" alt="blf — blazingly fast" width="240">
+  <img src="docs/logo-web.png" alt="blf — blazingly fast" width="300">
 </p>
 
 Blazingly fast misc CLI utilities.
