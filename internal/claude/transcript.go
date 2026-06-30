@@ -32,6 +32,7 @@ func ConversationMeta(path string) (Conversation, error) {
 	var (
 		aiTitle       string
 		lastPrompt    string
+		customTitle   string
 		firstUserText string
 		sessionID     string
 		lastAccessed  time.Time
@@ -64,6 +65,10 @@ func ConversationMeta(path string) (Conversation, error) {
 			if rec.LastPrompt != "" {
 				lastPrompt = rec.LastPrompt
 			}
+		case "custom-title":
+			if rec.CustomTitle != "" {
+				customTitle = rec.CustomTitle
+			}
 		case "user":
 			if firstUserText == "" && !rec.IsSidechain && rec.ParentUUID == "" {
 				firstUserText = extractUserMessageText(rec.RawMessage)
@@ -74,7 +79,7 @@ func ConversationMeta(path string) (Conversation, error) {
 	return Conversation{
 		Path:         path,
 		SessionID:    sessionID,
-		Title:        buildConversationTitle(aiTitle, lastPrompt, firstUserText, sessionID),
+		Title:        buildConversationTitle(customTitle, aiTitle, lastPrompt, firstUserText, sessionID),
 		LastAccessed: lastAccessed,
 	}, scanner.Err()
 }
@@ -137,6 +142,7 @@ type transcriptLine struct {
 	Timestamp   string          `json:"timestamp"`
 	AITitle     string          `json:"aiTitle"`
 	LastPrompt  string          `json:"lastPrompt"`
+	CustomTitle string          `json:"customTitle"`
 	ParentUUID  string          `json:"parentUuid"`
 	IsSidechain bool            `json:"isSidechain"`
 	RawMessage  json.RawMessage `json:"message"`
@@ -189,11 +195,29 @@ func cleanUserText(s string) string {
 	return ""
 }
 
-func buildConversationTitle(aiTitle, lastPrompt, firstUser, sessionID string) string {
-	for _, candidate := range []string{aiTitle, lastPrompt, firstUser} {
-		if t := stripLeadingSlashToken(candidate); t != "" {
-			return t
+// acknowledgementWords are short replies that confirm/approve a prior
+// message rather than describing the conversation's topic (e.g. the closing
+// "agree" of a /grill flow). They're skipped as a title candidate since
+// they're never informative on their own.
+var acknowledgementWords = map[string]struct{}{
+	"agree": {}, "agreed": {}, "yes": {}, "yep": {}, "yeah": {}, "yup": {},
+	"ok": {}, "okay": {}, "sure": {}, "sounds good": {}, "lgtm": {},
+	"continue": {}, "go ahead": {}, "do it": {}, "ship it": {},
+	"approved": {}, "confirmed": {}, "correct": {}, "looks good": {},
+}
+
+func isAcknowledgement(s string) bool {
+	_, ok := acknowledgementWords[strings.ToLower(strings.Trim(s, " \t\n."))]
+	return ok
+}
+
+func buildConversationTitle(customTitle, aiTitle, lastPrompt, firstUser, sessionID string) string {
+	for _, candidate := range []string{customTitle, aiTitle, lastPrompt, firstUser} {
+		t := stripLeadingSlashToken(candidate)
+		if t == "" || isAcknowledgement(t) {
+			continue
 		}
+		return t
 	}
 	return sessionID
 }

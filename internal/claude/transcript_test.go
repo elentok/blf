@@ -46,6 +46,19 @@ const fixtureXMLNoise = `{"type":"mode","mode":"normal","sessionId":"sess-005"}
 {"type":"last-prompt","lastPrompt":"/beads ji2.2","sessionId":"sess-005"}
 `
 
+const fixtureCustomTitle = `{"type":"mode","mode":"normal","sessionId":"sess-006"}
+{"type":"user","parentUuid":null,"isSidechain":false,"message":{"role":"user","content":"scan apps recursively"},"timestamp":"2026-01-06T09:00:00Z"}
+{"type":"ai-title","aiTitle":"A generated title","sessionId":"sess-006"}
+{"type":"custom-title","customTitle":"launcher-scan-utils","sessionId":"sess-006"}
+{"type":"last-prompt","lastPrompt":"agree","sessionId":"sess-006"}
+`
+
+const fixtureAcknowledgementLastPrompt = `{"type":"mode","mode":"normal","sessionId":"sess-007"}
+{"type":"user","parentUuid":null,"isSidechain":false,"message":{"role":"user","content":"scan apps recursively"},"timestamp":"2026-01-07T09:00:00Z"}
+{"type":"last-prompt","lastPrompt":"scan apps recursively","sessionId":"sess-007"}
+{"type":"last-prompt","lastPrompt":"agree","sessionId":"sess-007"}
+`
+
 func TestConversationMetaAITitle(t *testing.T) {
 	path := writeFixture(t, fixtureWithAITitle)
 	c, err := ConversationMeta(path)
@@ -108,6 +121,30 @@ func TestConversationMetaXMLNoiseStripped(t *testing.T) {
 	// XML noise in first user message → fall through to lastPrompt "/beads ji2.2" → "ji2.2"
 	if c.Title != "ji2.2" {
 		t.Errorf("expected 'ji2.2', got %q", c.Title)
+	}
+}
+
+func TestConversationMetaCustomTitleTakesPriority(t *testing.T) {
+	path := writeFixture(t, fixtureCustomTitle)
+	c, err := ConversationMeta(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Title != "launcher-scan-utils" {
+		t.Errorf("expected customTitle to win over aiTitle/lastPrompt, got %q", c.Title)
+	}
+}
+
+func TestConversationMetaAcknowledgementLastPromptSkipped(t *testing.T) {
+	path := writeFixture(t, fixtureAcknowledgementLastPrompt)
+	c, err := ConversationMeta(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// lastPrompt is just "agree" (a closing acknowledgement) → falls through
+	// to the first user message instead.
+	if c.Title != "scan apps recursively" {
+		t.Errorf("expected acknowledgement lastPrompt to be skipped, got %q", c.Title)
 	}
 }
 
