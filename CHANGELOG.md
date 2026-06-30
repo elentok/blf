@@ -4,8 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [v0.6.0] - 2026-06-30
 
-- Added **`blf claude history`**: a TUI for browsing Claude Code conversation history. Lists projects, then conversations within a project (title, relative/absolute last-accessed time), with markdown export and a resume action that reopens a conversation's Claude session directly.
-- Added transcript search to `claude history` (`ctrl+f`): greps across conversations with ripgrep, toggling between project and global scope, with a live preview pane and its own resume action.
+- Added **`blf claude history`**: a TUI for browsing Claude Code conversation history. Lists projects, then conversations within a project (title, relative/absolute last-accessed time), with markdown export, a resume action that reopens a conversation's Claude session directly, and a `ctrl+y` binding to copy its session ID to the clipboard.
+- Added transcript search to `claude history` (`ctrl+f`): greps across conversations with ripgrep, toggling between project and global scope, with a live preview pane (also showing the matched conversation's session ID), its own resume action, and a `ctrl+y` binding to copy the session ID to the clipboard.
 - **`fuzzyfinder`** (the shared picker behind `launcher`, `goto-agent`, and `claude history`) now supports multi-word AND matching, so a query like `one two` matches rows containing both words in any order.
 - Fixed `fuzzyfinder` list rows wrapping onto a second line when their content was wider than the available width (e.g. long conversation titles in `claude history`), which pushed the footer off the bottom of the frame; rows are now truncated with `…` to fit.
 - **`launcher`** app scanning is now recursive and shows each app's parent folder as a subtitle, so apps nested in subfolders are found and easier to disambiguate.

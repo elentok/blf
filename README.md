@@ -148,8 +148,8 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 `claude history` behavior:
 
 - Opens on a fuzzy-filterable list of Claude Code projects (`~/.claude/projects`); type to filter, ↑/↓ to move, Enter to drill into a project's conversations, `ctrl+f` to jump straight to grep, Esc to quit.
-- The conversations page lists each project's sessions by title (falling back to the session ID) with relative and absolute last-accessed times; Enter exports the conversation to markdown and opens it in `$EDITOR` (falling back to `nvim`/`vi`), `ctrl+r` resumes it with `claude --resume <session-id>`, Esc goes back.
-- `ctrl+f` opens transcript grep search (ripgrep-backed) with a live preview pane; `ctrl+g` toggles between project and global scope, Enter opens the matched conversation at that line, `ctrl+r` resumes its session, Esc goes back.
+- The conversations page lists each project's sessions by title (falling back to the session ID) with relative and absolute last-accessed times; Enter exports the conversation to markdown and opens it in `$EDITOR` (falling back to `nvim`/`vi`), `ctrl+r` resumes it with `claude --resume <session-id>`, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
+- `ctrl+f` opens transcript grep search (ripgrep-backed) with a live preview pane showing the matched conversation's title and session ID; `ctrl+g` toggles between project and global scope, Enter opens the matched conversation at that line, `ctrl+r` resumes its session, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
 - Filtering and search use the shared `fuzzyfinder` widget, including multi-word AND matching (e.g. `one two` matches rows containing both words in any order) and match highlighting.
 
 `kitty ls` behavior:

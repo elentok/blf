@@ -14,6 +14,7 @@ import (
 
 	"github.com/elentok/blf/internal/claude"
 	"github.com/elentok/blf/internal/fuzzyfinder"
+	"github.com/elentok/blf/internal/platform"
 )
 
 type page int
@@ -84,6 +85,7 @@ type Model struct {
 	convQueryRef         *string
 	convWidget           fuzzyfinder.Model
 	conversationsErr     error
+	conversationsStatus  string
 	conversationsLoading bool
 	convProjectDir       string // project dir of the open conversations page
 	convProjectCwd       string // project cwd of the open conversations page
@@ -95,6 +97,7 @@ type Model struct {
 	grepSeq              int
 	grepRunning          bool
 	grepErr              error
+	grepStatus           string
 	rgNotFound           bool
 	grepFromPage         page
 	grepScope            grepScope
@@ -166,7 +169,7 @@ func New(projectsRoot string) Model {
 			}
 			return renderConversationRow(display[i], *convQueryRef, selected)
 		},
-		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  ctrl+r: resume  esc: back",
+		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  ctrl+r: resume  ctrl+y: yank session id  esc: back",
 		ItemCount: 1,
 	})
 
@@ -339,6 +342,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.enterGrep()
 			case "ctrl+r":
 				return m.resumeConversation()
+			case "ctrl+y":
+				return m.yankConversationSessionID()
 			}
 		case pageGrep:
 			switch key.String() {
@@ -352,6 +357,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.toggleGrepScope()
 			case "ctrl+r":
 				return m.resumeGrepResult()
+			case "ctrl+y":
+				return m.yankGrepSessionID()
 			}
 		}
 	}
@@ -374,6 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.convWidget.Query() != prevQuery {
 			*m.convQueryRef = m.convWidget.Query()
 			m.recomputeConvFilter()
+			m.conversationsStatus = ""
 		}
 		return m, cmd
 
@@ -382,6 +390,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.grepWidget, cmd = m.grepWidget.Update(msg)
 		if m.grepWidget.Query() != prevQuery {
+			m.grepStatus = ""
 			cmd = tea.Batch(cmd, m.startGrepDebounce())
 		}
 		return m, cmd
@@ -407,6 +416,7 @@ func (m Model) enterConversations() (tea.Model, tea.Cmd) {
 	m.convWidget.SetSelected(0)
 	m.convWidget.SetQuery("")
 	m.conversationsErr = nil
+	m.conversationsStatus = ""
 	m.conversationsLoading = true
 	return m, loadConversationsCmd(p.Dir)
 }
@@ -440,12 +450,32 @@ func (m Model) resumeConversation() (tea.Model, tea.Cmd) {
 	return m, resumeSessionCmd(conv.SessionID, m.convProjectCwd)
 }
 
+func (m Model) yankConversationSessionID() (tea.Model, tea.Cmd) {
+	display := *m.convDisplayRef
+	sel := m.convWidget.Selected()
+	if len(display) == 0 || sel >= len(display) {
+		return m, nil
+	}
+	conv := display[sel]
+	if conv.SessionID == "" {
+		m.conversationsStatus = "no session ID to copy"
+		return m, nil
+	}
+	if err := platform.CopyText(conv.SessionID); err != nil {
+		m.conversationsStatus = "failed to copy session ID"
+		return m, nil
+	}
+	m.conversationsStatus = "copied session ID: " + conv.SessionID
+	return m, nil
+}
+
 func (m Model) enterGrep() (tea.Model, tea.Cmd) {
 	m.grepFromPage = m.page
 	m.page = pageGrep
 	m.grepResults = nil
 	*m.grepResultsRef = nil
 	m.grepErr = nil
+	m.grepStatus = ""
 	m.grepRunning = false
 	m.grepSeq++
 	m.grepWidget.SetQuery("")
@@ -542,6 +572,27 @@ func (m Model) resumeGrepResult() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, resumeSessionCmd(result.SessionID, cwd)
+}
+
+func (m Model) yankGrepSessionID() (tea.Model, tea.Cmd) {
+	if len(m.grepResults) == 0 {
+		return m, nil
+	}
+	sel := m.grepWidget.Selected()
+	if sel >= len(m.grepResults) {
+		return m, nil
+	}
+	result := m.grepResults[sel]
+	if result.SessionID == "" {
+		m.grepStatus = "no session ID to copy"
+		return m, nil
+	}
+	if err := platform.CopyText(result.SessionID); err != nil {
+		m.grepStatus = "failed to copy session ID"
+		return m, nil
+	}
+	m.grepStatus = "copied session ID: " + result.SessionID
+	return m, nil
 }
 
 // projectCwdForFile returns the Cwd of the project containing filePath, by
@@ -676,6 +727,11 @@ func (m Model) View() tea.View {
 		} else if m.conversationsLoading {
 			content = "Loading..."
 		} else {
+			footer := "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  ctrl+r: resume  ctrl+y: yank session id  esc: back"
+			if m.conversationsStatus != "" {
+				footer = m.conversationsStatus + "  " + footer
+			}
+			m.convWidget.SetFooter(footer)
 			content = m.convWidget.View()
 		}
 	case pageGrep:
@@ -698,7 +754,10 @@ func (m Model) viewGrepPage() string {
 	if m.grepScope == grepScopeProject {
 		scopeLabel = "project"
 	}
-	footer := fmt.Sprintf("scope: %s  type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  ctrl+r: resume  esc: back", scopeLabel)
+	footer := fmt.Sprintf("scope: %s  type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  ctrl+r: resume  ctrl+y: yank session id  esc: back", scopeLabel)
+	if m.grepStatus != "" {
+		footer = m.grepStatus + "  " + footer
+	}
 	if m.grepRunning {
 		footer = "searching…  " + footer
 	}
@@ -746,6 +805,16 @@ func (m Model) renderGrepPreview() string {
 	if r.ConvTitle != "" {
 		titleLine = fuzzyfinder.SubtitleStyle.Render("conversation: " + r.ConvTitle)
 		bodyMaxLines = max(contentHeight-1, 0)
+	}
+
+	if r.SessionID != "" {
+		sessionLine := fuzzyfinder.SubtitleStyle.Render("session: " + r.SessionID)
+		bodyMaxLines = max(bodyMaxLines-1, 0)
+		if titleLine != "" {
+			titleLine += "\n" + sessionLine
+		} else {
+			titleLine = sessionLine
+		}
 	}
 
 	w := max(m.width-4, 20)
