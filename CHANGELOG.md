@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [v0.5.3] - 2026-06-30
+
+- Fixed `goto-agent` jumping to an agent in a different Kitty session: blf now switches to the target agent's session before focusing its window. Previously, focusing a cross-session window grafted its tab onto the active session, where it vanished on the next tab change.
+
 ## [v0.5.2] - 2026-06-29
 
 - **`goto-agent` picker** now highlights the fuzzy-matched characters as you type, across all searchable fields (dir, title, and agent name) — previously matches weren't highlighted at all.
