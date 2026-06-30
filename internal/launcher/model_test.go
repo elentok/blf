@@ -48,7 +48,7 @@ func TestEscResetsAndHides(t *testing.T) {
 	if m.input.Value() != "" {
 		t.Errorf("expected input reset, got %q", m.input.Value())
 	}
-	if m.results != nil {
+	if len(m.results) != 0 {
 		t.Errorf("expected results cleared, got %d", len(m.results))
 	}
 	if m.selected != 0 || m.offset != 0 {
@@ -85,7 +85,7 @@ func TestSyncEnterResetsAndHides(t *testing.T) {
 	if m.input.Value() != "" {
 		t.Errorf("expected input reset, got %q", m.input.Value())
 	}
-	if m.results != nil {
+	if len(m.results) != 0 {
 		t.Errorf("expected results cleared, got %d", len(m.results))
 	}
 
@@ -147,6 +147,32 @@ func TestCtrlXIgnoredForNonHistoryRow(t *testing.T) {
 
 	if h.Len() != 1 {
 		t.Errorf("expected history untouched, len=%d", h.Len())
+	}
+}
+
+func TestResetShowsRecentHistory(t *testing.T) {
+	h := history.New()
+	h.Append("alpha")
+	h.Append("beta")
+	m := NewModel(ModelConfig{
+		Providers:    []Provider{CalcProvider{}},
+		History:      h,
+		HideTerminal: func() error { return nil },
+		HideDelay:    0,
+	})
+
+	// Type a query, then dismiss. The recent list must be ready for the next show,
+	// since reopening the quick terminal emits no WindowSizeMsg to trigger a recompute.
+	m = typeText(t, m, "1+1")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m = next.(Model)
+
+	// esc records the calc query into history, so 2 seeded + 1 = 3 recent rows.
+	if len(m.results) != 3 {
+		t.Fatalf("expected 3 recent rows after reset, got %d", len(m.results))
+	}
+	if m.results[0].Action.Type != ActionRecall {
+		t.Errorf("expected recall rows, got %v", m.results[0].Action.Type)
 	}
 }
 

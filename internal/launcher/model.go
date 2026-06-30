@@ -104,6 +104,17 @@ func NewModel(cfg ModelConfig) Model {
 	return m
 }
 
+// setQuery sets the query on both the shared query ref and the live widget.
+//
+// m.input mirrors the query via a widget pointer captured at construction, but
+// bubbletea copies the model on every Update so that pointer is stale relative
+// to the live widget — writes through it never reach the rendered textinput.
+// Programmatic query changes must therefore go through the live m.widget here.
+func (m *Model) setQuery(s string) {
+	*m.input.queryRef = s
+	m.widget.SetQuery(s)
+}
+
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.widget.Init()}
 	if m.cfg.CurrencyCache != nil {
@@ -122,6 +133,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		*m.widthRef = msg.Width
 		m.widget.SetSize(msg.Width, msg.Height)
+		// On show, repopulate results so an empty query shows the default recent
+		// list rather than the stale/empty list left behind when we last hid.
+		m.recomputeResults()
 		// On show, reload apps from disk if the cache was updated externally.
 		if m.cfg.AppsProvider != nil && m.cfg.AppsCachePath != "" {
 			if info, err := os.Stat(m.cfg.AppsCachePath); err == nil {
@@ -209,7 +223,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				next = len(entries) - 1
 			}
 			m.historyIdx = next
-			m.input.SetValue(entries[next])
+			m.setQuery(entries[next])
 			m.scriptOutput = nil
 			m.recomputeResults()
 			return m, nil
@@ -221,10 +235,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			next := m.historyIdx - 1
 			if next < 0 {
 				m.historyIdx = -1
-				m.input.SetValue("")
+				m.setQuery("")
 			} else {
 				m.historyIdx = next
-				m.input.SetValue(m.cfg.History.Entries()[next])
+				m.setQuery(m.cfg.History.Entries()[next])
 			}
 			m.scriptOutput = nil
 			m.recomputeResults()
@@ -440,7 +454,7 @@ func (m *Model) updateFooter() {
 func (m *Model) act(r Result) (tea.Cmd, error) {
 	switch r.Action.Type {
 	case ActionRecall:
-		m.input.SetValue(r.Action.Target)
+		m.setQuery(r.Action.Target)
 		m.historyIdx = -1
 		m.scriptOutput = nil
 		m.recomputeResults()
@@ -520,16 +534,15 @@ func (m *Model) saveHistory() {
 // next repaint clears it. Waiting one render tick ensures the cleared frame is
 // flushed before we hide, so the buffer Kitty saves is already clean.
 func (m *Model) resetAndHide() tea.Cmd {
-	m.input.Reset()
-	m.results = nil
+	m.setQuery("")
 	m.selected = 0
 	m.offset = 0
 	m.status = ""
 	m.scriptOutput = nil
 	m.historyIdx = -1
-	m.widget.SetSelected(0)
-	m.widget.SetItemCount(1)
-	*m.resultsRef = nil
+	// Repopulate the default recent list now (rather than on the next show), since
+	// reshowing the quick terminal at the same size emits no WindowSizeMsg.
+	m.recomputeResults()
 	m.updateFooter()
 
 	hide := m.cfg.HideTerminal
