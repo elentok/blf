@@ -405,9 +405,10 @@ func (m *Model) recomputeResults() {
 		m.results = make([]Result, len(entries))
 		for i, e := range entries {
 			m.results[i] = Result{
-				Title:  e,
-				Icon:   IconRoleHistory,
-				Action: Action{Type: ActionRecall, Target: e},
+				Title:    e,
+				Subtitle: m.historyHint(e),
+				Icon:     IconRoleHistory,
+				Action:   Action{Type: ActionRecall, Target: e},
 			}
 		}
 		if m.selected >= len(m.results) {
@@ -504,6 +505,19 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 	default:
 		return nil, fmt.Errorf("action not yet implemented")
 	}
+}
+
+// historyHint returns the dimmed-italic "= <result>" subtitle for a history
+// row, computed live from the first provider that offers a hint, or "" if none.
+func (m *Model) historyHint(query string) string {
+	for _, p := range m.cfg.Providers {
+		if hp, ok := p.(HintProvider); ok {
+			if h := hp.Hint(query); h != "" {
+				return h
+			}
+		}
+	}
+	return ""
 }
 
 // recordHistory appends query to history and persists it if a path is configured.

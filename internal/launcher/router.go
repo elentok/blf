@@ -241,7 +241,7 @@ func matchesNumberUnit(s string) bool {
 
 func isUnitSymbol(c rune) bool {
 	switch c {
-	case '$', '€', '£', '¥', '₹', '°', 'μ':
+	case '$', '€', '£', '¥', '₹', '₪', '°', 'μ':
 		return true
 	}
 	return false

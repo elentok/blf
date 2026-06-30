@@ -40,6 +40,25 @@ var currencySymbols = map[string]string{
 	"£": "GBP",
 	"¥": "JPY",
 	"₹": "INR",
+	"₪": "ILS",
+}
+
+// codeSymbols is the reverse of currencySymbols (ISO code → symbol), used to
+// render history hints with symbols where available.
+var codeSymbols = func() map[string]string {
+	m := make(map[string]string, len(currencySymbols))
+	for sym, code := range currencySymbols {
+		m[code] = sym
+	}
+	return m
+}()
+
+// currencyDisplay returns a currency's symbol if one exists, else its lowercase ISO code.
+func currencyDisplay(code string) string {
+	if sym, ok := codeSymbols[code]; ok {
+		return sym
+	}
+	return strings.ToLower(code)
 }
 
 // UnitsProvider is a Provider that handles unit conversions and currency exchange.
@@ -55,6 +74,54 @@ var _ Provider = (*UnitsProvider)(nil)
 // currencies is the ordered list of ISO codes to show; nil produces no currency results.
 func NewUnitsProvider(registry *units.Registry, currencyCache *currency.Cache, currencies []string) *UnitsProvider {
 	return &UnitsProvider{registry: registry, currency: currencyCache, currencies: currencies}
+}
+
+// Hint returns "= <joined currency line>" for a currency query, or "" otherwise.
+// Non-currency unit conversions, unrecognized symbols, and not-yet-loaded rates
+// all yield no hint.
+func (p *UnitsProvider) Hint(query string) string {
+	if Classify(query) != Computational {
+		return ""
+	}
+	value, sym, ok := units.ParseInput(query)
+	if !ok {
+		return ""
+	}
+	// Non-currency unit conversions get no hint (too many targets to join).
+	if _, _, found := p.registry.Lookup(sym); found {
+		return ""
+	}
+	if p.currency == nil {
+		return ""
+	}
+	upper := resolveToISO(sym)
+	if !looksLikeCurrencyCode(sym) && upper == sym {
+		return ""
+	}
+	rates := p.currency.Rates()
+	if rates == nil {
+		return ""
+	}
+	fromRate, ok := rates.USD[upper]
+	if !ok || fromRate == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(p.currencies))
+	for _, code := range p.currencies {
+		if code == upper {
+			continue
+		}
+		toRate, ok := rates.USD[code]
+		if !ok || toRate == 0 {
+			continue
+		}
+		converted := value * toRate / fromRate
+		parts = append(parts, formatCurrencyAmount(converted)+" "+currencyDisplay(code))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "= " + strings.Join(parts, ", ")
 }
 
 func (p *UnitsProvider) Query(input string) []Result {
@@ -184,10 +251,11 @@ func formatCurrencyAmount(v float64) string {
 		return FormatNumber(v)
 	}
 	abs := math.Abs(v)
+	if abs == 0 {
+		return "0"
+	}
 	var s string
 	switch {
-	case abs == 0:
-		s = "0.00"
 	case abs >= 100:
 		s = fmt.Sprintf("%.2f", v)
 	case abs >= 1:
@@ -195,6 +263,16 @@ func formatCurrencyAmount(v float64) string {
 	default:
 		s = fmt.Sprintf("%.6f", v)
 	}
-	// strip trailing zeros after decimal point (but keep at least 2 for amounts >= 1)
+	// strip trailing zeros after the decimal point (but keep at least 2 for amounts >= 1)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	if abs >= 1 {
+		dot := strings.IndexByte(s, '.')
+		if dot < 0 {
+			s += ".00"
+		} else if decimals := len(s) - dot - 1; decimals < 2 {
+			s += strings.Repeat("0", 2-decimals)
+		}
+	}
 	return s
 }

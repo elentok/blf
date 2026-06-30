@@ -153,7 +153,7 @@ func ParseInput(input string) (value float64, symbol string, ok bool) {
 
 func isSymbolChar(c rune) bool {
 	switch c {
-	case '$', '€', '£', '¥', '₹', '°', 'μ':
+	case '$', '€', '£', '¥', '₹', '₪', '°', 'μ':
 		return true
 	}
 	return false

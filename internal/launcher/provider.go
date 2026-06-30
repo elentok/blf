@@ -52,3 +52,11 @@ type Result struct {
 type Provider interface {
 	Query(input string) []Result
 }
+
+// HintProvider is an optional capability for Providers that can compute a
+// dimmed-italic "history hint" for a stored query — the "= <result>" subtitle
+// shown beside a launcher history row. Hint returns "" when the provider has no
+// hint for the query (not its kind, fails to resolve, or data not yet loaded).
+type HintProvider interface {
+	Hint(query string) string
+}

@@ -53,6 +53,10 @@ _Contrast_: a **name-like query** (letters that don't resolve to a unit/function
 The persisted list of launcher queries you executed (pressed Enter on) or explicitly saved (Ctrl+S). Recalled via Ctrl+P/Ctrl+N or shown as the default list when the input is empty. Recalling **populates the input and recomputes** — it never blindly re-fires the original action.
 _Avoid_: recording every keystroke-query (only executed/saved queries are history).
 
+**history hint**:
+The dimmed-italic computed echo shown beside a **launcher history** row, rendered as the row's subtitle (`= <result>`). Only **computational queries** that resolve to a value get one: a math expression shows `= <value>` (e.g. `10+20` → `= 30`); a currency query shows a single joined line of the configured target currencies, using each currency's symbol where one exists and its ISO code otherwise (e.g. `1$` → `= 2.987 ₪, 0.79 £, 0.92 €`). Computed live from the current rates each time the history list is shown, never persisted. _Excluded_: non-currency unit conversions (too many targets to join meaningfully), bare numbers, and anything that doesn't resolve.
+_Avoid_: treating it as a re-fire of the original action (it is display-only; the stored query is still what gets recalled/executed).
+
 **fuzzy finder**:
 The shared embedded TUI widget (built on bubbletea v2 + lipgloss) that owns a query input box, a ranked/scrollable/fuzzy-highlighted result list, selection cursor, and the border/footer chrome. Consumers (the **launcher**, the **goto-agent** picker) embed it and own their own item type, ranking, per-row rendering, preview pane, actions, and any live-refresh tickers. Lives in `internal/fuzzyfinder`.
 _Avoid_: conflating it with the fzf-based `pick*` shell-outs (`pickSession`, `pickOSWindow`) — those launch the external `fzf` process; the **fuzzy finder** is self-owned Go, which is what lets it refresh live (spinners, status changes).

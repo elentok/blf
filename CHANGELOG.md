@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+- **`launcher` history hints**: math and currency entries in the history list now show their computed result as a dimmed-italic subtitle (`10+20 = 30`, `1$ = 2.987 ₪, 0.79 £, 0.92 €`). Currency lines use each currency's symbol where one exists (now including `₪` for ILS) and its ISO code otherwise, computed live from the current rates each time the list is shown. Non-currency unit conversions and bare numbers get no hint.
+- The `₪` shekel symbol is now recognized as a currency unit, so `100₪` parses as a currency query.
+- Currency amounts now drop trailing zeros (`2.987 ₪` instead of `2.9870 ₪`), keeping at least two decimals for amounts ≥ 1.
+- Capped `launcher` history at 30 entries (was 500); existing histories are trimmed to the newest 30 on next load.
+
 ## [v0.5.3] - 2026-06-30
 
 - Fixed `goto-agent` jumping to an agent in a different Kitty session: blf now switches to the target agent's session before focusing its window. Previously, focusing a cross-session window grafted its tab onto the active session, where it vanished on the next tab change.

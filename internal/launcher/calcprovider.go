@@ -55,3 +55,16 @@ func (CalcProvider) Query(input string) []Result {
 		return nil
 	}
 }
+
+// Hint returns "= <value>" for a real math expression, or "" otherwise.
+// Unit/currency inputs (handled by UnitsProvider) and bare numbers get no hint.
+func (CalcProvider) Hint(query string) string {
+	if Classify(query) != Computational || matchesNumberUnit(query) {
+		return ""
+	}
+	v, err := calc.Evaluate(query)
+	if err != nil {
+		return ""
+	}
+	return "= " + FormatNumber(v)
+}

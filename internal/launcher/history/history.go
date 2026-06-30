@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const MaxEntries = 500
+const MaxEntries = 30
 
 // History holds a capped, deduplicated list of launcher queries, most-recent first.
 type History struct {
