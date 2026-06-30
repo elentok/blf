@@ -100,7 +100,7 @@ func TestScanMacDirs(t *testing.T) {
 	}
 }
 
-func TestScanMacDirsDeduplicate(t *testing.T) {
+func TestScanMacDirsSameNameDifferentDirs(t *testing.T) {
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
 	if err := os.Mkdir(filepath.Join(dir1, "Safari.app"), 0o755); err != nil {
@@ -110,13 +110,67 @@ func TestScanMacDirsDeduplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Same name in two different dirs: both should appear (dedup is by path only).
 	result := apps.ScanMacDirs([]string{dir1, dir2})
-	if len(result) != 1 {
-		t.Errorf("expected 1 deduplicated result, got %d: %v", len(result), result)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 results, got %d: %v", len(result), result)
 	}
-	// First occurrence wins
-	if result[0].Path != filepath.Join(dir1, "Safari.app") {
-		t.Errorf("expected first dir to win, got %s", result[0].Path)
+	paths := map[string]bool{}
+	for _, a := range result {
+		paths[a.Path] = true
+	}
+	if !paths[filepath.Join(dir1, "Safari.app")] || !paths[filepath.Join(dir2, "Safari.app")] {
+		t.Errorf("expected both Safari paths, got %v", result)
+	}
+}
+
+func TestScanMacDirsRecursive(t *testing.T) {
+	root := t.TempDir()
+	// Top-level app: no subtitle.
+	if err := os.Mkdir(filepath.Join(root, "Safari.app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Nested app: /<root>/Utilities/Activity Monitor.app
+	utils := filepath.Join(root, "Utilities")
+	if err := os.Mkdir(utils, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	monitor := filepath.Join(utils, "Activity Monitor.app")
+	if err := os.Mkdir(monitor, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A file inside the bundle must not be treated as a separate entry / recursed into.
+	if err := os.Mkdir(filepath.Join(monitor, "Contents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Hidden directory must be skipped.
+	if err := os.Mkdir(filepath.Join(root, ".hidden"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".hidden", "Secret.app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := apps.ScanMacDirs([]string{root})
+	got := map[string]apps.App{}
+	for _, a := range result {
+		got[a.Name] = a
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 apps (Safari, Activity Monitor), got %d: %v", len(result), result)
+	}
+	if got["Safari"].Subtitle != "" {
+		t.Errorf("top-level app should have no subtitle, got %q", got["Safari"].Subtitle)
+	}
+	am, ok := got["Activity Monitor"]
+	if !ok {
+		t.Fatalf("expected nested Activity Monitor in results: %v", result)
+	}
+	if am.Path != monitor {
+		t.Errorf("Activity Monitor path: got %q, want %q", am.Path, monitor)
+	}
+	if am.Subtitle != "Utilities" {
+		t.Errorf("nested app subtitle: got %q, want %q", am.Subtitle, "Utilities")
 	}
 }
 

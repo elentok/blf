@@ -13,6 +13,10 @@ import (
 type App struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
+	// Subtitle is dimmed trailing context shown in the launcher: the immediate
+	// parent folder name when the app is nested below a scan root (e.g.
+	// "Utilities"), empty for apps directly under a root.
+	Subtitle string `json:"subtitle,omitempty"`
 }
 
 // Index is the persisted application index.
@@ -95,29 +99,48 @@ func LaunchArgsLinux(app App) []string {
 	return []string{"gio", "launch", app.Path}
 }
 
-// ScanMacDirs scans dirs for .app bundles and returns deduplicated App entries.
+// ScanMacDirs recursively scans dirs for .app bundles and returns App entries.
+//
+// Each root is walked recursively; descent stops at any directory whose name
+// ends in ".app" (emitted as an app, never recursed into) and at hidden entries
+// (names starting with "."). Apps nested below a root carry their immediate
+// parent folder name as Subtitle. Entries are deduplicated by full path only —
+// two apps with the same name in different folders both appear.
 func ScanMacDirs(dirs []string) []App {
 	seen := make(map[string]bool)
 	var result []App
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".app") {
-				continue
+	for _, root := range dirs {
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				// Unreadable root or entry: skip its subtree, keep walking siblings.
+				return nil
 			}
-			name := strings.TrimSuffix(e.Name(), ".app")
-			if seen[name] {
-				continue
+			name := d.Name()
+			if path != root && strings.HasPrefix(name, ".") {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
-			seen[name] = true
-			result = append(result, App{
-				Name: name,
-				Path: filepath.Join(dir, e.Name()),
-			})
-		}
+			if !strings.HasSuffix(name, ".app") {
+				return nil
+			}
+			if !seen[path] {
+				seen[path] = true
+				app := App{
+					Name: strings.TrimSuffix(name, ".app"),
+					Path: path,
+				}
+				if parent := filepath.Dir(path); parent != root {
+					app.Subtitle = filepath.Base(parent)
+				}
+				result = append(result, app)
+			}
+			if d.IsDir() {
+				return filepath.SkipDir // don't descend into the bundle
+			}
+			return nil
+		})
 	}
 	return result
 }

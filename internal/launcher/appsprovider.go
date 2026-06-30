@@ -103,6 +103,7 @@ func (p *AppsProvider) Query(input string) []Result {
 		lowerQ := strings.ToLower(q)
 		results = append(results, Result{
 			Title:         app.Name,
+			Subtitle:      app.Subtitle,
 			Icon:          IconRoleApp,
 			IconGlyph:     AppIconGlyph(app.Name),
 			Source:        "apps",
