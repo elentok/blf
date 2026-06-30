@@ -13,9 +13,9 @@ import (
 
 func testProjects() []claude.Project {
 	return []claude.Project{
-		{Label: "myproject", Subtitle: "~/work/myproject", Cwd: "/home/alice/work/myproject"},
-		{Label: "otherproject", Subtitle: "~/work/otherproject", Cwd: "/home/alice/work/otherproject"},
-		{Label: "blf", Subtitle: "~/dev/blf", Cwd: "/home/alice/dev/blf"},
+		{Label: "myproject", Subtitle: "~/work/myproject", Cwd: "/home/alice/work/myproject", Dir: "/home/alice/.claude/projects/myproject"},
+		{Label: "otherproject", Subtitle: "~/work/otherproject", Cwd: "/home/alice/work/otherproject", Dir: "/home/alice/.claude/projects/otherproject"},
+		{Label: "blf", Subtitle: "~/dev/blf", Cwd: "/home/alice/dev/blf", Dir: "/home/alice/.claude/projects/blf"},
 	}
 }
 
@@ -38,6 +38,10 @@ func modelPress(m Model, key string) Model {
 		msg = tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "ctrl+c":
 		msg = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "ctrl+f":
+		msg = tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl}
+	case "ctrl+g":
+		msg = tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
 	case "up":
 		msg = tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
@@ -262,5 +266,156 @@ func TestHistoryModelViewAltScreen(t *testing.T) {
 	v := m.View()
 	if !v.AltScreen {
 		t.Error("expected AltScreen=true on view")
+	}
+}
+
+// ---- Grep page tests ----
+
+func TestHistoryModelCtrlFFromProjectsOpensGlobalGrep(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+
+	if m.page != pageGrep {
+		t.Fatalf("expected pageGrep after ctrl+f, got %d", m.page)
+	}
+	if m.grepScope != grepScopeGlobal {
+		t.Errorf("expected grepScopeGlobal from projects page, got %d", m.grepScope)
+	}
+	if m.grepFromPage != pageProjects {
+		t.Errorf("expected grepFromPage=pageProjects, got %d", m.grepFromPage)
+	}
+}
+
+func TestHistoryModelCtrlFFromConversationsOpensProjectGrep(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter") // go to conversations
+	m = loadConversations(m, testConversations())
+	m = modelPress(m, "ctrl+f")
+
+	if m.page != pageGrep {
+		t.Fatalf("expected pageGrep after ctrl+f, got %d", m.page)
+	}
+	if m.grepScope != grepScopeProject {
+		t.Errorf("expected grepScopeProject from conversations page, got %d", m.grepScope)
+	}
+	if m.grepFromPage != pageConversations {
+		t.Errorf("expected grepFromPage=pageConversations, got %d", m.grepFromPage)
+	}
+}
+
+func TestHistoryModelGrepEscReturnsToOrigin(t *testing.T) {
+	// From projects.
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+	if m.page != pageGrep {
+		t.Fatalf("expected pageGrep")
+	}
+	m = modelPress(m, "esc")
+	if m.page != pageProjects {
+		t.Errorf("expected pageProjects after esc from grep, got %d", m.page)
+	}
+}
+
+func TestHistoryModelGrepCtrlGTogglesScope(t *testing.T) {
+	// Start from conversations so we have a project dir for toggle.
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "enter")
+	m = loadConversations(m, testConversations())
+	m = modelPress(m, "ctrl+f") // open grep in project scope
+
+	if m.grepScope != grepScopeProject {
+		t.Fatalf("expected grepScopeProject initially, got %d", m.grepScope)
+	}
+
+	m = modelPress(m, "ctrl+g") // toggle → global
+	if m.grepScope != grepScopeGlobal {
+		t.Errorf("expected grepScopeGlobal after ctrl+g, got %d", m.grepScope)
+	}
+
+	m = modelPress(m, "ctrl+g") // toggle → project again
+	if m.grepScope != grepScopeProject {
+		t.Errorf("expected grepScopeProject after second ctrl+g, got %d", m.grepScope)
+	}
+}
+
+func TestHistoryModelGrepViewShowsSearchPrompt(t *testing.T) {
+	m := New("")
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+
+	view := viewStr(m)
+	// Grep page should show something (at minimum the empty search prompt).
+	if view == "" {
+		t.Error("grep page view should not be empty")
+	}
+}
+
+func TestHistoryModelGrepResultsInjected(t *testing.T) {
+	m := New("")
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+
+	// Inject grep results directly.
+	seq := m.grepSeq
+	results := []claude.GrepResult{
+		{FilePath: "/p/a.jsonl", ConvTitle: "Fibonacci session", Snippet: "fibonacci sequence", SnippetHL: []int{0, 1, 2}},
+		{FilePath: "/p/b.jsonl", ConvTitle: "Sort session", Snippet: "sort algorithm", SnippetHL: nil},
+	}
+	next, _ = m.Update(grepResultsMsg{results: results, err: nil, seq: seq})
+	m = next.(Model)
+
+	if len(m.grepResults) != 2 {
+		t.Fatalf("expected 2 grep results, got %d", len(m.grepResults))
+	}
+
+	view := viewStr(m)
+	if !strings.Contains(view, "fibonacci") {
+		t.Errorf("grep view should contain 'fibonacci', got:\n%s", view)
+	}
+}
+
+func TestHistoryModelGrepStaleResultsIgnored(t *testing.T) {
+	m := New("")
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+
+	// seq is m.grepSeq; inject with a different seq.
+	staleSeq := m.grepSeq - 1
+	results := []claude.GrepResult{
+		{FilePath: "/p/a.jsonl", ConvTitle: "Stale", Snippet: "stale result"},
+	}
+	next, _ := m.Update(grepResultsMsg{results: results, err: nil, seq: staleSeq})
+	m = next.(Model)
+
+	if len(m.grepResults) != 0 {
+		t.Errorf("stale results should be ignored, got %d", len(m.grepResults))
+	}
+}
+
+func TestHistoryModelGrepRgNotFoundShownInView(t *testing.T) {
+	m := New("")
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+	m = loadProjects(m, testProjects())
+	m = modelPress(m, "ctrl+f")
+
+	seq := m.grepSeq
+	next, _ = m.Update(grepResultsMsg{err: claude.ErrRgNotFound, seq: seq})
+	m = next.(Model)
+
+	if !m.rgNotFound {
+		t.Error("expected rgNotFound to be set")
+	}
+	view := viewStr(m)
+	if !strings.Contains(view, "rg not found") {
+		t.Errorf("view should mention rg not found, got:\n%s", view)
 	}
 }

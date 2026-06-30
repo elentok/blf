@@ -1,9 +1,12 @@
 package claudehistory
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,6 +21,14 @@ type page int
 const (
 	pageProjects page = iota
 	pageConversations
+	pageGrep
+)
+
+type grepScope int
+
+const (
+	grepScopeGlobal  grepScope = iota
+	grepScopeProject           // single project dir
 )
 
 type projectsLoadedMsg struct {
@@ -37,6 +48,26 @@ type convExportedMsg struct {
 
 type editorFinishedMsg struct{ err error }
 
+type grepDebounceMsg struct {
+	seq   int
+	query string
+}
+
+type grepResultsMsg struct {
+	results []claude.GrepResult
+	err     error
+	seq     int
+}
+
+type grepExportedMsg struct {
+	path   string
+	query  string
+	editor string
+	err    error
+}
+
+type grepEditorFinishedMsg struct{ err error }
+
 // Model is the root bubbletea model for the claude history TUI.
 type Model struct {
 	page        page
@@ -52,10 +83,24 @@ type Model struct {
 	convWidget           fuzzyfinder.Model
 	conversationsErr     error
 	conversationsLoading bool
+	convProjectDir       string // project dir of the open conversations page
+
+	// grep page state
+	grepWidget       fuzzyfinder.Model
+	grepResults      []claude.GrepResult
+	grepSeq          int
+	grepRunning      bool
+	grepErr          error
+	rgNotFound       bool
+	grepFromPage     page
+	grepScope        grepScope
+	grepScopeProjDir string // dir for grepScopeProject
 
 	width  int
 	height int
 }
+
+const grepPreviewHeight = 8
 
 // New creates a new history Model. It returns a model that starts on the
 // projects page and immediately triggers an async load of projects.
@@ -86,7 +131,7 @@ func New(projectsRoot string) Model {
 			}
 			return renderProjectRow(display[i], *queryRef, selected)
 		},
-		Footer:    "type: filter  ↑/↓: move  enter: open  esc: quit",
+		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  esc: quit",
 		ItemCount: 1,
 	})
 	m.convWidget = fuzzyfinder.New(fuzzyfinder.Config{
@@ -100,7 +145,15 @@ func New(projectsRoot string) Model {
 			}
 			return renderConversationRow(display[i], *convQueryRef, selected)
 		},
-		Footer:    "type: filter  ↑/↓: move  enter: open  esc: back",
+		Footer:    "type: filter  ↑/↓: move  enter: open  ctrl+f: grep  esc: back",
+		ItemCount: 1,
+	})
+
+	m.grepWidget = fuzzyfinder.New(fuzzyfinder.Config{
+		RenderRow: func(i int, selected bool) string {
+			return renderGrepRow(&m, i, selected)
+		},
+		Footer:    "type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  esc: back",
 		ItemCount: 1,
 	})
 
@@ -112,6 +165,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.widget.Init(),
 		m.convWidget.Init(),
+		m.grepWidget.Init(),
 		loadProjectsCmd(""),
 	)
 }
@@ -137,6 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.widget.SetSize(msg.Width, msg.Height)
 		m.convWidget.SetSize(msg.Width, msg.Height)
+		m.grepWidget.SetSize(msg.Width, max(msg.Height-grepPreviewHeight, 4))
 		return m, nil
 
 	case projectsLoadedMsg:
@@ -172,6 +227,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorFinishedMsg:
 		return m, nil
+
+	case grepDebounceMsg:
+		if msg.seq != m.grepSeq || msg.query != m.grepWidget.Query() {
+			return m, nil // stale
+		}
+		if len([]rune(msg.query)) < 3 {
+			m.grepResults = nil
+			m.grepRunning = false
+			m.grepWidget.SetItemCount(1)
+			return m, nil
+		}
+		m.grepRunning = true
+		seq := m.grepSeq
+		query := msg.query
+		dirs := m.grepDirs()
+		return m, func() tea.Msg {
+			results, err := claude.GrepTranscripts(query, dirs)
+			return grepResultsMsg{results: results, err: err, seq: seq}
+		}
+
+	case grepResultsMsg:
+		if msg.seq != m.grepSeq {
+			return m, nil // stale
+		}
+		m.grepRunning = false
+		if msg.err != nil {
+			if errors.Is(msg.err, claude.ErrRgNotFound) {
+				m.rgNotFound = true
+			} else {
+				m.grepErr = msg.err
+			}
+			return m, nil
+		}
+		m.grepResults = msg.results
+		m.grepWidget.SetItemCount(max(len(msg.results), 1))
+		m.grepWidget.SetSelected(0)
+		return m, nil
+
+	case grepExportedMsg:
+		if msg.err != nil {
+			m.grepErr = msg.err
+			return m, nil
+		}
+		cmd := buildEditorCmd(msg.editor, msg.path, msg.query)
+		return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+			return grepEditorFinishedMsg{err: err}
+		})
+
+	case grepEditorFinishedMsg:
+		// Stay on grep page.
+		return m, nil
 	}
 
 	if key, ok := msg.(tea.KeyMsg); ok {
@@ -182,6 +288,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "enter":
 				return m.enterConversations()
+			case "ctrl+f":
+				return m.enterGrep()
 			}
 		case pageConversations:
 			switch key.String() {
@@ -191,6 +299,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.exitConversations()
 			case "enter":
 				return m.openConversation()
+			case "ctrl+f":
+				return m.enterGrep()
+			}
+		case pageGrep:
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				return m.exitGrep()
+			case "enter":
+				return m.openGrepResult()
+			case "ctrl+g":
+				return m.toggleGrepScope()
 			}
 		}
 	}
@@ -215,6 +336,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recomputeConvFilter()
 		}
 		return m, cmd
+
+	case pageGrep:
+		prevQuery := m.grepWidget.Query()
+		var cmd tea.Cmd
+		m.grepWidget, cmd = m.grepWidget.Update(msg)
+		if m.grepWidget.Query() != prevQuery {
+			cmd = tea.Batch(cmd, m.startGrepDebounce())
+		}
+		return m, cmd
 	}
 
 	return m, nil
@@ -228,6 +358,7 @@ func (m Model) enterConversations() (tea.Model, tea.Cmd) {
 	}
 	p := display[sel]
 	m.page = pageConversations
+	m.convProjectDir = p.Dir
 	m.allConversations = nil
 	*m.convDisplayRef = nil
 	*m.convQueryRef = ""
@@ -252,6 +383,117 @@ func (m Model) openConversation() (tea.Model, tea.Cmd) {
 	}
 	conv := display[sel]
 	return m, exportConvCmd(conv)
+}
+
+func (m Model) enterGrep() (tea.Model, tea.Cmd) {
+	m.grepFromPage = m.page
+	m.page = pageGrep
+	m.grepResults = nil
+	m.grepErr = nil
+	m.grepRunning = false
+	m.grepSeq++
+	m.grepWidget.SetQuery("")
+	m.grepWidget.SetItemCount(1)
+	m.grepWidget.SetSelected(0)
+
+	if m.grepFromPage == pageConversations && m.convProjectDir != "" {
+		m.grepScope = grepScopeProject
+		m.grepScopeProjDir = m.convProjectDir
+	} else {
+		m.grepScope = grepScopeGlobal
+	}
+	return m, nil
+}
+
+func (m Model) exitGrep() (tea.Model, tea.Cmd) {
+	m.page = m.grepFromPage
+	return m, nil
+}
+
+func (m Model) toggleGrepScope() (tea.Model, tea.Cmd) {
+	if m.grepScope == grepScopeGlobal {
+		if m.convProjectDir != "" {
+			m.grepScope = grepScopeProject
+			m.grepScopeProjDir = m.convProjectDir
+		}
+	} else {
+		m.grepScope = grepScopeGlobal
+	}
+	// Re-run the current query with the new scope.
+	m.grepSeq++
+	m.grepResults = nil
+	m.grepWidget.SetItemCount(1)
+	m.grepWidget.SetSelected(0)
+	query := m.grepWidget.Query()
+	if len([]rune(query)) >= 3 {
+		m.grepRunning = true
+		seq := m.grepSeq
+		dirs := m.grepDirs()
+		return m, func() tea.Msg {
+			results, err := claude.GrepTranscripts(query, dirs)
+			return grepResultsMsg{results: results, err: err, seq: seq}
+		}
+	}
+	return m, nil
+}
+
+func (m Model) openGrepResult() (tea.Model, tea.Cmd) {
+	if len(m.grepResults) == 0 {
+		return m, nil
+	}
+	sel := m.grepWidget.Selected()
+	if sel >= len(m.grepResults) {
+		return m, nil
+	}
+	result := m.grepResults[sel]
+	query := m.grepWidget.Query()
+	editor := resolveEditor()
+	return m, func() tea.Msg {
+		md, err := claude.ExportMarkdown(result.FilePath)
+		if err != nil {
+			return grepExportedMsg{err: err}
+		}
+		f, err := os.CreateTemp("", "claude-grep-*.md")
+		if err != nil {
+			return grepExportedMsg{err: err}
+		}
+		if _, err := f.WriteString(md); err != nil {
+			f.Close()
+			return grepExportedMsg{err: err}
+		}
+		f.Close()
+		return grepExportedMsg{path: f.Name(), query: query, editor: editor}
+	}
+}
+
+func (m *Model) startGrepDebounce() tea.Cmd {
+	m.grepSeq++
+	seq := m.grepSeq
+	query := m.grepWidget.Query()
+	return func() tea.Msg {
+		time.Sleep(100 * time.Millisecond)
+		return grepDebounceMsg{seq: seq, query: query}
+	}
+}
+
+func (m *Model) grepDirs() []string {
+	if m.grepScope == grepScopeProject && m.grepScopeProjDir != "" {
+		return []string{m.grepScopeProjDir}
+	}
+	dirs := make([]string, len(m.allProjects))
+	for i, p := range m.allProjects {
+		dirs[i] = p.Dir
+	}
+	return dirs
+}
+
+func buildEditorCmd(editor, path, query string) *exec.Cmd {
+	bin := strings.Fields(editor)[0]
+	isNvim := strings.Contains(filepath.Base(bin), "nvim")
+	if isNvim && query != "" {
+		return exec.Command(bin, "+/"+query, path)
+	}
+	return exec.Command(bin, path)
 }
 
 func exportConvCmd(conv claude.Conversation) tea.Cmd {
@@ -336,10 +578,133 @@ func (m Model) View() tea.View {
 		} else {
 			content = m.convWidget.View()
 		}
+	case pageGrep:
+		content = m.viewGrepPage()
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+func (m Model) viewGrepPage() string {
+	if m.rgNotFound {
+		return errorStyle.Render("rg not found — brew install ripgrep")
+	}
+	if m.grepErr != nil {
+		return errorStyle.Render("Error: " + m.grepErr.Error())
+	}
+
+	scopeLabel := "global"
+	if m.grepScope == grepScopeProject {
+		scopeLabel = "project"
+	}
+	footer := fmt.Sprintf("scope: %s  type: search  ↑/↓: move  enter: open  ctrl+g: toggle scope  esc: back", scopeLabel)
+	if m.grepRunning {
+		footer = "searching…  " + footer
+	}
+	m.grepWidget.SetFooter(footer)
+
+	widgetContent := m.grepWidget.View()
+	preview := m.renderGrepPreview()
+	return widgetContent + "\n" + preview
+}
+
+func (m Model) renderGrepPreview() string {
+	if len(m.grepResults) == 0 {
+		query := m.grepWidget.Query()
+		if query == "" {
+			return previewStyle.Render("Type to search across transcripts")
+		}
+		if len([]rune(query)) < 3 {
+			return previewStyle.Render("Enter at least 3 characters")
+		}
+		if m.grepRunning {
+			return previewStyle.Render("Searching…")
+		}
+		return previewStyle.Render("No results")
+	}
+
+	sel := m.grepWidget.Selected()
+	if sel >= len(m.grepResults) {
+		return previewStyle.Render("")
+	}
+
+	r := m.grepResults[sel]
+	text := r.Preview
+	if text == "" {
+		text = r.Snippet
+	}
+
+	// Wrap to width and truncate to preview height.
+	w := max(m.width-4, 20)
+	lines := wrapText(text, w)
+	maxLines := max(grepPreviewHeight-1, 1)
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
+	title := ""
+	if r.ConvTitle != "" {
+		title = fuzzyfinder.SubtitleStyle.Render(r.ConvTitle) + "\n"
+	}
+	return title + previewStyle.Render(strings.Join(lines, "\n"))
+}
+
+// renderGrepRow renders a single grep result row.
+func renderGrepRow(m *Model, i int, selected bool) string {
+	if len(m.grepResults) == 0 {
+		q := m.grepWidget.Query()
+		if q == "" {
+			return fuzzyfinder.RowNormalStyle.Render("Type to search…")
+		}
+		if len([]rune(q)) < 3 {
+			return fuzzyfinder.RowNormalStyle.Render("Enter at least 3 characters…")
+		}
+		if m.grepRunning {
+			return fuzzyfinder.RowNormalStyle.Render("Searching…")
+		}
+		return fuzzyfinder.RowNormalStyle.Render("No results")
+	}
+	if i >= len(m.grepResults) {
+		return ""
+	}
+
+	r := m.grepResults[i]
+	plain := lipgloss.NewStyle()
+
+	projLabel := claude.GrepResultProjectLabel(r.FilePath)
+	projStr := fuzzyfinder.Highlight(projLabel+" · ", nil, fuzzyfinder.SubtitleStyle, selected)
+
+	convTitle := r.ConvTitle
+	if convTitle == "" {
+		convTitle = filepath.Base(r.FilePath)
+	}
+	convStr := fuzzyfinder.Highlight(convTitle+" · ", nil, fuzzyfinder.SubtitleStyle, selected)
+
+	snippetStr := fuzzyfinder.Highlight(r.Snippet, r.SnippetHL, plain, selected)
+
+	return projStr + convStr + snippetStr
+}
+
+// wrapText wraps text to at most width runes per line (naïve word wrap).
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		width = 80
+	}
+	var lines []string
+	for para := range strings.SplitSeq(text, "\n") {
+		runes := []rune(para)
+		if len(runes) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+		for len(runes) > width {
+			lines = append(lines, string(runes[:width]))
+			runes = runes[width:]
+		}
+		lines = append(lines, string(runes))
+	}
+	return lines
 }
 
 // projectSearchable returns the string matched against the fuzzy query.
