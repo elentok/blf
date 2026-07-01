@@ -62,28 +62,30 @@ func AppIconGlyph(title string) string {
 // Icons maps semantic IconRole values to display strings.
 // Nerd Font glyphs are used when available; otherwise fall back to ASCII.
 var Icons = map[IconRole]string{
-	IconRoleCalc:     "󰃬 ", // nf-md-calculator
-	IconRoleUnit:     "󱉸 ", // nf-md-ruler
-	IconRoleCurrency: "󰀧 ", // nf-md-currency-usd
-	IconRoleApp:      "󰀻 ", // nf-md-apps
-	IconRoleScript:   "󰐊 ", // nf-md-play
-	IconRoleHistory:  "󰋚 ", // nf-md-history
-	IconRoleError:    "󰀪 ", // nf-md-alert
-	IconRoleLoading:  "󰔟 ", // nf-md-loading
-	IconRoleSettings: "󰒓 ", // nf-md-cog
+	IconRoleCalc:      "󰃬 ", // nf-md-calculator
+	IconRoleUnit:      "󱉸 ", // nf-md-ruler
+	IconRoleCurrency:  "󰀧 ", // nf-md-currency-usd
+	IconRoleApp:       "󰀻 ", // nf-md-apps
+	IconRoleScript:    "󰐊 ", // nf-md-play
+	IconRoleHistory:   "󰋚 ", // nf-md-history
+	IconRoleError:     "󰀪 ", // nf-md-alert
+	IconRoleLoading:   "󰔟 ", // nf-md-loading
+	IconRoleSettings:  "󰒓 ", // nf-md-cog
+	IconRoleDirectory: "󰉋 ", // nf-md-folder
 }
 
 // ASCIIIcons is a plain-text fallback for environments without Nerd Fonts.
 var ASCIIIcons = map[IconRole]string{
-	IconRoleCalc:     "= ",
-	IconRoleUnit:     "~ ",
-	IconRoleCurrency: "$ ",
-	IconRoleApp:      "> ",
-	IconRoleScript:   "! ",
-	IconRoleHistory:  "* ",
-	IconRoleError:    "x ",
-	IconRoleLoading:  ". ",
-	IconRoleSettings: "* ",
+	IconRoleCalc:      "= ",
+	IconRoleUnit:      "~ ",
+	IconRoleCurrency:  "$ ",
+	IconRoleApp:       "> ",
+	IconRoleScript:    "! ",
+	IconRoleHistory:   "* ",
+	IconRoleError:     "x ",
+	IconRoleLoading:   ". ",
+	IconRoleSettings:  "* ",
+	IconRoleDirectory: "d ",
 }
 
 // Icon returns the icon string for a given role.

@@ -26,6 +26,16 @@ type LauncherConfig struct {
 	UnitGroups []UnitGroupConfig `toml:"unit_group"`
 	// Scripts lists user scripts that add to or override the built-in defaults.
 	Scripts []ScriptConfig `toml:"script"`
+	// DirectoryWeight is the source weight for directories (default 1.0).
+	DirectoryWeight float64 `toml:"directory_weight"`
+	// Directories lists user directories that add to or override the built-in defaults.
+	Directories []DirectoryConfig `toml:"directory"`
+}
+
+// DirectoryConfig is a named filesystem location in the config file.
+type DirectoryConfig struct {
+	Name string `toml:"name"`
+	Path string `toml:"path"` // may start with "~"
 }
 
 // ScriptConfig is a named runnable action in the config file.
@@ -57,9 +67,10 @@ var defaultCurrencies = []string{"USD", "ILS", "GBP", "EUR"}
 func defaultConfig() Config {
 	return Config{
 		Launcher: LauncherConfig{
-			ScriptWeight: 1.5,
-			AppWeight:    1.0,
-			Currencies:   defaultCurrencies,
+			ScriptWeight:    1.5,
+			AppWeight:       1.0,
+			DirectoryWeight: 1.0,
+			Currencies:      defaultCurrencies,
 		},
 	}
 }

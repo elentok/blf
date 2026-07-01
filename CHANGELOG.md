@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.1] - 2026-07-02
+
+- Added a **directory source** to `launcher`: fuzzy-matches filesystem directories (Home, Desktop, Downloads, Documents, iCloud by default) and opens the selected one in the file manager. Configurable via `[[launcher.directory]]` (`name`, `path`, `~` expanded) and `directory_weight`; user entries add to or override the built-ins by name, and entries whose path doesn't exist are hidden.
+- Fixed `launcher`'s "open" action (`ActionOpen`, used by System Settings panes and now directories) to use the same cross-platform opener as `blf open` instead of a hardcoded macOS-only `open` call.
+- `clean-url` now also recognizes Google's `q` redirect param (in addition to `url`), so `google.com/url?q=<dest>` links unwrap correctly.
+
 ## [v0.6.0] - 2026-06-30
 
 - Added **`blf claude history`**: a TUI for browsing Claude Code conversation history. Lists projects, then conversations within a project (title, relative/absolute last-accessed time), with markdown export, a resume action that reopens a conversation's Claude session directly, and a `ctrl+y` binding to copy its session ID to the clipboard.

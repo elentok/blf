@@ -9,9 +9,11 @@ import (
 	"github.com/elentok/blf/internal/launcher"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
+	"github.com/elentok/blf/internal/launcher/directories"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/scripts"
 	"github.com/elentok/blf/internal/launcher/units"
+	"github.com/elentok/blf/internal/platform"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +82,22 @@ func newLauncherCmd(d deps) *cobra.Command {
 
 			settingsProvider := launcher.NewSettingsProvider(cfg.Launcher.AppWeight)
 
+			// Directory provider: merge built-ins with user config, expand "~".
+			userDirs := make([]directories.Directory, 0, len(cfg.Launcher.Directories))
+			for _, dc := range cfg.Launcher.Directories {
+				userDirs = append(userDirs, directories.Directory{Name: dc.Name, Path: dc.Path})
+			}
+			mergedDirs := directories.Merge(directories.Builtins, userDirs)
+			expandedDirs := make([]directories.Directory, 0, len(mergedDirs))
+			for _, dir := range mergedDirs {
+				p, err := expandTilde(dir.Path, d.userHomeDir)
+				if err != nil {
+					continue
+				}
+				expandedDirs = append(expandedDirs, directories.Directory{Name: dir.Name, Path: p})
+			}
+			directoryProvider := launcher.NewDirectoryProvider(expandedDirs, cfg.Launcher.DirectoryWeight)
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
@@ -87,6 +105,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 					appsProvider,
 					scriptsProvider,
 					settingsProvider,
+					directoryProvider,
 				},
 				ConfigErr:       cfgErr,
 				CopyText:        d.copyText,
@@ -103,8 +122,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 					return err
 				},
 				OpenTarget: func(target string) error {
-					_, err := d.runCommand("open", target)
-					return err
+					return platform.OpenURL(target)
 				},
 				HideTerminal: func() error {
 					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")

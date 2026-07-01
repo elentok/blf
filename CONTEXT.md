@@ -45,6 +45,16 @@ _Avoid_: "spawned per keypress" (the process is persistent; Cmd+2 only toggles v
 One contributor of launcher results — math, unit/currency conversion, application launch, or script. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: exact > prefix > source-weight > fuzzy score).
 _Avoid_: "mode" (implies an exclusive switch you toggle between).
 
+**directory source**:
+The **launcher source** that surfaces filesystem directories — a fixed set of **built-in directories** plus **configured directories** — and opens the selected one in the OS file manager (Finder / Linux file manager) via `ActionOpen`.
+_Avoid_: "folder provider" ("directory" is the term used throughout this codebase)
+
+**built-in directory**:
+One of the directory entries the **directory source** always includes without configuration: Home, Desktop, Downloads, Documents, iCloud. Silently omitted at query time if its path doesn't exist on the current machine (e.g. iCloud on Linux).
+
+**configured directory**:
+A directory entry the user adds via `[[launcher.directory]]` in the config file. If its name matches a **built-in directory**'s name, it replaces that built-in's path (not a duplicate row); otherwise it's added alongside the built-ins.
+
 **computational query**:
 A launcher input that resolves to a value — a math expression containing an operator/function (`1+2`, `sqrt(2)`) or a `<number><unit>` conversion (`10cm`, `123$`). A confident computational parse **suppresses** the fuzzy app/script list.
 _Contrast_: a **name-like query** (letters that don't resolve to a unit/function) is fuzzy-matched against apps + scripts. A bare number (`1`) is treated as name-like (falls through to fuzzy, e.g. `1`→1Password), except a large number also contributes a comma-formatted row above the matches.
@@ -90,6 +100,9 @@ The ctrl+r action on the **conversation** list and **live grep** pages: suspends
 - A **project** contains one or more **conversations**; selecting a project lists its conversations, and selecting a conversation produces its **conversation export** in `$EDITOR`.
 - **claude history** and the **launcher**/**goto-agent** picker all embed the same **fuzzy finder** widget; claude history runs several instances behind a page state machine, with **live grep** supplying its own `rg`-ranked items rather than the widget's fuzzy ranking.
 
+- The **directory source**'s result set is the union of **built-in directories** and **configured directories**, deduplicated by name (a **configured directory** wins on name collision).
+
 ## Flagged ambiguities
 
+- "open" was ambiguous between the **launcher**'s `ActionOpen` (previously wired to a hardcoded macOS-only `open` binary call) and the standalone `blf open` command (already cross-platform via `platform.OpenURL`) — resolved for the **directory source**: `ActionOpen` is rewired to use `platform.OpenURL` too, so both paths share one cross-platform mechanism.
 - "file ref" is also used informally in the `tmux-targets` feature to mean a `path:line[:col]` token detected _inside text_ (a location pointer). That is a different concept from the clipboard **File reference** defined here. Left as-is for now; rename to "file location" later if the overlap causes confusion.

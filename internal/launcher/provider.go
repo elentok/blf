@@ -30,6 +30,7 @@ const (
 	IconRoleError
 	IconRoleLoading
 	IconRoleSettings
+	IconRoleDirectory
 )
 
 // Result is one item in the launcher's ranked result list.

@@ -201,7 +201,7 @@ These mappings are only examples. Because `blf kitty new-session` and `blf kitty
 
 - Type a **math expression** (`1234*2`, `sqrt(2)*pi`, `200+10%`) → result appears immediately; Enter copies it to the clipboard.
 - Type a **`<number><unit>`** (`10cm`, `123$`) → conversions to every other unit in that group appear; Enter copies the selected row.
-- Type a **name** → fuzzy matches against installed applications and configured scripts, ranked into one list with match-position highlighting; Enter launches the app or runs the script.
+- Type a **name** → fuzzy matches against installed applications, configured scripts, macOS System Settings panes, and directories (Home, Desktop, Downloads, Documents, iCloud, plus any configured), ranked into one list with match-position highlighting; Enter launches the app, runs the script, or opens the directory in the file manager.
 - Computational input suppresses the fuzzy app/script list; name-like input shows it. A bare small number (`1`) searches apps; a large bare number (`1000000`) also shows a comma-formatted copy row.
 - Empty input shows recent history items; Up/Down selects, Enter populates the input and recomputes without re-firing.
 - **↑/↓, Ctrl+K/J, Ctrl+P/N** — navigate the result list.
@@ -234,8 +234,9 @@ Config (`~/.config/blf/config.toml`):
 
 ```toml
 [launcher]
-script_weight = 2.0  # scripts rank above apps (default 1.5)
-app_weight    = 1.0  # default
+script_weight    = 2.0  # scripts rank above apps (default 1.5)
+app_weight       = 1.0  # default
+directory_weight = 1.0  # default
 
 # Built-in scripts include playpause and clean-url.
 # [[launcher.script]] entries add to or override them.
@@ -281,6 +282,17 @@ factor  = 6894.76
 name    = "atmosphere"
 symbols = ["atm"]
 factor  = 101325.0
+
+# Built-in directories: Home, Desktop, Downloads, Documents, iCloud.
+# [[launcher.directory]] entries add to or override them (matched by name);
+# "~" is expanded, and entries whose path doesn't exist are hidden.
+[[launcher.directory]]
+name = "Projects"
+path = "~/dev"
+
+[[launcher.directory]]
+name = "Desktop"       # overrides the built-in Desktop's path
+path = "~/OtherDesktop"
 ```
 
 Data paths:
