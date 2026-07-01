@@ -16,14 +16,14 @@ var googleURLHostPattern = regexp.MustCompile(`^(www\.)?google\.[a-z.]+$`)
 type redirectWrapper struct {
 	matchesHost func(host string) bool
 	matchesPath func(path string) bool
-	param       string
+	params      []string
 }
 
 var redirectWrappers = []redirectWrapper{
 	{
 		matchesHost: googleURLHostPattern.MatchString,
 		matchesPath: func(path string) bool { return path == "/url" },
-		param:       "url",
+		params:      []string{"url", "q"},
 	},
 }
 
@@ -98,11 +98,12 @@ func unwrapRedirect(rawURL string) (string, bool) {
 		if !wrapper.matchesHost(parsed.Host) || !wrapper.matchesPath(parsed.Path) {
 			continue
 		}
-		embedded := parsed.Query().Get(wrapper.param)
-		if embedded == "" {
-			continue
+		query := parsed.Query()
+		for _, param := range wrapper.params {
+			if embedded := query.Get(param); embedded != "" {
+				return embedded, true
+			}
 		}
-		return embedded, true
 	}
 
 	return "", false

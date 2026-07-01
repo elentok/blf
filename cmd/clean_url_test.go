@@ -18,6 +18,11 @@ func TestCleanURL(t *testing.T) {
 			want:  "https://en.wikipedia.org/wiki/Hello",
 		},
 		{
+			name:  "google redirect wrapper with q param",
+			input: "https://www.google.com/url?q=https://en.wikipedia.org/wiki/Hello&source=gmail&ust=123&usg=abc",
+			want:  "https://en.wikipedia.org/wiki/Hello",
+		},
+		{
 			name:  "google redirect wrapper with country tld",
 			input: "https://www.google.co.uk/url?sa=t&url=https://example.com/page&ved=abc",
 			want:  "https://example.com/page",
