@@ -422,7 +422,7 @@ func (m *Model) recomputeResults() {
 	for _, p := range m.cfg.Providers {
 		all = append(all, p.Query(query)...)
 	}
-	ranked := Rank(all)
+	ranked := Rank(all, nil)
 	if len(ranked) > maxResults {
 		ranked = ranked[:maxResults]
 	}

@@ -72,13 +72,21 @@ func Classify(input string) QueryType {
 
 // Rank returns a copy of results sorted by:
 //
-//	exact match > prefix match > source weight > fuzzy score
-func Rank(results []Result) []Result {
+//	learned-rank count > exact match > prefix match > source weight > fuzzy score
+//
+// learnedRanks maps a Result's Action.Key() to a usage count, already scoped
+// to whatever query produced results; a missing key counts as 0. A nonzero
+// count always outranks exact/prefix/weight/fuzzy-score, letting a user's
+// repeated non-first pick for a query eventually surface first.
+func Rank(results []Result, learnedRanks map[string]int) []Result {
 	out := make([]Result, len(results))
 	copy(out, results)
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
+		aRank, bRank := learnedRanks[a.Action.Key()], learnedRanks[b.Action.Key()]
 		switch {
+		case aRank != bRank:
+			return aRank > bRank
 		case a.IsExactMatch != b.IsExactMatch:
 			return a.IsExactMatch
 		case a.IsPrefixMatch != b.IsPrefixMatch:

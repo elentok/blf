@@ -1,5 +1,7 @@
 package launcher
 
+import "strconv"
+
 // ActionType defines what to do when a result is selected.
 type ActionType int
 
@@ -15,6 +17,13 @@ const (
 type Action struct {
 	Type   ActionType
 	Target string // value to copy, app path to launch, or script name to run
+}
+
+// Key returns a stable, collision-resistant identifier for the action,
+// suitable for use as a learned-rank resultKey. It combines Type and Target
+// so that identical Target strings under different Types never collide.
+func (a Action) Key() string {
+	return strconv.Itoa(int(a.Type)) + ":" + a.Target
 }
 
 // IconRole is a semantic icon category for a result row.
