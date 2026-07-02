@@ -42,8 +42,17 @@ An always-running, full-screen TUI (`blf launcher`) that lives inside Kitty's qu
 _Avoid_: "spawned per keypress" (the process is persistent; Cmd+2 only toggles visibility).
 
 **launcher source** (a.k.a. **provider**):
-One contributor of launcher results — math, unit/currency conversion, application launch, or script. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: exact > prefix > source-weight > fuzzy score).
+One contributor of launcher results — math, unit/currency conversion, application launch, or script. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: **learned rank** > exact > prefix > source-weight > fuzzy score).
 _Avoid_: "mode" (implies an exclusive switch you toggle between).
+
+**learned rank**:
+A per-(exact query text, result target) counter that overrides the default ranking tiers, letting the launcher remember that the user has repeatedly picked a non-top result for a specific query. Any Enter/pick on a result that wasn't first in the list increments the counter for (trimmed query text, Action.Type+Action.Target); the next time that exact query is typed, results with a nonzero counter sort above exact/prefix/source-weight/fuzzy-score matches, highest counter first. Applies to every action type (launch, run, open, copy), not just app launches. Persists permanently (no decay, no in-TUI clear) in a plain, human-editable state file alongside **launcher history**.
+_Avoid_: confusing with **source weight** (the static, per-provider `Weight` field on a Result) — learned rank is per-user, per-query, and accumulated from behavior; source weight is a fixed constant a provider assigns to all of its rows.
+_Avoid_: "selection preference" / "pick habit" (considered and rejected as ambiguous/imprecise for this glossary).
+
+**source weight**:
+The static `Weight` field a **launcher source** assigns to its own result rows, used as a ranking tiebreak below exact/prefix match. Fixed per provider, not learned from usage.
+_Contrast_: **learned rank**, which is per-query and accumulated from the user's actual picks.
 
 **directory source**:
 The **launcher source** that surfaces filesystem directories — a fixed set of **built-in directories** plus **configured directories** — and opens the selected one in the OS file manager (Finder / Linux file manager) via `ActionOpen`.
@@ -101,6 +110,8 @@ The ctrl+r action on the **conversation** list and **live grep** pages: suspends
 - **claude history** and the **launcher**/**goto-agent** picker all embed the same **fuzzy finder** widget; claude history runs several instances behind a page state machine, with **live grep** supplying its own `rg`-ranked items rather than the widget's fuzzy ranking.
 
 - The **directory source**'s result set is the union of **built-in directories** and **configured directories**, deduplicated by name (a **configured directory** wins on name collision).
+
+- Picking a non-top **launcher** result increments its **learned rank** for that query; **launcher history** recording (which query was executed) and **learned rank** recording (which result won for that query) both fire from the same Enter/pick event but are separate, independently-persisted stores.
 
 ## Flagged ambiguities
 
