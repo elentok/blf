@@ -11,6 +11,7 @@ import (
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/directories"
 	"github.com/elentok/blf/internal/launcher/history"
+	"github.com/elentok/blf/internal/launcher/learnedrank"
 	"github.com/elentok/blf/internal/launcher/scripts"
 	"github.com/elentok/blf/internal/launcher/units"
 	"github.com/elentok/blf/internal/platform"
@@ -64,6 +65,10 @@ func newLauncherCmd(d deps) *cobra.Command {
 			historyPath := filepath.Join(stateDir, "launcher-history")
 			launcherHistory := history.Load(historyPath)
 
+			// Learned rank: load from state dir.
+			learnedRankPath := filepath.Join(stateDir, "launcher-learned-ranks")
+			launcherLearnedRank := learnedrank.Load(learnedRankPath)
+
 			// Scripts provider: merge built-ins with user config, filter for platform.
 			userScripts := make([]scripts.Script, 0, len(cfg.Launcher.Scripts))
 			for _, sc := range cfg.Launcher.Scripts {
@@ -116,6 +121,8 @@ func newLauncherCmd(d deps) *cobra.Command {
 				ScriptsProvider: scriptsProvider,
 				History:         launcherHistory,
 				HistoryPath:     historyPath,
+				LearnedRank:     launcherLearnedRank,
+				LearnedRankPath: learnedRankPath,
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)

@@ -11,6 +11,7 @@ import (
 	"github.com/elentok/blf/internal/fuzzyfinder"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/history"
+	"github.com/elentok/blf/internal/launcher/learnedrank"
 	"github.com/elentok/blf/internal/launcher/scripts"
 )
 
@@ -25,14 +26,16 @@ type ModelConfig struct {
 	LaunchApp       func(string) error // optional; launches an app by path
 	OpenTarget      func(string) error // optional; opens a file/URL via `open` (no -a)
 	UseNerdFont     bool
-	CurrencyCache   *currency.Cache  // optional; nil disables currency refresh
-	AppsProvider    *AppsProvider    // optional; nil disables app search
-	AppsCachePath   string           // path to apps.json; empty disables refresh
-	HomeDir         string           // used by ReindexCmd
-	ScriptsProvider *ScriptsProvider // optional; nil disables script execution
-	History         *history.History // optional; nil disables history
-	HistoryPath     string           // path to persist history; empty skips persistence
-	HideDelay       time.Duration    // delay before hiding the terminal (see resetAndHide); 0 = immediate
+	CurrencyCache   *currency.Cache    // optional; nil disables currency refresh
+	AppsProvider    *AppsProvider      // optional; nil disables app search
+	AppsCachePath   string             // path to apps.json; empty disables refresh
+	HomeDir         string             // used by ReindexCmd
+	ScriptsProvider *ScriptsProvider   // optional; nil disables script execution
+	History         *history.History   // optional; nil disables history
+	HistoryPath     string             // path to persist history; empty skips persistence
+	LearnedRank     *learnedrank.Store // optional; nil disables the learned-rank feature
+	LearnedRankPath string             // path to persist learned ranks; empty skips persistence
+	HideDelay       time.Duration      // delay before hiding the terminal (see resetAndHide); 0 = immediate
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -422,7 +425,11 @@ func (m *Model) recomputeResults() {
 	for _, p := range m.cfg.Providers {
 		all = append(all, p.Query(query)...)
 	}
-	ranked := Rank(all, nil)
+	var learnedRanks map[string]int
+	if m.cfg.LearnedRank != nil {
+		learnedRanks = m.cfg.LearnedRank.Counts(query)
+	}
+	ranked := Rank(all, learnedRanks)
 	if len(ranked) > maxResults {
 		ranked = ranked[:maxResults]
 	}
@@ -467,12 +474,14 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 			return nil, fmt.Errorf("copy not available")
 		}
 		m.recordHistory(m.input.Value())
+		m.recordLearnedRank(m.input.Value(), r)
 		return nil, m.cfg.CopyText(r.Action.Target)
 	case ActionLaunch:
 		if m.cfg.LaunchApp == nil {
 			return nil, fmt.Errorf("launch not available")
 		}
 		m.recordHistory(m.input.Value())
+		m.recordLearnedRank(m.input.Value(), r)
 		target := r.Action.Target
 		launchFn := m.cfg.LaunchApp
 		return func() tea.Msg {
@@ -488,6 +497,7 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 			return nil, fmt.Errorf("script not found: %s", r.Action.Target)
 		}
 		m.recordHistory(m.input.Value())
+		m.recordLearnedRank(m.input.Value(), r)
 		m.status = "running…"
 		m.updateFooter()
 		return ScriptRunCmd(s), nil
@@ -496,6 +506,7 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 			return nil, fmt.Errorf("open not available")
 		}
 		m.recordHistory(m.input.Value())
+		m.recordLearnedRank(m.input.Value(), r)
 		target := r.Action.Target
 		openFn := m.cfg.OpenTarget
 		return func() tea.Msg {
@@ -535,6 +546,25 @@ func (m *Model) saveHistory() {
 		return
 	}
 	_ = m.cfg.History.Save(m.cfg.HistoryPath)
+}
+
+// recordLearnedRank records that result was picked for query, when it was not
+// the top result at the time of picking, and persists it if a path is
+// configured. No-op when learned rank is disabled or the pick was first.
+func (m *Model) recordLearnedRank(query string, result Result) {
+	if m.cfg.LearnedRank == nil || m.selected == 0 {
+		return
+	}
+	m.cfg.LearnedRank.Increment(strings.TrimSpace(query), result.Action.Key())
+	m.saveLearnedRank()
+}
+
+// saveLearnedRank persists learned ranks to disk if LearnedRankPath is set.
+func (m *Model) saveLearnedRank() {
+	if m.cfg.LearnedRank == nil || m.cfg.LearnedRankPath == "" {
+		return
+	}
+	_ = m.cfg.LearnedRank.Save(m.cfg.LearnedRankPath)
 }
 
 // resetAndHide clears the launcher back to its empty state and returns a Cmd that

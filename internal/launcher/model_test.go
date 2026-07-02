@@ -5,7 +5,23 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher/history"
+	"github.com/elentok/blf/internal/launcher/learnedrank"
 )
+
+// fakeProvider returns two fixed results for any non-empty query, regardless
+// of query content — used to exercise learned-rank wiring without depending
+// on fuzzy matching or filesystem state.
+type fakeProvider struct{}
+
+func (fakeProvider) Query(input string) []Result {
+	if input == "" {
+		return nil
+	}
+	return []Result{
+		{Title: "First", Action: Action{Type: ActionCopy, Target: "first"}},
+		{Title: "Second", Action: Action{Type: ActionCopy, Target: "second"}},
+	}
+}
 
 // typeText feeds each rune to the model as a key press, returning the updated model.
 func typeText(t *testing.T, m Model, text string) Model {
@@ -191,5 +207,108 @@ func TestResetAndHideNilHideTerminal(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Error("expected nil cmd when HideTerminal is unset")
+	}
+}
+
+func TestPickingNonFirstResultRecordsLearnedRank(t *testing.T) {
+	lr := learnedrank.New()
+	m := NewModel(ModelConfig{
+		Providers:   []Provider{fakeProvider{}},
+		CopyText:    func(string) error { return nil },
+		LearnedRank: lr,
+	})
+
+	m = typeText(t, m, "ab")
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(m.results))
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(Model)
+	if m.selected != 1 {
+		t.Fatalf("expected selected=1 after down, got %d", m.selected)
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	counts := lr.Counts("ab")
+	key := Action{Type: ActionCopy, Target: "second"}.Key()
+	if counts[key] != 1 {
+		t.Fatalf("expected learned-rank count 1 for %q, got %d", key, counts[key])
+	}
+}
+
+func TestPickingFirstResultDoesNotRecordLearnedRank(t *testing.T) {
+	lr := learnedrank.New()
+	m := NewModel(ModelConfig{
+		Providers:   []Provider{fakeProvider{}},
+		CopyText:    func(string) error { return nil },
+		LearnedRank: lr,
+	})
+
+	m = typeText(t, m, "ab")
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(m.results))
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	counts := lr.Counts("ab")
+	if len(counts) != 0 {
+		t.Fatalf("expected no learned-rank entries, got %v", counts)
+	}
+}
+
+func TestLearnedRankRePicksSameQueryToTop(t *testing.T) {
+	lr := learnedrank.New()
+	m := NewModel(ModelConfig{
+		Providers:   []Provider{fakeProvider{}},
+		CopyText:    func(string) error { return nil },
+		LearnedRank: lr,
+	})
+
+	m = typeText(t, m, "ab")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(Model)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	// esc/enter reset the input; re-type the exact same query.
+	m = typeText(t, m, "ab")
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(m.results))
+	}
+	if got := m.results[0].Action.Target; got != "second" {
+		t.Fatalf("expected previously non-first pick ranked first, got %q", got)
+	}
+}
+
+func TestLearnedRankDoesNotLeakAcrossQueries(t *testing.T) {
+	lr := learnedrank.New()
+	m := NewModel(ModelConfig{
+		Providers:   []Provider{fakeProvider{}},
+		CopyText:    func(string) error { return nil },
+		LearnedRank: lr,
+	})
+
+	m = typeText(t, m, "ab")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(Model)
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	// A different query text should not inherit the learned rank from "ab".
+	m = typeText(t, m, "cd")
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(m.results))
+	}
+	if got := m.results[0].Action.Target; got != "first" {
+		t.Fatalf("expected unaffected default ordering for a different query, got %q", got)
 	}
 }
