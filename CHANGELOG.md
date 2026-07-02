@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.2] - 2026-07-02
+
+- Added **learned ranking** to `launcher`: previously selected results for a given query are boosted above the usual fuzzy/history ranking on subsequent searches. Selections are tracked per (query, result) pair in a new persistent store (XDG state dir), and only non-first picks are recorded, so the effect only kicks in once a result has been chosen over the top suggestion.
+
 ## [v0.6.1] - 2026-07-02
 
 - Added a **directory source** to `launcher`: fuzzy-matches filesystem directories (Home, Desktop, Downloads, Documents, iCloud by default) and opens the selected one in the file manager. Configurable via `[[launcher.directory]]` (`name`, `path`, `~` expanded) and `directory_weight`; user entries add to or override the built-ins by name, and entries whose path doesn't exist are hidden.
