@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/elentok/blf/internal/config"
 	"github.com/elentok/blf/internal/launcher"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
@@ -28,10 +29,10 @@ func newLauncherCmd(d deps) *cobra.Command {
 				return fmt.Errorf("launcher: get home dir: %w", err)
 			}
 
-			cfg, cfgErr := launcher.LoadConfig(d.readFile, homeDir)
+			cfg, cfgErr := config.LoadConfig(d.readFile, homeDir)
 
 			// Currency cache
-			cacheDir := launcher.XDGCacheDir(homeDir)
+			cacheDir := config.XDGCacheDir(homeDir)
 			currencyCache := currency.NewCache(
 				filepath.Join(cacheDir, "currency.json"),
 				nil, // use default HTTP client
@@ -61,7 +62,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 			}
 
 			// History: load from state dir.
-			stateDir := launcher.XDGStateDir(homeDir)
+			stateDir := config.XDGStateDir(homeDir)
 			historyPath := filepath.Join(stateDir, "launcher-history")
 			launcherHistory := history.Load(historyPath)
 
@@ -164,7 +165,7 @@ func newLauncherReindexCmd(d deps) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("reindex: %w", err)
 			}
-			cacheDir := launcher.XDGCacheDir(homeDir)
+			cacheDir := config.XDGCacheDir(homeDir)
 			cachePath := filepath.Join(cacheDir, "apps.json")
 			if err := apps.Save(cachePath, idx); err != nil {
 				return fmt.Errorf("reindex: save: %w", err)

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/elentok/blf/internal/editfile"
 )
 
 var (
@@ -166,29 +166,17 @@ func deleteSessionFile(path string, d Deps) error {
 }
 
 func editSessionFile(path string, d Deps) error {
-	if d.LookupEnv == nil {
-		return errors.New("environment lookup helper is not configured")
-	}
-
 	cleanPath, err := validateSessionPath(path, d)
 	if err != nil {
 		return err
 	}
 
-	editor, ok := d.LookupEnv("EDITOR")
-	if !ok || strings.TrimSpace(editor) == "" {
-		return errors.New("EDITOR environment variable is not set")
-	}
-
-	cmd := exec.Command("sh", "-lc", editor+" \"$1\"", "sh", cleanPath)
-	cmd.Stdin = d.Stdin
-	cmd.Stdout = d.Stdout
-	cmd.Stderr = d.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("edit kitty session file %q: %w", cleanPath, err)
-	}
-
-	return nil
+	return editfile.Open(cleanPath, editfile.Deps{
+		Stdin:     d.Stdin,
+		Stdout:    d.Stdout,
+		Stderr:    d.Stderr,
+		LookupEnv: d.LookupEnv,
+	})
 }
 
 func ListSessions(d Deps) ([]Session, error) {

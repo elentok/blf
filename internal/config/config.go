@@ -1,4 +1,7 @@
-package launcher
+// Package config holds the blf-wide configuration file: its schema, defaults,
+// loading, and XDG path resolution. Individual commands (e.g. the launcher)
+// read the sections they care about from the decoded Config.
+package config
 
 import (
 	"fmt"
@@ -64,7 +67,9 @@ type UnitConfig struct {
 
 var defaultCurrencies = []string{"USD", "ILS", "GBP", "EUR"}
 
-func defaultConfig() Config {
+// DefaultConfig returns the Config used when no config file is present, and
+// as the seed written by `blf config edit` for a first-time config file.
+func DefaultConfig() Config {
 	return Config{
 		Launcher: LauncherConfig{
 			ScriptWeight:    1.5,
@@ -80,25 +85,29 @@ func defaultConfig() Config {
 // malformed it returns defaults plus a non-nil error so the caller can show a
 // non-blocking notice without crashing.
 func LoadConfig(readFile func(string) ([]byte, error), homeDir string) (Config, error) {
-	path := xdgConfigPath(homeDir)
+	path := XDGConfigPath(homeDir)
 	data, err := readFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return defaultConfig(), nil
+			return DefaultConfig(), nil
 		}
-		return defaultConfig(), fmt.Errorf("read config %s: %w", path, err)
+		return DefaultConfig(), fmt.Errorf("read config %s: %w", path, err)
 	}
 
-	cfg := defaultConfig()
+	cfg := DefaultConfig()
 	if _, err := toml.Decode(string(data), &cfg); err != nil {
-		return defaultConfig(), fmt.Errorf("malformed config %s: %w", path, err)
+		return DefaultConfig(), fmt.Errorf("malformed config %s: %w", path, err)
 	}
 	return cfg, nil
 }
 
 // XDGConfigPath returns the path to the blf config file.
 func XDGConfigPath(homeDir string) string {
-	return xdgConfigPath(homeDir)
+	configDir := filepath.Join(homeDir, ".config", "blf")
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		configDir = filepath.Join(d, "blf")
+	}
+	return filepath.Join(configDir, "config.toml")
 }
 
 // XDGCacheDir returns the blf cache directory (~/.cache/blf or $XDG_CACHE_HOME/blf).
@@ -115,12 +124,4 @@ func XDGStateDir(homeDir string) string {
 		return filepath.Join(d, "blf")
 	}
 	return filepath.Join(homeDir, ".local", "state", "blf")
-}
-
-func xdgConfigPath(homeDir string) string {
-	configDir := filepath.Join(homeDir, ".config", "blf")
-	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		configDir = filepath.Join(d, "blf")
-	}
-	return filepath.Join(configDir, "config.toml")
 }

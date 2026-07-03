@@ -61,8 +61,12 @@ _Avoid_: "folder provider" ("directory" is the term used throughout this codebas
 **built-in directory**:
 One of the directory entries the **directory source** always includes without configuration: Home, Desktop, Downloads, Documents, iCloud. Silently omitted at query time if its path doesn't exist on the current machine (e.g. iCloud on Linux).
 
+**config file**:
+The single TOML file at `~/.config/blf/config.toml` (respecting `XDG_CONFIG_HOME`) holding all of blf's configuration, decoded into `Config` by `LoadConfig`. Currently only the `[launcher]` section is read; other sections are reserved for future commands. Lives in `internal/config`. Edited directly via `blf config edit`, which seeds it with active defaults (real `defaultConfig()` values, not commented-out placeholders) if it doesn't exist yet, then hands off to `$EDITOR`.
+_Avoid_: "user config" / "settings file" (the codebase and CLI consistently say "config file").
+
 **configured directory**:
-A directory entry the user adds via `[[launcher.directory]]` in the config file. If its name matches a **built-in directory**'s name, it replaces that built-in's path (not a duplicate row); otherwise it's added alongside the built-ins.
+A directory entry the user adds via `[[launcher.directory]]` in the **config file**. If its name matches a **built-in directory**'s name, it replaces that built-in's path (not a duplicate row); otherwise it's added alongside the built-ins.
 
 **computational query**:
 A launcher input that resolves to a value — a math expression containing an operator/function (`1+2`, `sqrt(2)`) or a `<number><unit>` conversion (`10cm`, `123$`). A confident computational parse **suppresses** the fuzzy app/script list.
