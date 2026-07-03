@@ -69,12 +69,16 @@ A launcher input that resolves to a value — a math expression containing an op
 _Contrast_: a **name-like query** (letters that don't resolve to a unit/function) is fuzzy-matched against apps + scripts. A bare number (`1`) is treated as name-like (falls through to fuzzy, e.g. `1`→1Password), except a large number also contributes a comma-formatted row above the matches.
 
 **launcher history**:
-The persisted list of launcher queries you executed (pressed Enter on) or explicitly saved (Ctrl+S). Recalled via Ctrl+P/Ctrl+N or shown as the default list when the input is empty. Recalling **populates the input and recomputes** — it never blindly re-fires the original action.
-_Avoid_: recording every keystroke-query (only executed/saved queries are history).
+The persisted list of things you did via the launcher. For **launch**, **run**, and **open** actions, an entry is the picked result's label and action (e.g. "Kitty" → launch `/Applications/kitty.app`) — not the query text that found it, so different queries resolving to the same item coalesce into one entry. For copy actions (calc/unit/currency), an entry is still the raw query text (explicitly saved via Ctrl+S, since a copy result has no independent identity beyond its query). Shown as the default list when the input is empty (see ADR 0006).
+_Avoid_: recording every keystroke-query (only executed/saved entries are history); assuming every entry stores a query — launch/run/open entries store the picked item, not the query.
+
+**history direct-fire**:
+Pressing Enter on a **launcher history** row for a launch/run/open entry immediately performs its stored action (e.g. picking "Kitty" launches Kitty) rather than populating the input and recomputing. This is the one place the launcher re-fires an action without the user re-confirming via search (ADR 0006).
+_Contrast_: Ctrl+R/Ctrl+F still populate the input with the entry's label (or query, for copy entries) and recompute — a text-recall shortcut for further editing, not an execution shortcut.
 
 **history hint**:
-The dimmed-italic computed echo shown beside a **launcher history** row, rendered as the row's subtitle (`= <result>`). Only **computational queries** that resolve to a value get one: a math expression shows `= <value>` (e.g. `10+20` → `= 30`); a currency query shows a single joined line of the configured target currencies, using each currency's symbol where one exists and its ISO code otherwise (e.g. `1$` → `= 2.987 ₪, 0.79 £, 0.92 €`). Computed live from the current rates each time the history list is shown, never persisted. _Excluded_: non-currency unit conversions (too many targets to join meaningfully), bare numbers, and anything that doesn't resolve.
-_Avoid_: treating it as a re-fire of the original action (it is display-only; the stored query is still what gets recalled/executed).
+The dimmed-italic computed echo shown beside a **launcher history** row that still stores a query (copy entries only), rendered as the row's subtitle (`= <result>`). A math expression shows `= <value>` (e.g. `10+20` → `= 30`); a currency query shows a single joined line of the configured target currencies, using each currency's symbol where one exists and its ISO code otherwise (e.g. `1$` → `= 2.987 ₪, 0.79 £, 0.92 €`). Computed live from the current rates each time the history list is shown, never persisted. _Excluded_: non-currency unit conversions (too many targets to join meaningfully), bare numbers, and anything that doesn't resolve. Launch/run/open entries never have a hint — they have no stored query to compute one from.
+_Avoid_: treating it as a re-fire of the original action (it is display-only; for copy entries the stored query is still what gets recalled/executed — see **history direct-fire** for the launch/run/open case, which does re-fire).
 
 **fuzzy finder**:
 The shared embedded TUI widget (built on bubbletea v2 + lipgloss) that owns a query input box, a ranked/scrollable/fuzzy-highlighted result list, selection cursor, and the border/footer chrome. Consumers (the **launcher**, the **goto-agent** picker) embed it and own their own item type, ranking, per-row rendering, preview pane, actions, and any live-refresh tickers. Lives in `internal/fuzzyfinder`.
@@ -106,12 +110,13 @@ The ctrl+r action on the **conversation** list and **live grep** pages: suspends
 - `blf copy-ref <file>...` copies **File references** to the clipboard — a reference/handle, not the bytes.
 - `blf clean-url` reads a URL (from an argument or the clipboard) and prints (and, in `--clipboard` mode, writes back) the **clean URL**.
 - Pressing Enter on a selected **launcher** result performs its action — launch an app, run a script, or copy a computed value to the clipboard — and records a **launcher history** entry; a successful action then hides the quick terminal.
+- Pressing Enter on a **launcher history** row does not go through the normal result-ranking path: for launch/run/open entries it's a **history direct-fire** (immediate action, no recompute); for copy entries it still populates the input and recomputes, same as before.
 - A **project** contains one or more **conversations**; selecting a project lists its conversations, and selecting a conversation produces its **conversation export** in `$EDITOR`.
 - **claude history** and the **launcher**/**goto-agent** picker all embed the same **fuzzy finder** widget; claude history runs several instances behind a page state machine, with **live grep** supplying its own `rg`-ranked items rather than the widget's fuzzy ranking.
 
 - The **directory source**'s result set is the union of **built-in directories** and **configured directories**, deduplicated by name (a **configured directory** wins on name collision).
 
-- Picking a non-top **launcher** result increments its **learned rank** for that query; **launcher history** recording (which query was executed) and **learned rank** recording (which result won for that query) both fire from the same Enter/pick event but are separate, independently-persisted stores.
+- Picking a non-top **launcher** result increments its **learned rank** for that query; **launcher history** recording (the item+action, for launch/run/open — or the query, for copy) and **learned rank** recording (which result won for that query) both fire from the same Enter/pick event but are separate, independently-persisted stores.
 
 ## Flagged ambiguities
 

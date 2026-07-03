@@ -164,7 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.results) > 0 {
 				role := m.results[0].Icon
 				if role == IconRoleCalc || role == IconRoleUnit || role == IconRoleCurrency {
-					m.recordHistory(m.input.Value())
+					m.recordHistory(m.input.Value(), m.results[0])
 				}
 			}
 			return m, m.resetAndHide()
@@ -226,7 +226,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				next = len(entries) - 1
 			}
 			m.historyIdx = next
-			m.setQuery(entries[next])
+			m.setQuery(entries[next].Label)
 			m.scriptOutput = nil
 			m.recomputeResults()
 			return m, nil
@@ -241,7 +241,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.setQuery("")
 			} else {
 				m.historyIdx = next
-				m.setQuery(m.cfg.History.Entries()[next])
+				m.setQuery(m.cfg.History.Entries()[next].Label)
 			}
 			m.scriptOutput = nil
 			m.recomputeResults()
@@ -255,7 +255,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if val == "" {
 				return m, nil
 			}
-			m.cfg.History.Append(val)
+			m.cfg.History.Append(history.Entry{Label: val, ActionType: history.ActionTypeCopy})
 			m.saveHistory()
 			m.status = "saved"
 			m.updateFooter()
@@ -267,10 +267,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			result := m.results[m.selected]
-			if result.Action.Type != ActionRecall {
+			if result.Action.Type != ActionRecall || result.HistoryEntry == nil {
 				return m, nil
 			}
-			if m.cfg.History.Remove(result.Action.Target) {
+			if m.cfg.History.Remove(*result.HistoryEntry) {
 				m.saveHistory()
 				m.historyIdx = -1
 				m.recomputeResults()
@@ -406,12 +406,25 @@ func (m *Model) recomputeResults() {
 	if query == "" && m.cfg.History != nil && m.cfg.History.Len() > 0 {
 		entries := m.cfg.History.Entries()
 		m.results = make([]Result, len(entries))
-		for i, e := range entries {
+		for i := range entries {
+			e := entries[i]
+			icon := IconRoleHistory
+			iconGlyph := ""
+			subtitle := ""
+			if e.ActionType == history.ActionTypeCopy {
+				subtitle = m.historyHint(e.Label)
+			} else if r, ok := m.lookupHistoryResult(e); ok {
+				icon = r.Icon
+				iconGlyph = r.IconGlyph
+				subtitle = r.Subtitle
+			}
 			m.results[i] = Result{
-				Title:    e,
-				Subtitle: m.historyHint(e),
-				Icon:     IconRoleHistory,
-				Action:   Action{Type: ActionRecall, Target: e},
+				Title:        e.Label,
+				Subtitle:     subtitle,
+				Icon:         icon,
+				IconGlyph:    iconGlyph,
+				Action:       Action{Type: ActionRecall, Target: e.Label},
+				HistoryEntry: &entries[i],
 			}
 		}
 		if m.selected >= len(m.results) {
@@ -462,6 +475,16 @@ func (m *Model) updateFooter() {
 func (m *Model) act(r Result) (tea.Cmd, error) {
 	switch r.Action.Type {
 	case ActionRecall:
+		// A history-direct-fire entry (launch/run/open) carries its original
+		// action in HistoryEntry; re-dispatch through the same execution
+		// paths below rather than populating the input (ADR 0006).
+		if r.HistoryEntry != nil && r.HistoryEntry.ActionType != history.ActionTypeCopy {
+			entry := *r.HistoryEntry
+			return m.act(Result{
+				Title:  entry.Label,
+				Action: Action{Type: ActionType(entry.ActionType), Target: entry.Target},
+			})
+		}
 		m.setQuery(r.Action.Target)
 		m.historyIdx = -1
 		m.scriptOutput = nil
@@ -473,14 +496,14 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		if m.cfg.CopyText == nil {
 			return nil, fmt.Errorf("copy not available")
 		}
-		m.recordHistory(m.input.Value())
+		m.recordHistory(m.input.Value(), r)
 		m.recordLearnedRank(m.input.Value(), r)
 		return nil, m.cfg.CopyText(r.Action.Target)
 	case ActionLaunch:
 		if m.cfg.LaunchApp == nil {
 			return nil, fmt.Errorf("launch not available")
 		}
-		m.recordHistory(m.input.Value())
+		m.recordHistory(m.input.Value(), r)
 		m.recordLearnedRank(m.input.Value(), r)
 		target := r.Action.Target
 		launchFn := m.cfg.LaunchApp
@@ -496,7 +519,7 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		if !ok {
 			return nil, fmt.Errorf("script not found: %s", r.Action.Target)
 		}
-		m.recordHistory(m.input.Value())
+		m.recordHistory(m.input.Value(), r)
 		m.recordLearnedRank(m.input.Value(), r)
 		m.status = "running…"
 		m.updateFooter()
@@ -505,7 +528,7 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		if m.cfg.OpenTarget == nil {
 			return nil, fmt.Errorf("open not available")
 		}
-		m.recordHistory(m.input.Value())
+		m.recordHistory(m.input.Value(), r)
 		m.recordLearnedRank(m.input.Value(), r)
 		target := r.Action.Target
 		openFn := m.cfg.OpenTarget
@@ -531,12 +554,39 @@ func (m *Model) historyHint(query string) string {
 	return ""
 }
 
-// recordHistory appends query to history and persists it if a path is configured.
-func (m *Model) recordHistory(query string) {
+// lookupHistoryResult re-derives the current icon/subtitle for a launch/run/
+// open history entry by asking each TargetLookupProvider whether it still
+// owns e's (ActionType, Target). Returns ok=false if no provider claims it
+// (e.g. the app was removed or renamed since it was recorded), in which case
+// callers should fall back to a generic display.
+func (m *Model) lookupHistoryResult(e history.Entry) (Result, bool) {
+	action := Action{Type: ActionType(e.ActionType), Target: e.Target}
+	for _, p := range m.cfg.Providers {
+		if lp, ok := p.(TargetLookupProvider); ok {
+			if r, found := lp.LookupResult(action); found {
+				return r, true
+			}
+		}
+	}
+	return Result{}, false
+}
+
+// recordHistory appends a history entry for the picked result and persists
+// it if a path is configured. For ActionCopy (calc/unit/currency) the entry
+// stores the raw query text, since those results have no identity
+// independent of their query; for launch/run/open it stores the result's
+// label and action (see ADR 0006).
+func (m *Model) recordHistory(query string, r Result) {
 	if m.cfg.History == nil {
 		return
 	}
-	m.cfg.History.Append(strings.TrimSpace(query))
+	var entry history.Entry
+	if r.Action.Type == ActionCopy {
+		entry = history.Entry{Label: strings.TrimSpace(query), ActionType: history.ActionTypeCopy}
+	} else {
+		entry = history.Entry{Label: r.Title, ActionType: int(r.Action.Type), Target: r.Action.Target}
+	}
+	m.cfg.History.Append(entry)
 	m.saveHistory()
 }
 
@@ -552,10 +602,11 @@ func (m *Model) saveHistory() {
 // the top result at the time of picking, and persists it if a path is
 // configured. No-op when learned rank is disabled or the pick was first.
 func (m *Model) recordLearnedRank(query string, result Result) {
-	if m.cfg.LearnedRank == nil || m.selected == 0 {
+	trimmed := strings.TrimSpace(query)
+	if m.cfg.LearnedRank == nil || m.selected == 0 || trimmed == "" {
 		return
 	}
-	m.cfg.LearnedRank.Increment(strings.TrimSpace(query), result.Action.Key())
+	m.cfg.LearnedRank.Increment(trimmed, result.Action.Key())
 	m.saveLearnedRank()
 }
 

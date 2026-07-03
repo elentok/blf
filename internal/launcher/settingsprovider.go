@@ -106,3 +106,23 @@ func (p *SettingsProvider) Query(input string) []Result {
 	}
 	return results
 }
+
+// LookupResult implements TargetLookupProvider by finding the settings pane
+// whose path matches action.Target.
+func (p *SettingsProvider) LookupResult(action Action) (Result, bool) {
+	if action.Type != ActionOpen {
+		return Result{}, false
+	}
+	for _, pane := range p.panes {
+		if pane.path == action.Target {
+			return Result{
+				Title:     pane.name,
+				Subtitle:  "(settings)",
+				Icon:      IconRoleSettings,
+				IconGlyph: pane.glyph,
+				Action:    Action{Type: ActionOpen, Target: pane.path},
+			}, true
+		}
+	}
+	return Result{}, false
+}

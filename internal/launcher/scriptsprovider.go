@@ -82,3 +82,21 @@ func (p *ScriptsProvider) Query(input string) []Result {
 	}
 	return results
 }
+
+// LookupResult implements TargetLookupProvider by finding the script whose
+// name matches action.Target.
+func (p *ScriptsProvider) LookupResult(action Action) (Result, bool) {
+	if action.Type != ActionRun {
+		return Result{}, false
+	}
+	s, found := p.Find(action.Target)
+	if !found {
+		return Result{}, false
+	}
+	return Result{
+		Title:     s.Name,
+		Icon:      IconRoleScript,
+		IconGlyph: s.Icon,
+		Action:    Action{Type: ActionRun, Target: s.Name},
+	}, true
+}

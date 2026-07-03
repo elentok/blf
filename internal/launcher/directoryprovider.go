@@ -64,3 +64,22 @@ func (p *DirectoryProvider) Query(input string) []Result {
 	}
 	return results
 }
+
+// LookupResult implements TargetLookupProvider by finding the directory whose
+// Path matches action.Target.
+func (p *DirectoryProvider) LookupResult(action Action) (Result, bool) {
+	if action.Type != ActionOpen {
+		return Result{}, false
+	}
+	for _, d := range p.dirs {
+		if d.Path == action.Target {
+			return Result{
+				Title:    d.Name,
+				Subtitle: d.Path,
+				Icon:     IconRoleDirectory,
+				Action:   Action{Type: ActionOpen, Target: d.Path},
+			}, true
+		}
+	}
+	return Result{}, false
+}

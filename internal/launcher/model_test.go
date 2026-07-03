@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/learnedrank"
 )
@@ -111,11 +112,15 @@ func TestSyncEnterResetsAndHides(t *testing.T) {
 	}
 }
 
+func copyHistoryEntry(label string) history.Entry {
+	return history.Entry{Label: label, ActionType: history.ActionTypeCopy}
+}
+
 func TestCtrlXDeletesSelectedHistoryEntry(t *testing.T) {
 	h := history.New()
-	h.Append("alpha")
-	h.Append("beta")
-	h.Append("gamma") // most-recent first: gamma, beta, alpha
+	h.Append(copyHistoryEntry("alpha"))
+	h.Append(copyHistoryEntry("beta"))
+	h.Append(copyHistoryEntry("gamma")) // most-recent first: gamma, beta, alpha
 	m := NewModel(ModelConfig{History: h})
 
 	// Empty input shows history rows; select the middle one (beta).
@@ -132,7 +137,7 @@ func TestCtrlXDeletesSelectedHistoryEntry(t *testing.T) {
 	m = next.(Model)
 
 	for _, e := range h.Entries() {
-		if e == "beta" {
+		if e.Label == "beta" {
 			t.Fatal("expected beta removed from history")
 		}
 	}
@@ -146,7 +151,7 @@ func TestCtrlXDeletesSelectedHistoryEntry(t *testing.T) {
 
 func TestCtrlXIgnoredForNonHistoryRow(t *testing.T) {
 	h := history.New()
-	h.Append("noop")
+	h.Append(copyHistoryEntry("noop"))
 	m := NewModel(ModelConfig{
 		Providers: []Provider{CalcProvider{}},
 		History:   h,
@@ -166,10 +171,192 @@ func TestCtrlXIgnoredForNonHistoryRow(t *testing.T) {
 	}
 }
 
+// launchHistoryActionType mirrors ActionLaunch's iota value for building
+// history.Entry values without importing history into a cycle (history
+// itself deliberately doesn't import launcher).
+const launchHistoryActionType = int(ActionLaunch)
+
+func TestCtrlXRemovesCorrectEntry_whenLabelsCollide(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Same Name", ActionType: launchHistoryActionType, Target: "/Applications/a.app"})
+	h.Append(history.Entry{Label: "Same Name", ActionType: launchHistoryActionType, Target: "/Applications/b.app"})
+	m := NewModel(ModelConfig{History: h})
+
+	m.recomputeResults()
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 history rows, got %d", len(m.results))
+	}
+	// Most-recent first: the b.app entry is selected by default (index 0).
+	m.selected = 0
+	if got := m.results[0].HistoryEntry.Target; got != "/Applications/b.app" {
+		t.Fatalf("expected selected row to target b.app, got %q", got)
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	entries := h.Entries()
+	if len(entries) != 1 || entries[0].Target != "/Applications/a.app" {
+		t.Fatalf("expected only the a.app entry to remain, got %+v", entries)
+	}
+}
+
+func TestEnterOnLaunchHistoryRow_directFires(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Kitty", ActionType: launchHistoryActionType, Target: "/Applications/kitty.app"})
+	launched := ""
+	m := NewModel(ModelConfig{
+		History:      h,
+		LaunchApp:    func(path string) error { launched = path; return nil },
+		HideTerminal: func() error { return nil },
+		HideDelay:    0,
+	})
+
+	m.recomputeResults()
+	if len(m.results) != 1 {
+		t.Fatalf("expected 1 history row, got %d", len(m.results))
+	}
+	// Direct-fire happens without an intermediate populate-and-recompute step:
+	// the input must stay empty right up to the point act() executes.
+	if m.input.Value() != "" {
+		t.Fatalf("expected empty input before firing, got %q", m.input.Value())
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	if launched != "/Applications/kitty.app" {
+		t.Fatalf("expected direct-fire launch of kitty.app, got %q", launched)
+	}
+}
+
+func TestEnterOnCopyHistoryRow_populatesAndRecomputes(t *testing.T) {
+	h := history.New()
+	h.Append(copyHistoryEntry("1+1"))
+	m := NewModel(ModelConfig{
+		Providers: []Provider{CalcProvider{}},
+		History:   h,
+	})
+
+	m.recomputeResults()
+	if len(m.results) != 1 {
+		t.Fatalf("expected 1 history row, got %d", len(m.results))
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	runCmd(cmd)
+
+	// Regression: copy-type history rows must still populate the input and
+	// recompute (calc result for "1+1"), not direct-fire.
+	if m.input.Value() != "1+1" {
+		t.Fatalf("expected input populated with %q, got %q", "1+1", m.input.Value())
+	}
+	if len(m.results) == 0 || m.results[0].Action.Type != ActionCopy {
+		t.Fatalf("expected recomputed calc result, got %+v", m.results)
+	}
+}
+
+func TestHistoryHint_suppressedForLaunchEntries(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Kitty", ActionType: launchHistoryActionType, Target: "/Applications/kitty.app"})
+	h.Append(copyHistoryEntry("1+1"))
+	m := NewModel(ModelConfig{
+		Providers: []Provider{CalcProvider{}},
+		History:   h,
+	})
+
+	m.recomputeResults()
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 history rows, got %d", len(m.results))
+	}
+	for _, r := range m.results {
+		if r.Title == "Kitty" && r.Subtitle != "" {
+			t.Errorf("expected no hint on launch-type row, got %q", r.Subtitle)
+		}
+		if r.Title == "1+1" && r.Subtitle == "" {
+			t.Error("expected a computed hint on the copy-type row")
+		}
+	}
+}
+
+func TestHistoryRow_launchEntry_reDerivesIconAndSubtitleFromProvider(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Kitty", ActionType: launchHistoryActionType, Target: "/Applications/kitty.app"})
+
+	appsProvider := NewAppsProvider(1)
+	appsProvider.SetIndex(&apps.Index{Apps: []apps.App{
+		{Name: "Kitty", Path: "/Applications/kitty.app", Subtitle: "Utilities"},
+	}})
+
+	m := NewModel(ModelConfig{
+		Providers: []Provider{appsProvider},
+		History:   h,
+	})
+	m.recomputeResults()
+
+	if len(m.results) != 1 {
+		t.Fatalf("expected 1 history row, got %d", len(m.results))
+	}
+	r := m.results[0]
+	if r.Subtitle != "Utilities" {
+		t.Errorf("expected subtitle re-derived from AppsProvider, got %q", r.Subtitle)
+	}
+	if r.Icon != IconRoleApp {
+		t.Errorf("expected Icon re-derived as IconRoleApp, got %v", r.Icon)
+	}
+}
+
+func TestHistoryRow_launchEntry_fallsBackToGenericIcon_whenAppNoLongerFound(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Removed App", ActionType: launchHistoryActionType, Target: "/Applications/removed.app"})
+
+	appsProvider := NewAppsProvider(1)
+	appsProvider.SetIndex(&apps.Index{}) // app no longer indexed (removed/renamed)
+
+	m := NewModel(ModelConfig{
+		Providers: []Provider{appsProvider},
+		History:   h,
+	})
+	m.recomputeResults()
+
+	if len(m.results) != 1 {
+		t.Fatalf("expected 1 history row, got %d", len(m.results))
+	}
+	r := m.results[0]
+	if r.Icon != IconRoleHistory {
+		t.Errorf("expected fallback to IconRoleHistory, got %v", r.Icon)
+	}
+	if r.Subtitle != "" {
+		t.Errorf("expected no subtitle when app can't be found, got %q", r.Subtitle)
+	}
+}
+
+func TestCtrlRCtrlF_populateInputOnly_noDirectFire(t *testing.T) {
+	h := history.New()
+	h.Append(history.Entry{Label: "Kitty", ActionType: launchHistoryActionType, Target: "/Applications/kitty.app"})
+	launched := ""
+	m := NewModel(ModelConfig{
+		History:   h,
+		LaunchApp: func(path string) error { launched = path; return nil },
+	})
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	if m.input.Value() != "Kitty" {
+		t.Fatalf("expected input populated with %q, got %q", "Kitty", m.input.Value())
+	}
+	if launched != "" {
+		t.Fatalf("expected ctrl+r to not direct-fire, but launched %q", launched)
+	}
+}
+
 func TestResetShowsRecentHistory(t *testing.T) {
 	h := history.New()
-	h.Append("alpha")
-	h.Append("beta")
+	h.Append(copyHistoryEntry("alpha"))
+	h.Append(copyHistoryEntry("beta"))
 	m := NewModel(ModelConfig{
 		Providers:    []Provider{CalcProvider{}},
 		History:      h,

@@ -1,6 +1,10 @@
 package launcher
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/elentok/blf/internal/launcher/history"
+)
 
 // ActionType defines what to do when a result is selected.
 type ActionType int
@@ -55,6 +59,7 @@ type Result struct {
 	IsExactMatch  bool    // Title exactly equals the trimmed query
 	IsPrefixMatch bool    // Title starts with the trimmed query (case-insensitive)
 	Action        Action
+	HistoryEntry  *history.Entry // set only for rows synthesized from launcher history; nil otherwise
 }
 
 // Provider contributes results to the launcher's ranked list.
@@ -69,4 +74,14 @@ type Provider interface {
 // hint for the query (not its kind, fails to resolve, or data not yet loaded).
 type HintProvider interface {
 	Hint(query string) string
+}
+
+// TargetLookupProvider is an optional capability for Providers that can
+// resolve the live Result (icon/subtitle) for a previously-recorded Action,
+// used to re-derive display details for a launch/run/open launcher-history
+// row instead of persisting them. Returns ok=false if this provider doesn't
+// own action.Type or can no longer find action.Target (e.g. app was removed
+// or renamed) — callers should fall back to a generic display.
+type TargetLookupProvider interface {
+	LookupResult(action Action) (Result, bool)
 }

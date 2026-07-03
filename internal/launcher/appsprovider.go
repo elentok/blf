@@ -117,3 +117,23 @@ func (p *AppsProvider) Query(input string) []Result {
 	}
 	return results
 }
+
+// LookupResult implements TargetLookupProvider by finding the app whose Path
+// matches action.Target.
+func (p *AppsProvider) LookupResult(action Action) (Result, bool) {
+	if action.Type != ActionLaunch || p.index == nil {
+		return Result{}, false
+	}
+	for _, app := range p.index.Apps {
+		if app.Path == action.Target {
+			return Result{
+				Title:     app.Name,
+				Subtitle:  app.Subtitle,
+				Icon:      IconRoleApp,
+				IconGlyph: AppIconGlyph(app.Name),
+				Action:    Action{Type: ActionLaunch, Target: app.Path},
+			}, true
+		}
+	}
+	return Result{}, false
+}
