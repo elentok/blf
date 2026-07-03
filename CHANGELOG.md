@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.3] - 2026-07-04
+
+- **`launcher` history now stores picked items instead of query text**, enabling direct-fire recall: selecting a launch/run/open entry from the empty-input history list now immediately performs that action on Enter (e.g. picking "Kitty" launches Kitty), and different queries resolving to the same item coalesce into one entry. Copy actions (calc/unit/currency) keep the old behavior — history stores the query text, and Enter populates the input for recompute. Ctrl+R/Ctrl+F remain text-recall shortcuts for further editing, not execution.
+- Added **`blf config edit`** to open the config file in `$EDITOR`, seeding it with active defaults on first use if it doesn't exist yet. Extracted config path resolution, schema, and defaults out of the launcher package into a new `internal/config` package, so config-file infrastructure isn't tied to the launcher anymore.
+
 ## [v0.6.2] - 2026-07-02
 
 - Added **learned ranking** to `launcher`: previously selected results for a given query are boosted above the usual fuzzy/history ranking on subsequent searches. Selections are tracked per (query, result) pair in a new persistent store (XDG state dir), and only non-first picks are recorded, so the effect only kicks in once a result has been chosen over the top suggestion.
