@@ -51,9 +51,9 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - [x] Unit tests with a fake `bd` (exec indirection) covering JSON decode + arg building
 
 ### 2. Readiness + sort
-- [ ] Derive unblocked/blocked per issue from the ready set
-- [ ] Readiness-bucketed comparator (bucket → priority → updated-at)
-- [ ] Tests for bucket ordering and readiness derivation
+- [x] Derive unblocked/blocked per issue from the ready set
+- [x] Readiness-bucketed comparator (bucket → priority → updated-at)
+- [x] Tests for bucket ordering and readiness derivation
 
 ### 3. Preview rendering (`internal/beads` view helpers)
 - [ ] Subtasks tree (hierarchy, nested, completion count)
@@ -62,10 +62,11 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - [ ] Tests for tree building incl. diamond + cycle collapsing
 
 ### 4. TUI model (`internal/beads/model.go`)
-- [ ] Embed `fuzzyfinder`; flat list, row rendering (icons, tags, `↓/↑` badge, readiness color)
+- [x] Embed `fuzzyfinder`; flat list, row rendering (icons, tags, `↓/↑` badge, readiness color)
 - [ ] Side-by-side layout + narrow fallback + `tab` toggle (`SetSize` with reduced width)
 - [ ] Lazy debounced cached preview fetch (async `tea.Cmd`), loading placeholders
-- [ ] Scope filter cycle (`ctrl+f`) re-fetches set; manual refresh (`ctrl+r`)
+- [x] Scope filter cycle (`ctrl+f`) re-fetches set
+- [ ] Manual refresh (`ctrl+r`)
 - [x] Client-side fuzzy via `fuzzyfinder.Find`
 - [x] Empty-state line; `bd`/db error surfacing before entering the TUI
 

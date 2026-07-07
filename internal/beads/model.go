@@ -1,6 +1,9 @@
 package beads
 
 import (
+	"fmt"
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -11,12 +14,19 @@ import (
 // letting tests inject a stub instead of shelling out to bd.
 type IssueLister interface {
 	List(scope Scope) ([]Issue, error)
+	Ready() (map[string]bool, error)
 }
 
-// issuesLoadedMsg carries the async result of the initial List call.
+// issuesLoadedMsg carries the async result of a List call.
 type issuesLoadedMsg struct {
 	issues []Issue
 	err    error
+}
+
+// readyLoadedMsg carries the async result of a Ready call.
+type readyLoadedMsg struct {
+	ready map[string]bool
+	err   error
 }
 
 // ModelConfig holds injectable dependencies for the beads TUI model.
@@ -35,8 +45,10 @@ type Model struct {
 
 	queryRef   *string
 	displayRef *[]Issue
+	readyRef   *map[string]bool
 	widget     fuzzyfinder.Model
 
+	scope    Scope
 	allItems []Issue
 	loading  bool
 	loadErr  error
@@ -50,11 +62,14 @@ type Model struct {
 func NewModel(cfg ModelConfig) Model {
 	queryRef := new(string)
 	displayRef := new([]Issue)
+	readyRef := new(map[string]bool)
 
 	m := Model{
 		cfg:        cfg,
 		queryRef:   queryRef,
 		displayRef: displayRef,
+		readyRef:   readyRef,
+		scope:      cfg.Scope,
 		loading:    true,
 	}
 
@@ -64,24 +79,47 @@ func NewModel(cfg ModelConfig) Model {
 			if i >= len(display) {
 				return ""
 			}
-			return renderIssueRow(display[i], *queryRef, selected)
+			return renderIssueRow(display[i], *readyRef, *queryRef, selected)
 		},
-		Footer:    "enter: copy id & quit  esc/ctrl+c: quit",
+		Footer:    "enter: copy id & quit  ctrl+f: cycle scope  esc/ctrl+c: quit",
 		ItemCount: 1,
 	})
 
 	return m
 }
 
-// Init starts the widget cursor blink and kicks off the initial issue load.
+// Init starts the widget cursor blink and kicks off the initial issue and
+// ready-set loads.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.widget.Init(), loadIssuesCmd(m.cfg.Lister, m.cfg.Scope))
+	return tea.Batch(m.widget.Init(), loadIssuesCmd(m.cfg.Lister, m.scope), loadReadyCmd(m.cfg.Lister))
 }
 
 func loadIssuesCmd(lister IssueLister, scope Scope) tea.Cmd {
 	return func() tea.Msg {
 		issues, err := lister.List(scope)
 		return issuesLoadedMsg{issues: issues, err: err}
+	}
+}
+
+func loadReadyCmd(lister IssueLister) tea.Cmd {
+	return func() tea.Msg {
+		ready, err := lister.Ready()
+		return readyLoadedMsg{ready: ready, err: err}
+	}
+}
+
+// nextScope returns the next scope in the ctrl+f cycle: actionable ->
+// ready-only -> blocked-only -> all incl. closed -> back to actionable.
+func nextScope(s Scope) Scope {
+	switch s {
+	case ScopeReady:
+		return ScopeBlocked
+	case ScopeBlocked:
+		return ScopeAll
+	case ScopeAll:
+		return ScopeActionable
+	default:
+		return ScopeReady
 	}
 }
 
@@ -106,6 +144,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.allItems = msg.issues
+		SortIssues(m.allItems, *m.readyRef)
+		m.recomputeFilter()
+		return m, nil
+
+	case readyLoadedMsg:
+		if msg.err != nil {
+			return m, nil
+		}
+		*m.readyRef = msg.ready
+		SortIssues(m.allItems, *m.readyRef)
 		m.recomputeFilter()
 		return m, nil
 
@@ -113,6 +161,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
+
+		case "ctrl+f":
+			m.scope = nextScope(m.scope)
+			m.loading = true
+			m.loadErr = nil
+			return m, loadIssuesCmd(m.cfg.Lister, m.scope)
 
 		case "enter":
 			display := *m.displayRef
@@ -195,9 +249,70 @@ func statusIcon(status string) string {
 	}
 }
 
-// renderIssueRow renders "{status icon} {id}  {title}", with title fuzzy-match
-// characters highlighted.
-func renderIssueRow(issue Issue, query string, selected bool) string {
+// readinessGlyph is the row's readiness indicator, distinct from statusIcon:
+// a filled dot for unblocked, a triangle for blocked, a dim middot otherwise.
+func readinessGlyph(r Readiness) string {
+	switch r {
+	case Unblocked:
+		return "●"
+	case Blocked:
+		return "▲"
+	default:
+		return "·"
+	}
+}
+
+func readinessStyle(r Readiness) lipgloss.Style {
+	switch r {
+	case Unblocked:
+		return readinessUnblockedStyle
+	case Blocked:
+		return readinessBlockedStyle
+	default:
+		return readinessOtherStyle
+	}
+}
+
+// readinessBadge renders the dim "↓N ↑M" blocker/dependent badge from
+// DependencyCount/DependentCount, hiding either side that's zero and
+// returning "" when both are zero.
+func readinessBadge(issue Issue) string {
+	var parts []string
+	if issue.DependencyCount > 0 {
+		parts = append(parts, fmt.Sprintf("↓%d", issue.DependencyCount))
+	}
+	if issue.DependentCount > 0 {
+		parts = append(parts, fmt.Sprintf("↑%d", issue.DependentCount))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ")
+}
+
+// rowTag returns the dim hierarchy tag for a row: "epic" for epic issues, a
+// "↳ <parent>" breadcrumb for subtasks, or "" for standalone issues.
+func rowTag(issue Issue) string {
+	if issue.IssueType == "epic" {
+		return "epic"
+	}
+	if issue.Parent != "" {
+		return "↳ " + issue.Parent
+	}
+	return ""
+}
+
+// renderIssueRow renders "{readiness glyph} {status icon} {id}  {title}  {tag}  {badge}",
+// with title fuzzy-match characters highlighted. tag and badge are omitted
+// when empty.
+func renderIssueRow(issue Issue, readyIDs map[string]bool, query string, selected bool) string {
+	readiness := ClassifyReadiness(issue, readyIDs)
+	glyphStyle := readinessStyle(readiness)
+	if selected {
+		glyphStyle = glyphStyle.Background(fuzzyfinder.SelectedBg)
+	}
+	glyph := glyphStyle.Render(readinessGlyph(readiness) + " ")
+
 	icon := statusIcon(issue.Status) + " "
 	if selected {
 		icon = lipgloss.NewStyle().Background(fuzzyfinder.SelectedBg).Render(icon)
@@ -210,5 +325,17 @@ func renderIssueRow(issue Issue, query string, selected bool) string {
 	sep := fuzzyfinder.Highlight("  ", nil, plain, selected)
 	title := fuzzyfinder.Highlight(issue.Title, ranges, plain, selected)
 
-	return icon + id + sep + title
+	line := glyph + icon + id + sep + title
+
+	if tag := rowTag(issue); tag != "" {
+		line += fuzzyfinder.Highlight("  ", nil, plain, selected) +
+			fuzzyfinder.Highlight(tag, nil, fuzzyfinder.SubtitleStyle, selected)
+	}
+
+	if badge := readinessBadge(issue); badge != "" {
+		line += fuzzyfinder.Highlight("  ", nil, plain, selected) +
+			fuzzyfinder.Highlight(badge, nil, fuzzyfinder.SubtitleStyle, selected)
+	}
+
+	return line
 }
