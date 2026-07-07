@@ -42,8 +42,16 @@ An always-running, full-screen TUI (`blf launcher`) that lives inside Kitty's qu
 _Avoid_: "spawned per keypress" (the process is persistent; Cmd+2 only toggles visibility).
 
 **launcher source** (a.k.a. **provider**):
-One contributor of launcher results — math, unit/currency conversion, application launch, or script. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: **learned rank** > exact > prefix > source-weight > fuzzy score).
+One contributor of launcher results — math, unit/currency conversion, application launch, script, or command. Each inspects the raw query and optionally emits rows into a single ranked list; sources are _not_ mutually-exclusive modes, they self-select on query shape and coexist (ranking: **learned rank** > exact > prefix > source-weight > fuzzy score).
 _Avoid_: "mode" (implies an exclusive switch you toggle between).
+
+**script**:
+A user-authored (or built-in) bash/osascript snippet, fuzzy-matched by name and executed as an external process (`exec.Cmd`) when picked. Configured/overridden via user config; built-ins ship in code.
+_Contrast_: **command**, which runs in-process.
+
+**command**:
+A built-in, hardcoded **launcher source** entry (e.g. reload, cleanurl) that runs in-process — calling a Go function directly rather than spawning an external process. Not user-configurable, unlike **script**.
+_Avoid_: confusing with a **script** — both are fuzzy-matched, name-triggered actions, but a command never shells out.
 
 **learned rank**:
 A per-(exact query text, result target) counter that overrides the default ranking tiers, letting the launcher remember that the user has repeatedly picked a non-top result for a specific query. Any Enter/pick on a result that wasn't first in the list increments the counter for (trimmed query text, Action.Type+Action.Target); the next time that exact query is typed, results with a nonzero counter sort above exact/prefix/source-weight/fuzzy-score matches, highest counter first. Applies to every action type (launch, run, open, copy), not just app launches. Persists permanently (no decay, no in-TUI clear) in a plain, human-editable state file alongside **launcher history**.
@@ -108,6 +116,22 @@ The rendering of a **conversation**'s `.jsonl` into Markdown (chronological role
 **resume** (claude history):
 The ctrl+r action on the **conversation** list and **live grep** pages: suspends the TUI and runs `claude --resume <sessionId>` in the owning **project**'s `cwd`, returning to claude history when the resumed session exits. Same suspend/exec/return shape as the **conversation export**'s editor handoff, but execs `claude` itself instead of `$EDITOR`. Not offered on the **project** list, since a project row aggregates many conversations rather than naming one.
 
+**blf beads**:
+An interactive TUI (`blf beads`) for browsing and triaging **Beads** issues in the current project, and handing a chosen issue's id to an AI agent for implementation. Embeds the shared **fuzzy finder** widget with a side-by-side **issue preview**, treating the external `bd` CLI (its JSON output) as the sole source of truth — blf never reads the beads database directly. Its primary verb copies the selected id to the clipboard (and prints it to stdout) and quits; secondary verbs create/edit/re-state/close issues and open the dependency graph, all by shelling out to `bd`. Project-contextual: relies on `bd`'s auto-discovery of the `.beads` database from the working directory.
+_Avoid_: "beads manager" (it is a browser/picker first; management is secondary), reimplementing beads' data layer (it is a thin front-end over `bd`).
+
+**readiness** (blf beads):
+Whether an issue is **unblocked** (actionable now) or **blocked** (waiting on an open dependency), derived authoritatively from membership in `bd ready`'s set — never guessed from a raw dependency count, since a closed blocker still counts. Drives the row indicator, the readiness-bucketed sort (unblocked before blocked, priority within each), and the scope filter.
+_Avoid_: inferring blocked-ness from `dependency_count > 0` (counts include already-satisfied blockers).
+
+**issue preview** (blf beads):
+The side pane showing the selected issue's full detail, lazily fetched and cached per issue. Presents two **separate** sections that must never be merged, because they are different relationships: a **subtasks tree** (parent→child hierarchy, from an epic downward, with completion count) and a **blocked-by tree** (the transitive dependency chain the issue is waiting on, rooted at the issue and expanded in the "blocked by" direction, with diamonds/cycles collapsed to a back-reference marker).
+_Avoid_: merging hierarchy and dependency edges into one tree (two distinct edge semantics), calling the dependency chain a "graph" here (it is rendered as a rooted tree; the full DAG is a separate `bd graph` shell-out).
+
+**create mode** (blf beads):
+A transient state that repurposes the always-focused **fuzzy finder** input as a title field instead of a search box (prompt changes, list stops filtering); confirming creates the issue via `bd create`, cancelling restores the prior search. When entered on an **epic** row it defaults the new issue to that epic's child, toggleable to standalone. The same mode-flip mechanism backs status changes (a status-pick variant), so no separate multi-field form is built.
+_Avoid_: "create form" (there is no bespoke form — it reuses the one input line; richer fields come from the edit handoff or `bd`).
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).
@@ -117,6 +141,7 @@ The ctrl+r action on the **conversation** list and **live grep** pages: suspends
 - Pressing Enter on a **launcher history** row does not go through the normal result-ranking path: for launch/run/open entries it's a **history direct-fire** (immediate action, no recompute); for copy entries it still populates the input and recomputes, same as before.
 - A **project** contains one or more **conversations**; selecting a project lists its conversations, and selecting a conversation produces its **conversation export** in `$EDITOR`.
 - **claude history** and the **launcher**/**goto-agent** picker all embed the same **fuzzy finder** widget; claude history runs several instances behind a page state machine, with **live grep** supplying its own `rg`-ranked items rather than the widget's fuzzy ranking.
+- **blf beads** also embeds the **fuzzy finder** widget: it loads the working set once per scope via `bd list --json` (+ `bd ready --json` for **readiness**), fuzzy-matches client-side, and re-fetches only on scope change, a mutation, or manual refresh. The selected row's **issue preview** is fetched separately (lazy, debounced, cached). Pressing Enter copies the issue id and quits (a picker handoff), unlike the launcher's Enter which performs an action and stays resident.
 
 - The **directory source**'s result set is the union of **built-in directories** and **configured directories**, deduplicated by name (a **configured directory** wins on name collision).
 
