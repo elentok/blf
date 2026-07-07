@@ -200,6 +200,18 @@ func TestMatchRangesEmptyQuery(t *testing.T) {
 	}
 }
 
+func TestSetPromptChangesRenderedInput(t *testing.T) {
+	m := newTestModel(3, 20)
+	before := m.View()
+
+	m.SetPrompt("title")
+	after := m.View()
+
+	if before == after {
+		t.Error("expected View() to change after SetPrompt")
+	}
+}
+
 func TestQueryReflectsTyping(t *testing.T) {
 	m := newTestModel(3, 20)
 	if m.Query() != "" {

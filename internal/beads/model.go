@@ -27,6 +27,22 @@ type IssueLister interface {
 	Ready() (map[string]bool, error)
 }
 
+// IssueMutator is the subset of Adapter behavior the TUI actions depend on.
+type IssueMutator interface {
+	Create(title string, opts CreateOptions) (Issue, error)
+	UpdateStatus(id, status string) (Issue, error)
+	Close(id string) (Issue, error)
+	Reopen(id string) (Issue, error)
+}
+
+type modeState int
+
+const (
+	modeBrowse modeState = iota
+	modeCreate
+	modeStatus
+)
+
 // issuesLoadedMsg carries the async result of a List call.
 type issuesLoadedMsg struct {
 	issues []Issue
@@ -55,12 +71,26 @@ type previewLoadedMsg struct {
 	data previewData
 }
 
+type mutationFinishedMsg struct {
+	issue Issue
+	err   error
+}
+
+type shellFinishedMsg struct {
+	issueID string
+	err     error
+	refresh bool
+}
+
 // ModelConfig holds injectable dependencies for the beads TUI model.
 type ModelConfig struct {
-	Lister   IssueLister
-	Preview  PreviewFetcher
-	Scope    Scope
-	CopyText func(string) error // optional; nil disables the clipboard write on enter
+	Lister     IssueLister
+	Preview    PreviewFetcher
+	Mutator    IssueMutator
+	Scope      Scope
+	CopyText   func(string) error // optional; nil disables the clipboard write on enter
+	EditIssue  func(string) tea.Cmd
+	GraphIssue func(string) tea.Cmd
 }
 
 // Model is the bubbletea model for the `blf beads` picker: a flat fuzzy list
@@ -73,6 +103,7 @@ type Model struct {
 	queryRef   *string
 	displayRef *[]Issue
 	readyRef   *map[string]bool
+	modeRef    *modeState
 	widget     fuzzyfinder.Model
 
 	scope    Scope
@@ -81,6 +112,13 @@ type Model struct {
 	loadErr  error
 
 	selectedID string
+	mode       modeState
+
+	modeSavedQuery      string
+	modeSavedSelectedID string
+	createParentID      string
+	createStandalone    bool
+	pendingSelectID     string
 
 	// previewCache holds fetched trees per issue id; previewSeq guards
 	// against a stale debounce/fetch replying after the selection moved on
@@ -102,12 +140,14 @@ func NewModel(cfg ModelConfig) Model {
 	queryRef := new(string)
 	displayRef := new([]Issue)
 	readyRef := new(map[string]bool)
+	modeRef := new(modeState)
 
 	m := Model{
 		cfg:          cfg,
 		queryRef:     queryRef,
 		displayRef:   displayRef,
 		readyRef:     readyRef,
+		modeRef:      modeRef,
 		scope:        cfg.Scope,
 		loading:      true,
 		previewCache: make(map[string]previewData),
@@ -115,15 +155,22 @@ func NewModel(cfg ModelConfig) Model {
 
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
 		RenderRow: func(i int, selected bool) string {
+			if *modeRef == modeStatus {
+				if i >= len(StatusChoices) {
+					return ""
+				}
+				return renderStatusRow(StatusChoices[i], selected)
+			}
 			display := *displayRef
 			if i >= len(display) {
 				return ""
 			}
 			return renderIssueRow(display[i], *readyRef, *queryRef, selected)
 		},
-		Footer:    "enter: copy id & quit  tab: toggle preview  ctrl+f: cycle scope  esc/ctrl+c: quit",
+		Footer:    browseFooter,
 		ItemCount: 1,
 	})
+	m.syncWidgetChrome()
 
 	return m
 }
@@ -146,6 +193,10 @@ func loadReadyCmd(lister IssueLister) tea.Cmd {
 		ready, err := lister.Ready()
 		return readyLoadedMsg{ready: ready, err: err}
 	}
+}
+
+func loadSnapshotCmd(lister IssueLister, scope Scope) tea.Cmd {
+	return tea.Batch(loadIssuesCmd(lister, scope), loadReadyCmd(lister))
 }
 
 // nextScope returns the next scope in the ctrl+f cycle: actionable ->
@@ -185,6 +236,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
+	*m.modeRef = m.mode
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -198,9 +250,11 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loadErr = msg.err
 			return m, nil
 		}
+		m.loadErr = nil
 		m.allItems = msg.issues
 		SortIssues(m.allItems, *m.readyRef)
 		m.recomputeFilter()
+		m.restorePendingSelection()
 		return m, nil
 
 	case readyLoadedMsg:
@@ -210,6 +264,7 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		*m.readyRef = msg.ready
 		SortIssues(m.allItems, *m.readyRef)
 		m.recomputeFilter()
+		m.restorePendingSelection()
 		return m, nil
 
 	case previewDebounceMsg:
@@ -230,23 +285,116 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.previewCache[msg.id] = msg.data
 		return m, nil
 
+	case mutationFinishedMsg:
+		if msg.err != nil {
+			m.loadErr = msg.err
+			return m, nil
+		}
+		if m.mode != modeBrowse {
+			m.exitMode(false)
+		}
+		return m, m.startReload(msg.issue.ID, true)
+
+	case shellFinishedMsg:
+		if msg.err != nil {
+			m.loadErr = msg.err
+			return m, nil
+		}
+		if msg.refresh {
+			return m, m.startReload(msg.issueID, false)
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			if m.mode != modeBrowse {
+				m.exitMode(true)
+				return m, nil
+			}
 			return m, tea.Quit
 
 		case "tab":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
 			m.previewToggled = !m.previewToggled
 			m.applyLayout()
 			return m, nil
 
 		case "ctrl+f":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
 			m.scope = nextScope(m.scope)
 			m.loading = true
 			m.loadErr = nil
-			return m, loadIssuesCmd(m.cfg.Lister, m.scope)
+			return m, loadSnapshotCmd(m.cfg.Lister, m.scope)
+
+		case "ctrl+r":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
+			return m, m.startReload(m.selectedRowID(), false)
+
+		case "ctrl+a":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
+			m.enterCreateMode()
+			return m, nil
+
+		case "ctrl+t":
+			if m.mode != modeCreate {
+				return m, nil
+			}
+			if m.createParentID == "" {
+				return m, nil
+			}
+			m.createStandalone = !m.createStandalone
+			m.syncWidgetChrome()
+			return m, nil
+
+		case "ctrl+s":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
+			m.enterStatusMode()
+			return m, nil
+
+		case "ctrl+x":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
+			return m.toggleClosed()
+
+		case "ctrl+e":
+			if m.mode != modeBrowse || m.cfg.EditIssue == nil {
+				return m, nil
+			}
+			issue, ok := m.selectedIssue()
+			if !ok {
+				return m, nil
+			}
+			return m, m.cfg.EditIssue(issue.ID)
+
+		case "ctrl+g":
+			if m.mode != modeBrowse || m.cfg.GraphIssue == nil {
+				return m, nil
+			}
+			issue, ok := m.selectedIssue()
+			if !ok {
+				return m, nil
+			}
+			return m, m.cfg.GraphIssue(issue.ID)
 
 		case "enter":
+			switch m.mode {
+			case modeCreate:
+				return m.submitCreate()
+			case modeStatus:
+				return m.submitStatus()
+			}
 			display := *m.displayRef
 			sel := m.widget.Selected()
 			if len(display) == 0 || sel >= len(display) {
@@ -261,19 +409,211 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.mode == modeCreate {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "up", "down", "ctrl+k", "ctrl+j", "ctrl+p", "ctrl+n":
+				return m, nil
+			}
+		}
+	}
+
 	prevQuery := m.widget.Query()
 	var cmd tea.Cmd
 	m.widget, cmd = m.widget.Update(msg)
 	if m.widget.Query() != prevQuery {
-		*m.queryRef = m.widget.Query()
-		m.recomputeFilter()
+		switch m.mode {
+		case modeBrowse:
+			*m.queryRef = m.widget.Query()
+			m.recomputeFilter()
+		case modeCreate:
+			// The create title reuses the input line but must not refilter rows.
+		case modeStatus:
+			// Status mode owns the row set; typing is inert until the user exits.
+		}
 	}
 	return m, cmd
+}
+
+const browseFooter = "enter: copy id & quit  ctrl+a: create  ctrl+s: status  ctrl+x: close/reopen  ctrl+e: edit  ctrl+g: graph  ctrl+r: refresh  ctrl+f: cycle scope  tab: toggle preview  esc/ctrl+c: quit"
+
+func (m *Model) syncWidgetChrome() {
+	switch m.mode {
+	case modeCreate:
+		m.widget.SetPrompt("create ")
+		parent := "standalone"
+		if m.createParentID != "" && !m.createStandalone {
+			parent = "parent " + m.createParentID
+		}
+		m.widget.SetFooter("enter: create  ctrl+t: toggle parent  esc: cancel  target: " + parent)
+	case modeStatus:
+		m.widget.SetPrompt("status ")
+		m.widget.SetFooter("enter: set status  esc: cancel")
+	default:
+		m.widget.SetPrompt("")
+		m.widget.SetFooter(browseFooter)
+	}
+}
+
+func (m *Model) enterCreateMode() {
+	m.mode = modeCreate
+	*m.modeRef = m.mode
+	m.modeSavedQuery = m.widget.Query()
+	m.modeSavedSelectedID = m.selectedRowID()
+	m.createParentID = ""
+	m.createStandalone = false
+	if issue, ok := m.selectedIssue(); ok && issue.IssueType == "epic" {
+		m.createParentID = issue.ID
+	}
+	m.widget.SetQuery("")
+	*m.queryRef = ""
+	m.syncWidgetChrome()
+}
+
+func (m *Model) enterStatusMode() {
+	issue, ok := m.selectedIssue()
+	if !ok {
+		return
+	}
+	m.mode = modeStatus
+	*m.modeRef = m.mode
+	m.modeSavedQuery = m.widget.Query()
+	m.modeSavedSelectedID = issue.ID
+	m.widget.SetQuery("")
+	*m.queryRef = ""
+	m.widget.SetItemCount(len(StatusChoices))
+	m.widget.SetSelected(statusChoiceIndex(issue.Status))
+	m.syncWidgetChrome()
+}
+
+func (m *Model) exitMode(restoreQuery bool) {
+	m.mode = modeBrowse
+	*m.modeRef = m.mode
+	m.createParentID = ""
+	m.createStandalone = false
+	if restoreQuery {
+		m.widget.SetQuery(m.modeSavedQuery)
+		*m.queryRef = m.modeSavedQuery
+		m.recomputeFilter()
+		m.selectByID(m.modeSavedSelectedID)
+	} else {
+		m.widget.SetQuery("")
+		*m.queryRef = ""
+		m.recomputeFilter()
+	}
+	m.modeSavedQuery = ""
+	m.modeSavedSelectedID = ""
+	m.syncWidgetChrome()
+}
+
+func (m *Model) submitCreate() (tea.Model, tea.Cmd) {
+	if m.cfg.Mutator == nil {
+		return *m, nil
+	}
+	title := strings.TrimSpace(m.widget.Query())
+	if title == "" {
+		return *m, nil
+	}
+	opts := CreateOptions{Type: "task"}
+	if m.createParentID != "" && !m.createStandalone {
+		opts.Parent = m.createParentID
+	}
+	return *m, func() tea.Msg {
+		issue, err := m.cfg.Mutator.Create(title, opts)
+		return mutationFinishedMsg{issue: issue, err: err}
+	}
+}
+
+func (m *Model) submitStatus() (tea.Model, tea.Cmd) {
+	if m.cfg.Mutator == nil {
+		return *m, nil
+	}
+	issueID := m.modeSavedSelectedID
+	if issueID == "" {
+		return *m, nil
+	}
+	idx := m.widget.Selected()
+	if idx < 0 || idx >= len(StatusChoices) {
+		return *m, nil
+	}
+	status := StatusChoices[idx]
+	return *m, func() tea.Msg {
+		issue, err := m.cfg.Mutator.UpdateStatus(issueID, status)
+		return mutationFinishedMsg{issue: issue, err: err}
+	}
+}
+
+func (m *Model) toggleClosed() (tea.Model, tea.Cmd) {
+	if m.cfg.Mutator == nil {
+		return *m, nil
+	}
+	issue, ok := m.selectedIssue()
+	if !ok {
+		return *m, nil
+	}
+	return *m, func() tea.Msg {
+		var updated Issue
+		var err error
+		if issue.Status == "closed" {
+			updated, err = m.cfg.Mutator.Reopen(issue.ID)
+		} else {
+			updated, err = m.cfg.Mutator.Close(issue.ID)
+		}
+		return mutationFinishedMsg{issue: updated, err: err}
+	}
+}
+
+func (m *Model) startReload(selectID string, invalidatePreview bool) tea.Cmd {
+	m.loading = true
+	m.loadErr = nil
+	m.pendingSelectID = selectID
+	if invalidatePreview && selectID != "" {
+		delete(m.previewCache, selectID)
+	}
+	return loadSnapshotCmd(m.cfg.Lister, m.scope)
+}
+
+func (m *Model) restorePendingSelection() {
+	if m.pendingSelectID == "" {
+		return
+	}
+	m.selectByID(m.pendingSelectID)
+}
+
+func (m *Model) selectByID(id string) {
+	if id == "" {
+		return
+	}
+	display := *m.displayRef
+	for i, issue := range display {
+		if issue.ID == id {
+			m.widget.SetSelected(i)
+			return
+		}
+	}
+}
+
+func statusChoiceIndex(status string) int {
+	for i, candidate := range StatusChoices {
+		if candidate == status {
+			return i
+		}
+	}
+	return 0
 }
 
 // selectedIssue returns the issue at the widget's current selection, or
 // false if the display list is empty or the selection is out of range.
 func (m Model) selectedIssue() (Issue, bool) {
+	if m.mode == modeStatus {
+		for _, issue := range *m.displayRef {
+			if issue.ID == m.modeSavedSelectedID {
+				return issue, true
+			}
+		}
+		return Issue{}, false
+	}
 	display := *m.displayRef
 	sel := m.widget.Selected()
 	if len(display) == 0 || sel >= len(display) {
@@ -451,6 +791,11 @@ func rowTag(issue Issue) string {
 		return "↳ " + issue.Parent
 	}
 	return ""
+}
+
+func renderStatusRow(status string, selected bool) string {
+	plain := lipgloss.NewStyle()
+	return fuzzyfinder.Highlight(statusIcon(status)+" "+status, nil, plain, selected)
 }
 
 // renderIssueRow renders "{readiness glyph} {status icon} {id}  {title}  {tag}  {badge}",

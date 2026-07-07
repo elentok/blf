@@ -217,6 +217,15 @@ func (m *Model) SetFooter(s string) {
 	m.cfg.Footer = s
 }
 
+// SetPrompt updates the prompt shown before the input chevron, letting a
+// consumer repurpose the input line for a different kind of value (e.g. a
+// mode-flip like blf beads' create/status-pick modes) without rebuilding the
+// widget.
+func (m *Model) SetPrompt(s string) {
+	m.cfg.Prompt = s
+	m.input.Prompt = inputPromptStyle.Render(s + "> ")
+}
+
 // visibleRows returns how many result rows fit within the current height.
 // Overhead: border-top(1) + input(1) + separator(1) + footer(1) + border-bottom(1) = 5.
 func (m Model) visibleRows() int {

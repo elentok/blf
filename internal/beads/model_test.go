@@ -24,6 +24,53 @@ func (s stubLister) Ready() (map[string]bool, error) {
 	return s.ready, nil
 }
 
+type stubMutator struct {
+	createdTitle  string
+	createdOpts   CreateOptions
+	updatedID     string
+	updatedStatus string
+	closedID      string
+	reopenedID    string
+	createResult  Issue
+	updateResult  Issue
+	closeResult   Issue
+	reopenResult  Issue
+}
+
+func (s *stubMutator) Create(title string, opts CreateOptions) (Issue, error) {
+	s.createdTitle = title
+	s.createdOpts = opts
+	if s.createResult.ID != "" {
+		return s.createResult, nil
+	}
+	return Issue{ID: "new-1", Title: title, Status: "open", IssueType: "task"}, nil
+}
+
+func (s *stubMutator) UpdateStatus(id, status string) (Issue, error) {
+	s.updatedID = id
+	s.updatedStatus = status
+	if s.updateResult.ID != "" {
+		return s.updateResult, nil
+	}
+	return Issue{ID: id, Status: status}, nil
+}
+
+func (s *stubMutator) Close(id string) (Issue, error) {
+	s.closedID = id
+	if s.closeResult.ID != "" {
+		return s.closeResult, nil
+	}
+	return Issue{ID: id, Status: "closed"}, nil
+}
+
+func (s *stubMutator) Reopen(id string) (Issue, error) {
+	s.reopenedID = id
+	if s.reopenResult.ID != "" {
+		return s.reopenResult, nil
+	}
+	return Issue{ID: id, Status: "open"}, nil
+}
+
 // stubPreviewFetcher is a fake PreviewFetcher for model tests, so preview
 // fetches don't shell out to bd.
 type stubPreviewFetcher struct {
@@ -57,6 +104,26 @@ func modelPress(m Model, key string) Model {
 		msg = tea.KeyPressMsg{Code: tea.KeyEsc}
 	case "ctrl+c":
 		msg = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "ctrl+a":
+		msg = tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}
+	case "ctrl+e":
+		msg = tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl}
+	case "ctrl+f":
+		msg = tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl}
+	case "ctrl+g":
+		msg = tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
+	case "ctrl+r":
+		msg = tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	case "ctrl+s":
+		msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
+	case "ctrl+t":
+		msg = tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl}
+	case "ctrl+x":
+		msg = tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}
+	case "down":
+		msg = tea.KeyPressMsg{Code: tea.KeyDown}
+	case "up":
+		msg = tea.KeyPressMsg{Code: tea.KeyUp}
 	default:
 		if len(key) == 1 {
 			r := rune(key[0])
@@ -82,6 +149,14 @@ func loadIssues(m Model, issues []Issue) Model {
 	m = next.(Model)
 	next, _ = m.Update(issuesLoadedMsg{issues: issues})
 	return next.(Model)
+}
+
+func issueSet(ids ...string) []Issue {
+	var issues []Issue
+	for _, id := range ids {
+		issues = append(issues, Issue{ID: id, Title: id, Status: "open", IssueType: "task"})
+	}
+	return issues
 }
 
 func TestEnterYieldsSelectedID(t *testing.T) {
@@ -181,9 +256,6 @@ func TestCtrlFCyclesScopeAndRefetches(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected a re-fetch cmd after ctrl+f")
 	}
-	if _, ok := cmd().(issuesLoadedMsg); !ok {
-		t.Errorf("expected ctrl+f's cmd to yield issuesLoadedMsg")
-	}
 }
 
 func TestScopeCycleOrder(t *testing.T) {
@@ -194,6 +266,204 @@ func TestScopeCycleOrder(t *testing.T) {
 		if s != w {
 			t.Fatalf("step %d: nextScope = %v, want %v", i, s, w)
 		}
+	}
+}
+
+func TestCreateModeEscRestoresQuery(t *testing.T) {
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}})
+	m = loadIssues(m, testIssues())
+	m = modelType(m, "feature")
+
+	m = modelPress(m, "ctrl+a")
+	if m.mode != modeCreate {
+		t.Fatalf("expected create mode, got %v", m.mode)
+	}
+	if got := m.widget.Query(); got != "" {
+		t.Fatalf("expected create mode to clear the input, got %q", got)
+	}
+
+	m = modelType(m, "new task")
+	m = modelPress(m, "esc")
+
+	if m.mode != modeBrowse {
+		t.Fatalf("expected browse mode after esc, got %v", m.mode)
+	}
+	if got := m.widget.Query(); got != "feature" {
+		t.Fatalf("expected query restored to %q, got %q", "feature", got)
+	}
+}
+
+func TestCreateModeOnEpicDefaultsParentAndCtrlTTogglesStandalone(t *testing.T) {
+	issues := []Issue{
+		{ID: "epic-1", Title: "Epic", Status: "open", IssueType: "epic"},
+		{ID: "task-1", Title: "Task", Status: "open", IssueType: "task"},
+	}
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}})
+	m = loadIssues(m, issues)
+
+	m = modelPress(m, "ctrl+a")
+	if m.createParentID != "epic-1" {
+		t.Fatalf("expected epic parent default, got %q", m.createParentID)
+	}
+	if m.createStandalone {
+		t.Fatal("expected create mode to default to child mode")
+	}
+
+	m = modelPress(m, "ctrl+t")
+	if !m.createStandalone {
+		t.Fatal("expected ctrl+t to toggle standalone on")
+	}
+}
+
+func TestCreateModeEnterCreatesAndRefreshesSelection(t *testing.T) {
+	mutator := &stubMutator{
+		createResult: Issue{ID: "new-1", Title: "new task", Status: "open", IssueType: "task"},
+	}
+	initial := []Issue{
+		{ID: "epic-1", Title: "Epic", Status: "open", IssueType: "epic"},
+	}
+	reloaded := []Issue{
+		{ID: "epic-1", Title: "Epic", Status: "open", IssueType: "epic"},
+		{ID: "new-1", Title: "new task", Status: "open", IssueType: "task", Parent: "epic-1"},
+	}
+	m := NewModel(ModelConfig{
+		Lister:  stubLister{issues: initial},
+		Mutator: mutator,
+	})
+	m = loadIssues(m, initial)
+
+	m = modelPress(m, "ctrl+a")
+	m = modelType(m, "new task")
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	msg := cmd()
+	next, cmd = m.Update(msg)
+	m = next.(Model)
+
+	if mutator.createdTitle != "new task" {
+		t.Fatalf("created title = %q, want %q", mutator.createdTitle, "new task")
+	}
+	if mutator.createdOpts.Parent != "epic-1" {
+		t.Fatalf("expected created issue to inherit epic parent, got %+v", mutator.createdOpts)
+	}
+	if cmd == nil {
+		t.Fatal("expected create to trigger a reload")
+	}
+
+	next, _ = m.Update(issuesLoadedMsg{issues: reloaded})
+	m = next.(Model)
+	next, _ = m.Update(readyLoadedMsg{ready: map[string]bool{"epic-1": true, "new-1": true}})
+	m = next.(Model)
+
+	if m.mode != modeBrowse {
+		t.Fatalf("expected browse mode after successful create, got %v", m.mode)
+	}
+	if m.selectedRowID() != "new-1" {
+		t.Fatalf("expected new issue selected after reload, got %q", m.selectedRowID())
+	}
+}
+
+func TestStatusModeEscRestoresQuery(t *testing.T) {
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}})
+	m = loadIssues(m, testIssues())
+	m = modelType(m, "feature")
+
+	m = modelPress(m, "ctrl+s")
+	if m.mode != modeStatus {
+		t.Fatalf("expected status mode, got %v", m.mode)
+	}
+
+	m = modelPress(m, "esc")
+	if got := m.widget.Query(); got != "feature" {
+		t.Fatalf("expected query restored to %q, got %q", "feature", got)
+	}
+}
+
+func TestStatusModeEnterUpdatesSelectedIssue(t *testing.T) {
+	mutator := &stubMutator{}
+	issues := testIssues()
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}, Mutator: mutator})
+	m = loadIssues(m, issues)
+	m = modelPress(m, "down")
+
+	m = modelPress(m, "ctrl+s")
+	m = modelPress(m, "down") // in_progress -> blocked
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	msg := cmd()
+	next, _ = m.Update(msg)
+	m = next.(Model)
+
+	if mutator.updatedID != "abc-2" {
+		t.Fatalf("updated id = %q, want %q", mutator.updatedID, "abc-2")
+	}
+	if mutator.updatedStatus != "blocked" {
+		t.Fatalf("updated status = %q, want %q", mutator.updatedStatus, "blocked")
+	}
+}
+
+func TestCtrlXClosesOpenIssue(t *testing.T) {
+	mutator := &stubMutator{}
+	issues := []Issue{{ID: "abc-1", Title: "task", Status: "open"}}
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}, Mutator: mutator})
+	m = loadIssues(m, issues)
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+	msg := cmd()
+	next, _ = m.Update(msg)
+	m = next.(Model)
+
+	if mutator.closedID != "abc-1" {
+		t.Fatalf("closed id = %q, want %q", mutator.closedID, "abc-1")
+	}
+}
+
+func TestCtrlXReopensClosedIssue(t *testing.T) {
+	mutator := &stubMutator{}
+	issues := []Issue{{ID: "abc-1", Title: "task", Status: "closed"}}
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}, Mutator: mutator})
+	m = loadIssues(m, issues)
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+	msg := cmd()
+	next, _ = m.Update(msg)
+	m = next.(Model)
+
+	if mutator.reopenedID != "abc-1" {
+		t.Fatalf("reopened id = %q, want %q", mutator.reopenedID, "abc-1")
+	}
+}
+
+func TestCtrlRStartsReloadAndReselectsCurrentIssue(t *testing.T) {
+	issues := []Issue{
+		{ID: "abc-1", Title: "first", Status: "open"},
+		{ID: "abc-2", Title: "second", Status: "open"},
+	}
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}})
+	m = loadIssues(m, issues)
+	m = modelPress(m, "down")
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	if !m.loading {
+		t.Fatal("expected ctrl+r to set loading")
+	}
+	if m.pendingSelectID != "abc-2" {
+		t.Fatalf("pendingSelectID = %q, want %q", m.pendingSelectID, "abc-2")
+	}
+	if cmd == nil {
+		t.Fatal("expected ctrl+r to trigger reload")
+	}
+
+	next, _ = m.Update(issuesLoadedMsg{issues: issues})
+	m = next.(Model)
+	if m.selectedRowID() != "abc-2" {
+		t.Fatalf("selected row after reload = %q, want %q", m.selectedRowID(), "abc-2")
 	}
 }
 

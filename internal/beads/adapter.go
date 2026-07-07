@@ -147,3 +147,112 @@ func decodeIssues(data []byte) ([]Issue, error) {
 	}
 	return issues, nil
 }
+
+// decodeIssueList decodes a `bd <cmd> --json` result of the id-list form
+// (update/close/reopen: a JSON array, even for a single id) into its sole
+// issue.
+func decodeIssueList(data []byte, id string) (Issue, error) {
+	issues, err := decodeIssues(data)
+	if err != nil {
+		return Issue{}, err
+	}
+	if len(issues) == 0 {
+		return Issue{}, fmt.Errorf("beads: no issue returned for %q", id)
+	}
+	return issues[0], nil
+}
+
+// CreateOptions holds the optional `bd create` flags the TUI's create mode
+// sets.
+type CreateOptions struct {
+	Parent   string // --parent; empty omits the flag
+	Priority string // --priority; empty omits the flag
+	Type     string // --type; empty omits the flag
+}
+
+// Create creates a new issue via `bd create <title> --json`, returning the
+// created issue. Unlike List/Show/UpdateStatus/Close/Reopen, `bd create
+// --json` emits a single JSON object rather than an array.
+func (a *Adapter) Create(title string, opts CreateOptions) (Issue, error) {
+	args := []string{"create", title, "--json"}
+	if opts.Parent != "" {
+		args = append(args, "--parent", opts.Parent)
+	}
+	if opts.Priority != "" {
+		args = append(args, "--priority", opts.Priority)
+	}
+	if opts.Type != "" {
+		args = append(args, "--type", opts.Type)
+	}
+
+	out, err := a.run(args...)
+	if err != nil {
+		return Issue{}, err
+	}
+	var issue Issue
+	if err := json.Unmarshal(out, &issue); err != nil {
+		return Issue{}, fmt.Errorf("beads: decoding created issue: %w", err)
+	}
+	return issue, nil
+}
+
+// StatusChoices are the workflow statuses offered by the TUI's status-pick
+// mode. bd also accepts "pinned"/"hooked", but those are operational-state
+// markers rather than workflow steps, so they're left to the bd CLI directly
+// per CONTEXT.md/the PRD's "core status only" scope.
+var StatusChoices = []string{"open", "in_progress", "blocked", "deferred", "closed"}
+
+// UpdateStatus sets id's status via `bd update <id> --status <status> --json`.
+func (a *Adapter) UpdateStatus(id, status string) (Issue, error) {
+	out, err := a.run("update", id, "--status", status, "--json")
+	if err != nil {
+		return Issue{}, err
+	}
+	return decodeIssueList(out, id)
+}
+
+// Close closes id via `bd close <id> --json`.
+func (a *Adapter) Close(id string) (Issue, error) {
+	out, err := a.run("close", id, "--json")
+	if err != nil {
+		return Issue{}, err
+	}
+	return decodeIssueList(out, id)
+}
+
+// Reopen reopens id via `bd reopen <id> --json`.
+func (a *Adapter) Reopen(id string) (Issue, error) {
+	out, err := a.run("reopen", id, "--json")
+	if err != nil {
+		return Issue{}, err
+	}
+	return decodeIssueList(out, id)
+}
+
+// GraphFormat selects bd graph's output format.
+type GraphFormat string
+
+const (
+	// GraphCompact is the tree format, one line per issue, meant for paging
+	// in the terminal.
+	GraphCompact GraphFormat = "compact"
+	// GraphHTML is self-contained interactive HTML, meant to be written to a
+	// file and opened in a browser.
+	GraphHTML GraphFormat = "html"
+)
+
+// Graph returns id's dependency graph rendered in format via `bd graph`,
+// e.g. for the TUI's ctrl+g shell-out. The output is raw text/HTML, not
+// JSON: bd graph doesn't support --json.
+func (a *Adapter) Graph(id string, format GraphFormat) ([]byte, error) {
+	args := []string{"graph", id}
+	switch format {
+	case GraphCompact, "":
+		args = append(args, "--compact")
+	case GraphHTML:
+		args = append(args, "--html")
+	default:
+		return nil, fmt.Errorf("beads: unknown graph format %q", format)
+	}
+	return a.run(args...)
+}

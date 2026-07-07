@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/beads"
 	"github.com/spf13/cobra"
 )
@@ -20,10 +21,13 @@ func newBeadsCmd(d deps) *cobra.Command {
 			}
 
 			id, err := beads.Run(beads.ModelConfig{
-				Lister:   adapter,
-				Preview:  adapter,
-				Scope:    beads.ScopeActionable,
-				CopyText: d.copyText,
+				Lister:     adapter,
+				Preview:    adapter,
+				Mutator:    adapter,
+				Scope:      beads.ScopeActionable,
+				CopyText:   d.copyText,
+				EditIssue:  func(id string) tea.Cmd { return beads.EditIssueCmd(dir, id) },
+				GraphIssue: func(id string) tea.Cmd { return beads.GraphIssueCmd(dir, id) },
 			})
 			if err != nil {
 				return err
