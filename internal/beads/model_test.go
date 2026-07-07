@@ -120,6 +120,8 @@ func modelPress(m Model, key string) Model {
 		msg = tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl}
 	case "ctrl+x":
 		msg = tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl}
+	case "?":
+		msg = tea.KeyPressMsg{Code: '?', Text: "?"}
 	case "down":
 		msg = tea.KeyPressMsg{Code: tea.KeyDown}
 	case "up":
@@ -266,6 +268,26 @@ func TestScopeCycleOrder(t *testing.T) {
 		if s != w {
 			t.Fatalf("step %d: nextScope = %v, want %v", i, s, w)
 		}
+	}
+}
+
+func TestQuestionMarkOpensHelpAndNextKeyClosesIt(t *testing.T) {
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}})
+	m = loadIssues(m, testIssues())
+
+	m = modelPress(m, "?")
+	if !m.helpMode {
+		t.Fatal("expected help mode to open")
+	}
+
+	view := m.View().Content
+	if !strings.Contains(view, "blf beads - help") {
+		t.Fatalf("expected help view title, got %q", view)
+	}
+
+	m = modelPress(m, "down")
+	if m.helpMode {
+		t.Fatal("expected any key to close help mode")
 	}
 }
 

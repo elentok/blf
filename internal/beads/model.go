@@ -113,6 +113,7 @@ type Model struct {
 
 	selectedID string
 	mode       modeState
+	helpMode   bool
 
 	modeSavedQuery      string
 	modeSavedSelectedID string
@@ -306,6 +307,10 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.helpMode {
+			m.helpMode = false
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			if m.mode != modeBrowse {
@@ -388,6 +393,13 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.cfg.GraphIssue(issue.ID)
 
+		case "?":
+			if m.mode != modeBrowse {
+				return m, nil
+			}
+			m.helpMode = true
+			return m, nil
+
 		case "enter":
 			switch m.mode {
 			case modeCreate:
@@ -436,7 +448,7 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-const browseFooter = "enter: copy id & quit  ctrl+a: create  ctrl+s: status  ctrl+x: close/reopen  ctrl+e: edit  ctrl+g: graph  ctrl+r: refresh  ctrl+f: cycle scope  tab: toggle preview  esc/ctrl+c: quit"
+const browseFooter = "?: help"
 
 func (m *Model) syncWidgetChrome() {
 	switch m.mode {
@@ -708,6 +720,15 @@ func (m *Model) recomputeFilter() {
 }
 
 func (m Model) View() tea.View {
+	if m.helpMode {
+		w := max(m.width, 14)
+		h := max(m.height, 6)
+		content := previewStyle.Width(w).Height(h).Render(m.renderHelp())
+		v := tea.NewView(content)
+		v.AltScreen = true
+		return v
+	}
+
 	var content string
 	switch {
 	case m.loadErr != nil:
@@ -724,6 +745,44 @@ func (m Model) View() tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
+}
+
+func (m Model) renderHelp() string {
+	type binding struct{ key, desc string }
+	bindings := []binding{
+		{"↑ / ↓", "select issue"},
+		{"ctrl+k / ctrl+j", "(aliases for ↑ / ↓)"},
+		{"ctrl+p / ctrl+n", "(aliases for ↑ / ↓)"},
+		{"enter", "copy selected issue id and quit"},
+		{"ctrl+a", "create a new issue from the input line"},
+		{"ctrl+s", "pick a new status for the selected issue"},
+		{"ctrl+x", "close or reopen the selected issue"},
+		{"ctrl+e", "edit the selected issue in $EDITOR"},
+		{"ctrl+g", "open the selected issue's graph"},
+		{"ctrl+r", "refresh the list and keep selection"},
+		{"ctrl+f", "cycle scope (actionable / ready / blocked / all)"},
+		{"tab", "toggle the preview pane"},
+		{"esc", "quit the picker"},
+		{"?", "toggle this help"},
+	}
+
+	maxKeyWidth := 0
+	for _, b := range bindings {
+		if w := lipgloss.Width(b.key); w > maxKeyWidth {
+			maxKeyWidth = w
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString(previewTitleStyle.Render("blf beads - help") + "\n\n")
+	for _, b := range bindings {
+		pad := strings.Repeat(" ", maxKeyWidth-lipgloss.Width(b.key))
+		key := fuzzyfinder.SubtitleStyle.Render(b.key) + pad
+		desc := lipgloss.NewStyle().Render(b.desc)
+		sb.WriteString("  " + key + "  " + desc + "\n")
+	}
+	sb.WriteString("\n" + previewMetaStyle.Render("  press any key to close help"))
+	return sb.String()
 }
 
 // statusIcon mirrors the glyphs bd's own CLI output uses for these statuses.

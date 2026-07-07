@@ -72,6 +72,7 @@ Start a new shell for completions to take effect.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
 - `blf claude-statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line.
 - `blf claude history`: TUI for browsing Claude Code conversation history — list projects, drill into a project's conversations, grep across transcripts, export to markdown, and resume a session.
+- `blf beads`: TUI for browsing and triaging Beads issues in the current project.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -151,6 +152,14 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 - The conversations page lists each project's sessions by title (falling back to the session ID) with relative and absolute last-accessed times; Enter exports the conversation to markdown and opens it in `$EDITOR` (falling back to `nvim`/`vi`), `ctrl+r` resumes it with `claude --resume <session-id>`, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
 - `ctrl+f` opens transcript grep search (ripgrep-backed) with a live preview pane showing the matched conversation's title and session ID; `ctrl+g` toggles between project and global scope, Enter opens the matched conversation at that line, `ctrl+r` resumes its session, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
 - Filtering and search use the shared `fuzzyfinder` widget, including multi-word AND matching (e.g. `one two` matches rows containing both words in any order) and match highlighting.
+
+`blf beads` behavior:
+
+- Opens a project-contextual TUI over the local `.beads` database via the `bd` CLI; run it from a repo with Beads initialized, or pass `-C/--dir` to target another project.
+- Lists issues flat (epics, subtasks, standalone) with client-side fuzzy filtering by id/title, readiness-first sorting, and a `↓N ↑M` badge for blockers/dependents.
+- Shows a side preview for the selected issue with full description, an epic subtask tree, and the transitive blocked-by tree. Narrow terminals hide the preview by default; `tab` toggles it.
+- Press `enter` to copy the selected issue id to the clipboard, print it to stdout, and quit.
+- Press `?` for in-TUI key help. Main actions: `ctrl+a` create, `ctrl+s` status picker, `ctrl+x` close/reopen, `ctrl+e` edit in `$EDITOR`, `ctrl+g` open `bd graph`, `ctrl+r` refresh, `ctrl+f` cycle scope.
 
 `kitty ls` behavior:
 

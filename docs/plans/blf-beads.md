@@ -46,7 +46,7 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
       priority, issue_type, labels, dependency_count, dependent_count, parent, timestamps)
 - [x] `List(scope)` → `bd list --json` with scope flags; `Ready()` → `bd ready --json` (id set)
 - [x] `Show(id)`, `Children(id)`, `DepList(id)` for preview detail
-- [ ] Mutations: `Create(title, opts)`, `UpdateStatus(id, s)`, `Close/Reopen(id)`
+- [x] Mutations: `Create(title, opts)`, `UpdateStatus(id, s)`, `Close/Reopen(id)`
 - [x] `bd` presence + db-discovery checks with clear errors; `-C` dir passthrough
 - [x] Unit tests with a fake `bd` (exec indirection) covering JSON decode + arg building
 
@@ -66,22 +66,27 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - [x] Side-by-side layout + narrow fallback + `tab` toggle (`SetSize` with reduced width)
 - [x] Lazy debounced cached preview fetch (async `tea.Cmd`), loading placeholders
 - [x] Scope filter cycle (`ctrl+f`) re-fetches set
-- [ ] Manual refresh (`ctrl+r`)
+- [x] Manual refresh (`ctrl+r`)
 - [x] Client-side fuzzy via `fuzzyfinder.Find`
 - [x] Empty-state line; `bd`/db error surfacing before entering the TUI
 
 ### 5. Modes + actions
-- [ ] Create mode (input repurpose, epic `--parent` + `ctrl+t` toggle) → `bd create`, re-fetch, select new
-- [ ] Status-pick mode → `bd update --status`
-- [ ] Close/reopen (`ctrl+x`), edit handoff (`ctrl+e`, suspend/exec/return like claude history)
-- [ ] Graph shell-out (`ctrl+g`)
+- [x] Create mode (input repurpose, epic `--parent` + `ctrl+t` toggle) → `bd create`, re-fetch, select new
+- [x] Status-pick mode → `bd update --status`
+- [x] Close/reopen (`ctrl+x`), edit handoff (`ctrl+e`, suspend/exec/return like claude history)
+- [x] Graph shell-out (`ctrl+g`)
 - [x] Enter: copy id (lipgloss? no — clipboard via platform) + print to stdout + quit
 
 ### 6. Command wiring + docs
 - [x] `cmd/beads.go` cobra command `blf beads` with `-C/--dir`
-- [ ] Help/footer key hints (mirror launcher's `?`/footer approach)
-- [ ] README section + CHANGELOG entry (`/changelog`)
+- [x] Help/footer key hints (mirror launcher's `?`/footer approach)
+- [x] README section + CHANGELOG entry (`/changelog`)
 - [x] Manual verification against this repo's `.beads` db (35 issues)
+
+## Review
+
+- `blf beads` now uses the same compact-footer-plus-`?` help pattern as the launcher, keeping browse-mode chrome quiet while leaving the full keymap discoverable.
+- The CLI boundary held cleanly: all Beads reads and writes still route through `bd`, which was stable enough to document as an ADR.
 
 ## Open / deferred
 - "Roots only" list mode (hide subtasks) — deferred unless the flat density bothers us.

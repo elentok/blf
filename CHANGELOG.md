@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- Added **`blf beads`**: a Beads issue-browser TUI for the current project. It fuzzy-browses issues from the `bd` CLI, sorts them by readiness, shows a side preview with description + subtask/blocked-by trees, and copies the selected issue id on Enter so it can be handed straight to an AI agent.
+- `blf beads` now supports in-TUI triage actions: create from the shared input line, status changes, close/reopen, `$EDITOR` handoff, dependency graph viewing, scope cycling, refresh, and a `?` help screen. Mutations re-fetch the working set and keep the touched issue selected.
+
 ## [v0.6.3] - 2026-07-04
 
 - **`launcher` history now stores picked items instead of query text**, enabling direct-fire recall: selecting a launch/run/open entry from the empty-input history list now immediately performs that action on Enter (e.g. picking "Kitty" launches Kitty), and different queries resolving to the same item coalesce into one entry. Copy actions (calc/unit/currency) keep the old behavior — history stores the query text, and Enter populates the input for recompute. Ctrl+R/Ctrl+F remain text-recall shortcuts for further editing, not execution.
