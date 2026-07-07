@@ -21,6 +21,7 @@ func newBeadsCmd(d deps) *cobra.Command {
 
 			id, err := beads.Run(beads.ModelConfig{
 				Lister:   adapter,
+				Preview:  adapter,
 				Scope:    beads.ScopeActionable,
 				CopyText: d.copyText,
 			})

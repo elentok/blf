@@ -24,6 +24,21 @@ func (s stubLister) Ready() (map[string]bool, error) {
 	return s.ready, nil
 }
 
+// stubPreviewFetcher is a fake PreviewFetcher for model tests, so preview
+// fetches don't shell out to bd.
+type stubPreviewFetcher struct {
+	childrenOf map[string][]Issue
+	depsOf     map[string][]Dependency
+}
+
+func (s stubPreviewFetcher) Children(id string) ([]Issue, error) {
+	return s.childrenOf[id], nil
+}
+
+func (s stubPreviewFetcher) DepList(id string) ([]Dependency, error) {
+	return s.depsOf[id], nil
+}
+
 func testIssues() []Issue {
 	return []Issue{
 		{ID: "abc-1", Title: "fix the bug", Status: "open"},
@@ -232,5 +247,119 @@ func TestRenderIssueRowTagsEpicAndSubtask(t *testing.T) {
 	row = renderIssueRow(subtask, map[string]bool{}, "", false)
 	if !strings.Contains(row, "↳ epic-1") {
 		t.Errorf("expected parent breadcrumb in row, got %q", row)
+	}
+}
+
+func TestPreviewVisible_WideTerminalShowsByDefault(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	m = next.(Model)
+
+	if !m.previewVisible() {
+		t.Error("expected preview visible on a wide terminal")
+	}
+}
+
+func TestPreviewVisible_NarrowTerminalHidesByDefault(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m = next.(Model)
+
+	if m.previewVisible() {
+		t.Error("expected preview hidden on a narrow terminal")
+	}
+}
+
+func TestTabTogglesPreviewVisibility(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	m = next.(Model)
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: '\t'})
+	m = next.(Model)
+	if m.previewVisible() {
+		t.Error("expected tab to hide the preview on a wide terminal")
+	}
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: '\t'})
+	m = next.(Model)
+	if !m.previewVisible() {
+		t.Error("expected a second tab to re-show the preview")
+	}
+}
+
+func TestTabOnNarrowTerminalForcesPreviewOn(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m = next.(Model)
+
+	next, _ = m.Update(tea.KeyPressMsg{Code: '\t'})
+	m = next.(Model)
+	if !m.previewVisible() {
+		t.Error("expected tab to force the preview on despite the narrow terminal")
+	}
+}
+
+func TestSelectionChangeStartsPreviewDebounceAndFetch(t *testing.T) {
+	fetcher := stubPreviewFetcher{
+		childrenOf: map[string][]Issue{
+			"abc-2": {{ID: "abc-2.1", Title: "child", Status: "closed"}},
+		},
+	}
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}, Preview: fetcher})
+	m = loadIssues(m, testIssues())
+
+	// Move the cursor from abc-1 to abc-2.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(Model)
+	if m.selectedRowID() != "abc-2" {
+		t.Fatalf("expected selection to move to abc-2, got %q", m.selectedRowID())
+	}
+	if cmd == nil {
+		t.Fatal("expected a debounce cmd after the selection changed")
+	}
+
+	debounceMsg := cmd()
+	dm, ok := debounceMsg.(previewDebounceMsg)
+	if !ok || dm.id != "abc-2" {
+		t.Fatalf("expected previewDebounceMsg for abc-2, got %#v", debounceMsg)
+	}
+
+	next, cmd = m.Update(dm)
+	m = next.(Model)
+	if cmd == nil {
+		t.Fatal("expected a fetch cmd from the debounce message")
+	}
+
+	loadedMsg := cmd()
+	lm, ok := loadedMsg.(previewLoadedMsg)
+	if !ok || lm.id != "abc-2" {
+		t.Fatalf("expected previewLoadedMsg for abc-2, got %#v", loadedMsg)
+	}
+	if lm.data.subtasks == nil || len(lm.data.subtasks.Children) != 1 {
+		t.Fatalf("expected abc-2's fetched preview to include its child, got %+v", lm.data)
+	}
+
+	next, _ = m.Update(lm)
+	m = next.(Model)
+	if _, cached := m.previewCache["abc-2"]; !cached {
+		t.Error("expected abc-2's preview to be cached after previewLoadedMsg")
+	}
+}
+
+func TestStalePreviewMessagesAreIgnored(t *testing.T) {
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}, Preview: stubPreviewFetcher{}})
+	m = loadIssues(m, testIssues())
+
+	next, _ := m.Update(previewDebounceMsg{seq: m.previewSeq + 99, id: "abc-1"})
+	m = next.(Model)
+	if _, cached := m.previewCache["abc-1"]; cached {
+		t.Error("expected a stale-seq debounce message to be ignored")
+	}
+
+	next, _ = m.Update(previewLoadedMsg{seq: m.previewSeq + 99, id: "abc-1", data: previewData{}})
+	m = next.(Model)
+	if _, cached := m.previewCache["abc-1"]; cached {
+		t.Error("expected a stale-seq loaded message to be ignored")
 	}
 }

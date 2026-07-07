@@ -56,15 +56,15 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - [x] Tests for bucket ordering and readiness derivation
 
 ### 3. Preview rendering (`internal/beads` view helpers)
-- [ ] Subtasks tree (hierarchy, nested, completion count)
-- [ ] Blocked-by tree (transitive, rooted, diamond/cycle collapse marker)
-- [ ] Header (status/priority/type) + description + metadata; parent breadcrumb for subtasks
-- [ ] Tests for tree building incl. diamond + cycle collapsing
+- [x] Subtasks tree (hierarchy, nested, completion count)
+- [x] Blocked-by tree (transitive, rooted, diamond/cycle collapse marker)
+- [x] Header (status/priority/type) + description + metadata; parent breadcrumb for subtasks
+- [x] Tests for tree building incl. diamond + cycle collapsing
 
 ### 4. TUI model (`internal/beads/model.go`)
 - [x] Embed `fuzzyfinder`; flat list, row rendering (icons, tags, `↓/↑` badge, readiness color)
-- [ ] Side-by-side layout + narrow fallback + `tab` toggle (`SetSize` with reduced width)
-- [ ] Lazy debounced cached preview fetch (async `tea.Cmd`), loading placeholders
+- [x] Side-by-side layout + narrow fallback + `tab` toggle (`SetSize` with reduced width)
+- [x] Lazy debounced cached preview fetch (async `tea.Cmd`), loading placeholders
 - [x] Scope filter cycle (`ctrl+f`) re-fetches set
 - [ ] Manual refresh (`ctrl+r`)
 - [x] Client-side fuzzy via `fuzzyfinder.Find`

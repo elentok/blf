@@ -3,12 +3,22 @@ package beads
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/elentok/blf/internal/fuzzyfinder"
 )
+
+// previewMinWidth is the terminal width below which the issue preview
+// auto-hides to keep the list usable; tab overrides this.
+const previewMinWidth = 100
+
+// previewDebounceDelay is how long the preview fetch waits after a selection
+// change before shelling out, so scrolling the list doesn't spawn a bd call
+// per row.
+const previewDebounceDelay = 100 * time.Millisecond
 
 // IssueLister is the subset of Adapter behavior the TUI list depends on,
 // letting tests inject a stub instead of shelling out to bd.
@@ -29,9 +39,26 @@ type readyLoadedMsg struct {
 	err   error
 }
 
+// previewDebounceMsg fires previewDebounceDelay after a selection change; if
+// seq no longer matches the model's current previewSeq, the selection moved
+// on again and this fetch is stale.
+type previewDebounceMsg struct {
+	seq int
+	id  string
+}
+
+// previewLoadedMsg carries the async result of fetching an id's preview
+// trees.
+type previewLoadedMsg struct {
+	seq  int
+	id   string
+	data previewData
+}
+
 // ModelConfig holds injectable dependencies for the beads TUI model.
 type ModelConfig struct {
 	Lister   IssueLister
+	Preview  PreviewFetcher
 	Scope    Scope
 	CopyText func(string) error // optional; nil disables the clipboard write on enter
 }
@@ -55,6 +82,18 @@ type Model struct {
 
 	selectedID string
 
+	// previewCache holds fetched trees per issue id; previewSeq guards
+	// against a stale debounce/fetch replying after the selection moved on
+	// again (mirrors internal/claudehistory's grep debounce).
+	previewCache   map[string]previewData
+	previewSeq     int
+	previewLoading bool
+	// previewToggled flips whatever the width-based previewMinWidth default
+	// would otherwise decide (tab key), so it works both to hide the
+	// preview on a wide terminal and to force it on a narrow one.
+	previewToggled bool
+	previewWidth   int
+
 	width, height int
 }
 
@@ -65,12 +104,13 @@ func NewModel(cfg ModelConfig) Model {
 	readyRef := new(map[string]bool)
 
 	m := Model{
-		cfg:        cfg,
-		queryRef:   queryRef,
-		displayRef: displayRef,
-		readyRef:   readyRef,
-		scope:      cfg.Scope,
-		loading:    true,
+		cfg:          cfg,
+		queryRef:     queryRef,
+		displayRef:   displayRef,
+		readyRef:     readyRef,
+		scope:        cfg.Scope,
+		loading:      true,
+		previewCache: make(map[string]previewData),
 	}
 
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
@@ -81,7 +121,7 @@ func NewModel(cfg ModelConfig) Model {
 			}
 			return renderIssueRow(display[i], *readyRef, *queryRef, selected)
 		},
-		Footer:    "enter: copy id & quit  ctrl+f: cycle scope  esc/ctrl+c: quit",
+		Footer:    "enter: copy id & quit  tab: toggle preview  ctrl+f: cycle scope  esc/ctrl+c: quit",
 		ItemCount: 1,
 	})
 
@@ -129,12 +169,27 @@ func (m Model) SelectedID() string {
 	return m.selectedID
 }
 
+// Update forwards to updateInner and then, if the selection moved as a
+// result, kicks off a debounced preview fetch for the newly selected issue.
+// Centralizing the check here (rather than at every code path that can move
+// the selection: nav keys, filtering, scope reload, ready re-sort) means the
+// lazy-preview behavior can't be missed by a future call site.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	prevID := m.selectedRowID()
+	next, cmd := m.updateInner(msg)
+	nm := next.(Model)
+	if newID := nm.selectedRowID(); newID != prevID {
+		cmd = tea.Batch(cmd, nm.startPreviewDebounceCmd(newID))
+	}
+	return nm, cmd
+}
+
+func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.widget.SetSize(msg.Width, msg.Height)
+		m.applyLayout()
 		return m, nil
 
 	case issuesLoadedMsg:
@@ -157,10 +212,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recomputeFilter()
 		return m, nil
 
+	case previewDebounceMsg:
+		if msg.seq != m.previewSeq {
+			return m, nil // stale: the selection moved on again
+		}
+		issue, ok := m.selectedIssue()
+		if !ok || issue.ID != msg.id || m.cfg.Preview == nil {
+			return m, nil
+		}
+		return m, fetchPreviewCmd(m.cfg.Preview, issue, msg.seq)
+
+	case previewLoadedMsg:
+		if msg.seq != m.previewSeq {
+			return m, nil // stale: the selection moved on again
+		}
+		m.previewLoading = false
+		m.previewCache[msg.id] = msg.data
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			return m, tea.Quit
+
+		case "tab":
+			m.previewToggled = !m.previewToggled
+			m.applyLayout()
+			return m, nil
 
 		case "ctrl+f":
 			m.scope = nextScope(m.scope)
@@ -191,6 +269,77 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recomputeFilter()
 	}
 	return m, cmd
+}
+
+// selectedIssue returns the issue at the widget's current selection, or
+// false if the display list is empty or the selection is out of range.
+func (m Model) selectedIssue() (Issue, bool) {
+	display := *m.displayRef
+	sel := m.widget.Selected()
+	if len(display) == 0 || sel >= len(display) {
+		return Issue{}, false
+	}
+	return display[sel], true
+}
+
+// selectedRowID returns the id of the currently selected row, or "" if
+// nothing is selected.
+func (m Model) selectedRowID() string {
+	issue, ok := m.selectedIssue()
+	if !ok {
+		return ""
+	}
+	return issue.ID
+}
+
+// startPreviewDebounceCmd bumps previewSeq and, unless id's preview is
+// already cached, returns a Cmd that waits previewDebounceDelay before
+// firing a previewDebounceMsg — scrolling through the list rapidly only
+// triggers the actual bd calls once the cursor settles.
+func (m *Model) startPreviewDebounceCmd(id string) tea.Cmd {
+	m.previewSeq++
+	seq := m.previewSeq
+	if id == "" {
+		return nil
+	}
+	if _, cached := m.previewCache[id]; cached {
+		return nil
+	}
+	m.previewLoading = true
+	return func() tea.Msg {
+		time.Sleep(previewDebounceDelay)
+		return previewDebounceMsg{seq: seq, id: id}
+	}
+}
+
+// fetchPreviewCmd fetches root's subtasks + blocked-by trees via fetcher and
+// reports the result tagged with seq so a stale reply can be discarded.
+func fetchPreviewCmd(fetcher PreviewFetcher, root Issue, seq int) tea.Cmd {
+	return func() tea.Msg {
+		return previewLoadedMsg{seq: seq, id: root.ID, data: fetchPreviewData(fetcher, root)}
+	}
+}
+
+// previewVisible reports whether the preview pane should render, combining
+// the width-based auto-hide (narrow terminals) with the user's tab toggle,
+// which flips whatever the width would otherwise decide.
+func (m Model) previewVisible() bool {
+	wide := m.width >= previewMinWidth
+	return wide != m.previewToggled
+}
+
+// applyLayout re-derives the list/preview split from the current terminal
+// size: list ~40% left, preview ~60% right when shown, full-width list when
+// the preview is hidden.
+func (m *Model) applyLayout() {
+	if !m.previewVisible() {
+		m.widget.SetSize(m.width, m.height)
+		m.previewWidth = 0
+		return
+	}
+	leftWidth := m.width * 2 / 5
+	m.widget.SetSize(leftWidth, m.height)
+	m.previewWidth = m.width - leftWidth
 }
 
 // recomputeFilter re-derives the displayed issue list from allItems and the
@@ -227,6 +376,8 @@ func (m Model) View() tea.View {
 		content = "Loading issues…"
 	case len(m.allItems) == 0:
 		content = emptyStateStyle.Render("No issues in scope.")
+	case m.previewVisible():
+		content = lipgloss.JoinHorizontal(lipgloss.Top, m.widget.View(), m.renderPreview())
 	default:
 		content = m.widget.View()
 	}
@@ -338,4 +489,147 @@ func renderIssueRow(issue Issue, readyIDs map[string]bool, query string, selecte
 	}
 
 	return line
+}
+
+// renderPreview renders the side pane for the currently selected issue: a
+// header (title/status/priority) and description that render instantly from
+// data already in hand, followed by the subtasks + blocked-by trees once
+// their async fetch lands (or a loading placeholder until it does).
+//
+// Every variable-length piece of text (title, description, tree lines) is
+// hard-wrapped to the box's inner width and the whole result is truncated to
+// the box's inner height before rendering. lipgloss's Style.Height pads a
+// short block but does not truncate a tall one, and Style.Width word-wraps
+// rather than clipping — so an unwrapped long line silently grows the
+// rendered block past the terminal height and breaks the side-by-side
+// JoinHorizontal alignment with the list pane.
+func (m Model) renderPreview() string {
+	innerWidth := max(m.previewWidth-4, 20) // border (2) + horizontal padding (2)
+	box := previewStyle.Width(max(m.previewWidth, 10)).Height(max(m.height, 3))
+
+	issue, ok := m.selectedIssue()
+	if !ok {
+		return box.Render("")
+	}
+
+	var lines []string
+	for _, l := range wrapText(issue.Title, innerWidth) {
+		lines = append(lines, previewTitleStyle.Render(l))
+	}
+	lines = append(lines, previewMetaStyle.Render(
+		fmt.Sprintf("%s %s  ·  priority %d", statusIcon(issue.Status), issue.Status, issue.Priority)))
+	if issue.Parent != "" {
+		lines = append(lines, fuzzyfinder.SubtitleStyle.Render("↳ parent: "+issue.Parent))
+	}
+	lines = append(lines, "")
+
+	if issue.Description != "" {
+		lines = append(lines, wrapText(issue.Description, innerWidth)...)
+		lines = append(lines, "")
+	}
+
+	data, cached := m.previewCache[issue.ID]
+	switch {
+	case !cached && m.previewLoading:
+		lines = append(lines, previewSectionStyle.Render("Loading…"))
+	case cached && data.err != nil:
+		lines = append(lines, wrapText(errorStyle.Render("Error: "+data.err.Error()), innerWidth)...)
+	case cached:
+		if data.subtasks != nil {
+			header, body := renderSubtasksSection(*data.subtasks)
+			lines = append(lines, previewHeaderStyle.Render(header))
+			lines = append(lines, wrapText(strings.Join(body, "\n"), innerWidth)...)
+			lines = append(lines, "")
+		}
+		if data.blockedBy != nil {
+			header, body := renderBlockedBySection(*data.blockedBy)
+			if header != "" {
+				lines = append(lines, previewHeaderStyle.Render(header))
+				lines = append(lines, wrapText(strings.Join(body, "\n"), innerWidth)...)
+			}
+		}
+	}
+
+	// Content lines = box height minus the top/bottom border.
+	maxLines := max(m.height-2, 1)
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
+	return box.Render(strings.Join(lines, "\n"))
+}
+
+// renderSubtasksSection renders the "Subtasks (x/y done)" header plus the
+// nested child lines, kept as a section distinct from renderBlockedBySection
+// per CONTEXT.md's issue preview: hierarchy and dependency edges must never
+// be merged into one tree.
+func renderSubtasksSection(root SubtaskNode) (header string, bodyLines []string) {
+	closed, total := root.CompletionCount()
+	header = fmt.Sprintf("Subtasks (%d/%d done)", closed, total)
+	for _, child := range root.Children {
+		bodyLines = append(bodyLines, renderSubtaskLines(child, 0)...)
+	}
+	return header, bodyLines
+}
+
+func renderSubtaskLines(n SubtaskNode, depth int) []string {
+	indent := strings.Repeat("  ", depth)
+	line := indent + statusIcon(n.Issue.Status) + " " + n.Issue.ID + "  " + n.Issue.Title
+	lines := []string{line}
+	for _, child := range n.Children {
+		lines = append(lines, renderSubtaskLines(child, depth+1)...)
+	}
+	return lines
+}
+
+// renderBlockedBySection renders the "Blocked by" header plus the transitive
+// dependency lines, or "" when root has no blockers.
+func renderBlockedBySection(root BlockedByNode) (header string, bodyLines []string) {
+	for _, child := range root.Children {
+		bodyLines = append(bodyLines, renderBlockedByLines(child, 0)...)
+	}
+	if len(bodyLines) == 0 {
+		return "", nil
+	}
+	return "Blocked by", bodyLines
+}
+
+func renderBlockedByLines(n BlockedByNode, depth int) []string {
+	indent := strings.Repeat("  ", depth)
+	label := n.Issue.ID + "  " + n.Issue.Title
+	if n.IsBackRef {
+		label = n.Issue.ID + " (see above)"
+	}
+	line := indent + statusIcon(n.Issue.Status) + " " + label
+	lines := []string{line}
+	if !n.IsBackRef {
+		for _, child := range n.Children {
+			lines = append(lines, renderBlockedByLines(child, depth+1)...)
+		}
+	}
+	return lines
+}
+
+// wrapText hard-wraps text to at most width runes per line (naive, no word
+// boundaries — matches internal/claudehistory's grep preview wrapping),
+// splitting first on existing newlines so multi-paragraph text keeps its
+// paragraph breaks.
+func wrapText(text string, width int) []string {
+	if width <= 0 {
+		width = 80
+	}
+	var lines []string
+	for para := range strings.SplitSeq(text, "\n") {
+		runes := []rune(para)
+		if len(runes) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+		for len(runes) > width {
+			lines = append(lines, string(runes[:width]))
+			runes = runes[width:]
+		}
+		lines = append(lines, string(runes))
+	}
+	return lines
 }

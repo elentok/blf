@@ -12,3 +12,17 @@ var (
 	readinessBlockedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#f38ba8")) // red
 	readinessOtherStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")) // dim
 )
+
+var previewStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#cdd6f4")).
+	Border(lipgloss.RoundedBorder()).
+	Padding(0, 1).
+	BorderForeground(lipgloss.Color("#585b70"))
+
+var previewTitleStyle = lipgloss.NewStyle().Bold(true)
+
+var previewMetaStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086"))
+
+var previewHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#89b4fa"))
+
+var previewSectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Italic(true)
