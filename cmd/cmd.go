@@ -110,6 +110,7 @@ func execute(args []string, d deps) error {
 		newDimPathCmd(d),
 		newCleanURLCmd(d),
 		newLauncherCmd(d),
+		newBeadsCmd(d),
 		newConfigCmd(d),
 		newVersionCmd(d),
 	)

@@ -66,21 +66,21 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - [ ] Side-by-side layout + narrow fallback + `tab` toggle (`SetSize` with reduced width)
 - [ ] Lazy debounced cached preview fetch (async `tea.Cmd`), loading placeholders
 - [ ] Scope filter cycle (`ctrl+f`) re-fetches set; manual refresh (`ctrl+r`)
-- [ ] Client-side fuzzy via `fuzzyfinder.Find`
-- [ ] Empty-state line; `bd`/db error surfacing before entering the TUI
+- [x] Client-side fuzzy via `fuzzyfinder.Find`
+- [x] Empty-state line; `bd`/db error surfacing before entering the TUI
 
 ### 5. Modes + actions
 - [ ] Create mode (input repurpose, epic `--parent` + `ctrl+t` toggle) → `bd create`, re-fetch, select new
 - [ ] Status-pick mode → `bd update --status`
 - [ ] Close/reopen (`ctrl+x`), edit handoff (`ctrl+e`, suspend/exec/return like claude history)
 - [ ] Graph shell-out (`ctrl+g`)
-- [ ] Enter: copy id (lipgloss? no — clipboard via platform) + print to stdout + quit
+- [x] Enter: copy id (lipgloss? no — clipboard via platform) + print to stdout + quit
 
 ### 6. Command wiring + docs
-- [ ] `cmd/beads.go` cobra command `blf beads` with `-C/--dir`
+- [x] `cmd/beads.go` cobra command `blf beads` with `-C/--dir`
 - [ ] Help/footer key hints (mirror launcher's `?`/footer approach)
 - [ ] README section + CHANGELOG entry (`/changelog`)
-- [ ] Manual verification against this repo's `.beads` db (35 issues)
+- [x] Manual verification against this repo's `.beads` db (35 issues)
 
 ## Open / deferred
 - "Roots only" list mode (hide subtasks) — deferred unless the flat density bothers us.
