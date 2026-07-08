@@ -2,13 +2,9 @@ package beads
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"sync"
 )
-
-// ErrNoDatabase is returned when no .beads database is discoverable from the
-// adapter's working directory.
-var ErrNoDatabase = errors.New("no beads database found")
 
 // Scope selects which issues List returns.
 type Scope string
@@ -30,6 +26,14 @@ const (
 type Adapter struct {
 	Runner Runner
 	Dir    string
+
+	// mu serializes bd invocations: bd's underlying db contends under
+	// concurrent access, so two bd processes racing each other end up
+	// slower (and much noisier) than just running them back to back. The
+	// TUI fires bd calls from several independent goroutines (initial
+	// load, preview fetch, mutations), so this is enforced centrally here
+	// rather than at each call site.
+	mu sync.Mutex
 }
 
 // New returns an Adapter that shells out to the real bd binary, optionally
@@ -40,6 +44,9 @@ func New(dir string) *Adapter {
 
 // run threads the adapter's -C dir (if any) in front of args and executes.
 func (a *Adapter) run(args ...string) ([]byte, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	full := args
 	if a.Dir != "" {
 		full = append([]string{"-C", a.Dir}, args...)
@@ -47,21 +54,14 @@ func (a *Adapter) run(args ...string) ([]byte, error) {
 	return a.Runner.Run(full)
 }
 
-// Check confirms bd is installed and a .beads database is discoverable,
-// returning a clear error otherwise.
-func (a *Adapter) Check() error {
-	if _, err := a.run("where"); err != nil {
-		if errors.Is(err, ErrBdNotFound) {
-			return err
-		}
-		return fmt.Errorf("%w: %s", ErrNoDatabase, err)
-	}
-	return nil
-}
-
-// List returns the issues in scope, decoded from `bd list --json`.
+// List returns the issues in scope, decoded from `bd list --json`. Bd's
+// unavailability or a missing database surfaces as this call's own error
+// (bd's stderr is descriptive on both counts), so callers don't need a
+// separate up-front check.
 func (a *Adapter) List(scope Scope) ([]Issue, error) {
-	args := []string{"list", "--json"}
+	// bd list defaults to --limit 50; --limit 0 disables that cap so a
+	// large project's issue list doesn't get silently truncated.
+	args := []string{"list", "--json", "--limit", "0"}
 	switch scope {
 	case ScopeActionable, "":
 		// bd list's default already excludes closed issues.
@@ -117,27 +117,40 @@ func (a *Adapter) Show(id string) (Issue, error) {
 	return issues[0], nil
 }
 
-// Children returns id's child issues via `bd children <id> --json`.
-func (a *Adapter) Children(id string) ([]Issue, error) {
-	out, err := a.run("children", id, "--json")
-	if err != nil {
-		return nil, err
-	}
-	return decodeIssues(out)
-}
+// DepDirection selects which way DepTree walks from its root: DepDown
+// (blockers/ancestors) or DepUp (dependents/children).
+type DepDirection string
 
-// DepList returns what id depends on (its blockers) via
-// `bd dep list <id> --json`.
-func (a *Adapter) DepList(id string) ([]Dependency, error) {
-	out, err := a.run("dep", "list", id, "--json")
+const (
+	// DepDown walks toward what root depends on (its blockers), plus the
+	// parent-child edge to root's own parent.
+	DepDown DepDirection = "down"
+	// DepUp walks toward what depends on root: its subtasks (parent-child)
+	// and anything it blocks.
+	DepUp DepDirection = "up"
+)
+
+// DepTree returns the full recursive dependency tree rooted at id in a
+// single `bd dep tree` invocation, via `bd dep tree <id> --json
+// --show-all-paths` (--show-all-paths keeps every edge into a
+// diamond-shared or cyclic node instead of bd's default dedup, so
+// BuildSubtasksTree/BuildBlockedByTree can still detect and collapse those
+// themselves). One call replaces what would otherwise be one bd subprocess
+// spawn per node in the tree.
+func (a *Adapter) DepTree(id string, direction DepDirection) ([]DepTreeNode, error) {
+	args := []string{"dep", "tree", id, "--json", "--show-all-paths"}
+	if direction == DepUp {
+		args = append(args, "--direction", "up")
+	}
+	out, err := a.run(args...)
 	if err != nil {
 		return nil, err
 	}
-	var deps []Dependency
-	if err := json.Unmarshal(out, &deps); err != nil {
-		return nil, fmt.Errorf("beads: decoding dep list for %q: %w", id, err)
+	var nodes []DepTreeNode
+	if err := json.Unmarshal(out, &nodes); err != nil {
+		return nil, fmt.Errorf("beads: decoding dep tree for %q: %w", id, err)
 	}
-	return deps, nil
+	return nodes, nil
 }
 
 func decodeIssues(data []byte) ([]Issue, error) {

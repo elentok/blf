@@ -1,7 +1,6 @@
 package beads
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -46,7 +45,17 @@ const issueFixture = `[
   }
 ]`
 
-const depFixture = `[
+const depTreeFixture = `[
+  {
+    "id": "blf-bnt.1",
+    "title": "beads adapter",
+    "status": "in_progress",
+    "priority": 1,
+    "issue_type": "task",
+    "created_at": "2026-07-07T07:45:05Z",
+    "updated_at": "2026-07-07T09:27:31Z",
+    "depth": 0
+  },
   {
     "id": "blf-bnt",
     "title": "blf beads epic",
@@ -55,7 +64,9 @@ const depFixture = `[
     "issue_type": "epic",
     "created_at": "2026-07-07T07:43:30Z",
     "updated_at": "2026-07-07T07:43:30Z",
-    "dependency_type": "parent-child"
+    "depth": 1,
+    "parent_id": "blf-bnt.1",
+    "edge_from_parent": "parent-child"
   }
 ]`
 
@@ -90,28 +101,28 @@ func TestList_argvAndDecode(t *testing.T) {
 		{
 			name:     "actionable scope, no dir",
 			scope:    ScopeActionable,
-			wantArgs: []string{"list", "--json"},
+			wantArgs: []string{"list", "--json", "--limit", "0"},
 		},
 		{
 			name:     "ready scope",
 			scope:    ScopeReady,
-			wantArgs: []string{"list", "--json", "--ready"},
+			wantArgs: []string{"list", "--json", "--limit", "0", "--ready"},
 		},
 		{
 			name:     "blocked scope",
 			scope:    ScopeBlocked,
-			wantArgs: []string{"list", "--json", "--status", "blocked"},
+			wantArgs: []string{"list", "--json", "--limit", "0", "--status", "blocked"},
 		},
 		{
 			name:     "all scope",
 			scope:    ScopeAll,
-			wantArgs: []string{"list", "--json", "--all"},
+			wantArgs: []string{"list", "--json", "--limit", "0", "--all"},
 		},
 		{
 			name:     "threads -C dir before the op",
 			scope:    ScopeActionable,
 			dir:      "/tmp/some-project",
-			wantArgs: []string{"-C", "/tmp/some-project", "list", "--json"},
+			wantArgs: []string{"-C", "/tmp/some-project", "list", "--json", "--limit", "0"},
 		},
 	}
 
@@ -184,40 +195,50 @@ func TestShow_notFound(t *testing.T) {
 	}
 }
 
-func TestChildren_argv(t *testing.T) {
-	runner := &fakeRunner{output: []byte(issueFixture)}
-	a := &Adapter{Runner: runner, Dir: "/proj"}
+func TestDepTree_argvAndDecode(t *testing.T) {
+	tests := []struct {
+		name      string
+		direction DepDirection
+		dir       string
+		wantArgs  []string
+	}{
+		{
+			name:      "down (default)",
+			direction: DepDown,
+			wantArgs:  []string{"dep", "tree", "blf-bnt.1", "--json", "--show-all-paths"},
+		},
+		{
+			name:      "up",
+			direction: DepUp,
+			wantArgs:  []string{"dep", "tree", "blf-bnt.1", "--json", "--show-all-paths", "--direction", "up"},
+		},
+		{
+			name:      "threads -C dir before the op",
+			direction: DepDown,
+			dir:       "/proj",
+			wantArgs:  []string{"-C", "/proj", "dep", "tree", "blf-bnt.1", "--json", "--show-all-paths"},
+		},
+	}
 
-	issues, err := a.Children("blf-bnt")
-	if err != nil {
-		t.Fatalf("Children: unexpected error: %v", err)
-	}
-	wantArgs := []string{"-C", "/proj", "children", "blf-bnt", "--json"}
-	if !reflect.DeepEqual(runner.gotArgs, wantArgs) {
-		t.Errorf("argv = %v, want %v", runner.gotArgs, wantArgs)
-	}
-	if len(issues) != 1 {
-		t.Errorf("expected 1 child, got %d", len(issues))
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &fakeRunner{output: []byte(depTreeFixture)}
+			a := &Adapter{Runner: runner, Dir: tt.dir}
 
-func TestDepList_argvAndDecode(t *testing.T) {
-	runner := &fakeRunner{output: []byte(depFixture)}
-	a := &Adapter{Runner: runner}
-
-	deps, err := a.DepList("blf-bnt.1")
-	if err != nil {
-		t.Fatalf("DepList: unexpected error: %v", err)
-	}
-	wantArgs := []string{"dep", "list", "blf-bnt.1", "--json"}
-	if !reflect.DeepEqual(runner.gotArgs, wantArgs) {
-		t.Errorf("argv = %v, want %v", runner.gotArgs, wantArgs)
-	}
-	if len(deps) != 1 {
-		t.Fatalf("expected 1 dependency, got %d", len(deps))
-	}
-	if deps[0].ID != "blf-bnt" || deps[0].DependencyType != "parent-child" {
-		t.Errorf("dependency = %+v, want id=blf-bnt type=parent-child", deps[0])
+			nodes, err := a.DepTree("blf-bnt.1", tt.direction)
+			if err != nil {
+				t.Fatalf("DepTree: unexpected error: %v", err)
+			}
+			if !reflect.DeepEqual(runner.gotArgs, tt.wantArgs) {
+				t.Errorf("argv = %v, want %v", runner.gotArgs, tt.wantArgs)
+			}
+			if len(nodes) != 2 {
+				t.Fatalf("expected 2 nodes, got %d", len(nodes))
+			}
+			if nodes[1].ID != "blf-bnt" || nodes[1].Depth != 1 || nodes[1].ParentID != "blf-bnt.1" || nodes[1].EdgeFromParent != "parent-child" {
+				t.Errorf("node[1] = %+v, want id=blf-bnt depth=1 parent=blf-bnt.1 edge=parent-child", nodes[1])
+			}
+		})
 	}
 }
 
@@ -383,35 +404,6 @@ func TestGraph_unknownFormat(t *testing.T) {
 	a := &Adapter{Runner: runner}
 	if _, err := a.Graph("blf-bnt.1", GraphFormat("nonsense")); err == nil {
 		t.Fatal("expected error for unknown graph format")
-	}
-}
-
-func TestCheck_bdNotFound(t *testing.T) {
-	runner := &fakeRunner{err: ErrBdNotFound}
-	a := &Adapter{Runner: runner}
-	if err := a.Check(); !errors.Is(err, ErrBdNotFound) {
-		t.Errorf("Check() = %v, want ErrBdNotFound", err)
-	}
-}
-
-func TestCheck_noDatabase(t *testing.T) {
-	runner := &fakeRunner{err: errors.New("no active beads workspace found")}
-	a := &Adapter{Runner: runner}
-	err := a.Check()
-	if !errors.Is(err, ErrNoDatabase) {
-		t.Errorf("Check() = %v, want wrapped ErrNoDatabase", err)
-	}
-}
-
-func TestCheck_ok(t *testing.T) {
-	runner := &fakeRunner{output: []byte("/proj/.beads\n")}
-	a := &Adapter{Runner: runner, Dir: "/proj"}
-	if err := a.Check(); err != nil {
-		t.Errorf("Check() = %v, want nil", err)
-	}
-	wantArgs := []string{"-C", "/proj", "where"}
-	if !reflect.DeepEqual(runner.gotArgs, wantArgs) {
-		t.Errorf("argv = %v, want %v", runner.gotArgs, wantArgs)
 	}
 }
 

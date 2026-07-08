@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [v0.6.4] - 2026-07-08
 
 - Added **`blf beads`**: a Beads issue-browser TUI for the current project. It fuzzy-browses issues from the `bd` CLI, sorts them by readiness, shows a side preview with description + subtask/blocked-by trees, and copies the selected issue id on Enter so it can be handed straight to an AI agent.
 - `blf beads` now supports in-TUI triage actions: create from the shared input line, status changes, close/reopen, `$EDITOR` handoff, dependency graph viewing, scope cycling, refresh, and a `?` help screen. Mutations re-fetch the working set and keep the touched issue selected.

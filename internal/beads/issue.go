@@ -23,9 +23,11 @@ type Issue struct {
 	ClosedAt        *time.Time `json:"closed_at"`
 }
 
-// Dependency is one row of `bd dep list`/`bd show`'s dependency edges: the
-// related issue plus the edge type (e.g. "blocks", "parent-child").
-type Dependency struct {
+// DepTreeNode is one row of `bd dep tree <id> --json`: an issue plus its
+// position in the tree relative to the queried root.
+type DepTreeNode struct {
 	Issue
-	DependencyType string `json:"dependency_type"`
+	Depth          int    `json:"depth"`
+	ParentID       string `json:"parent_id"`
+	EdgeFromParent string `json:"edge_from_parent"`
 }

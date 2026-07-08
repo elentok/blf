@@ -16,9 +16,6 @@ func newBeadsCmd(d deps) *cobra.Command {
 		Short: "Browse Beads issues",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			adapter := beads.New(dir)
-			if err := adapter.Check(); err != nil {
-				return err
-			}
 
 			id, err := beads.Run(beads.ModelConfig{
 				Lister:     adapter,

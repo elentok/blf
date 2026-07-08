@@ -74,16 +74,15 @@ func (s *stubMutator) Reopen(id string) (Issue, error) {
 // stubPreviewFetcher is a fake PreviewFetcher for model tests, so preview
 // fetches don't shell out to bd.
 type stubPreviewFetcher struct {
-	childrenOf map[string][]Issue
-	depsOf     map[string][]Dependency
+	downOf map[string][]DepTreeNode
+	upOf   map[string][]DepTreeNode
 }
 
-func (s stubPreviewFetcher) Children(id string) ([]Issue, error) {
-	return s.childrenOf[id], nil
-}
-
-func (s stubPreviewFetcher) DepList(id string) ([]Dependency, error) {
-	return s.depsOf[id], nil
+func (s stubPreviewFetcher) DepTree(id string, direction DepDirection) ([]DepTreeNode, error) {
+	if direction == DepUp {
+		return s.upOf[id], nil
+	}
+	return s.downOf[id], nil
 }
 
 func testIssues() []Issue {
@@ -552,13 +551,26 @@ func TestPreviewVisible_WideTerminalShowsByDefault(t *testing.T) {
 	}
 }
 
-func TestPreviewVisible_NarrowTerminalHidesByDefault(t *testing.T) {
+func TestPreviewVisible_MediumWidthStacksInsteadOfHiding(t *testing.T) {
 	m := NewModel(ModelConfig{})
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
 	m = next.(Model)
 
+	if !m.previewVisible() {
+		t.Error("expected preview visible (stacked) on a medium-width terminal")
+	}
+	if !m.previewStacked {
+		t.Error("expected preview to be stacked below the list on a medium-width terminal")
+	}
+}
+
+func TestPreviewVisible_TooNarrowHidesByDefault(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 24})
+	m = next.(Model)
+
 	if m.previewVisible() {
-		t.Error("expected preview hidden on a narrow terminal")
+		t.Error("expected preview hidden on a too-narrow terminal")
 	}
 }
 
@@ -582,7 +594,7 @@ func TestTabTogglesPreviewVisibility(t *testing.T) {
 
 func TestTabOnNarrowTerminalForcesPreviewOn(t *testing.T) {
 	m := NewModel(ModelConfig{})
-	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 24})
 	m = next.(Model)
 
 	next, _ = m.Update(tea.KeyPressMsg{Code: '\t'})
@@ -592,10 +604,42 @@ func TestTabOnNarrowTerminalForcesPreviewOn(t *testing.T) {
 	}
 }
 
+func TestApplyLayout_SideBySideOnWideTerminal(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 24})
+	m = next.(Model)
+
+	if m.previewStacked {
+		t.Error("expected side-by-side layout on a wide terminal")
+	}
+	if m.previewWidth <= 0 || m.previewWidth >= m.width {
+		t.Errorf("expected previewWidth between 0 and width, got %d (width %d)", m.previewWidth, m.width)
+	}
+}
+
+func TestApplyLayout_StackedOnMediumTerminal(t *testing.T) {
+	m := NewModel(ModelConfig{})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
+	m = next.(Model)
+
+	if !m.previewStacked {
+		t.Error("expected stacked layout on a medium-width terminal")
+	}
+	if m.previewWidth != m.width {
+		t.Errorf("expected preview to span the full width when stacked, got %d (width %d)", m.previewWidth, m.width)
+	}
+	if m.previewHeight <= 0 || m.previewHeight >= m.height {
+		t.Errorf("expected previewHeight between 0 and height, got %d (height %d)", m.previewHeight, m.height)
+	}
+}
+
 func TestSelectionChangeStartsPreviewDebounceAndFetch(t *testing.T) {
 	fetcher := stubPreviewFetcher{
-		childrenOf: map[string][]Issue{
-			"abc-2": {{ID: "abc-2.1", Title: "child", Status: "closed"}},
+		upOf: map[string][]DepTreeNode{
+			"abc-2": {
+				{Issue: Issue{ID: "abc-2"}, Depth: 0},
+				{Issue: Issue{ID: "abc-2.1", Title: "child", Status: "closed"}, Depth: 1, ParentID: "abc-2", EdgeFromParent: "parent-child"},
+			},
 		},
 	}
 	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}, Preview: fetcher})

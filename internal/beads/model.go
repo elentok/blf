@@ -11,9 +11,15 @@ import (
 	"github.com/elentok/blf/internal/fuzzyfinder"
 )
 
-// previewMinWidth is the terminal width below which the issue preview
-// auto-hides to keep the list usable; tab overrides this.
+// previewMinWidth is the terminal width below which the issue preview moves
+// from a side-by-side pane to a stacked one below the list, to keep the list
+// column from getting squeezed unreadably narrow; tab overrides this.
 const previewMinWidth = 100
+
+// previewMinWidthForStack is the terminal width below which even a stacked
+// preview doesn't fit usefully and the preview auto-hides entirely; tab
+// overrides this too.
+const previewMinWidthForStack = 40
 
 // previewDebounceDelay is how long the preview fetch waits after a selection
 // change before shelling out, so scrolling the list doesn't spawn a bd call
@@ -132,6 +138,8 @@ type Model struct {
 	// preview on a wide terminal and to force it on a narrow one.
 	previewToggled bool
 	previewWidth   int
+	previewHeight  int
+	previewStacked bool
 
 	width, height int
 }
@@ -672,26 +680,42 @@ func fetchPreviewCmd(fetcher PreviewFetcher, root Issue, seq int) tea.Cmd {
 	}
 }
 
-// previewVisible reports whether the preview pane should render, combining
-// the width-based auto-hide (narrow terminals) with the user's tab toggle,
-// which flips whatever the width would otherwise decide.
+// previewVisible reports whether the preview pane should render at all,
+// combining the width-based auto-hide (terminals too narrow even for a
+// stacked pane) with the user's tab toggle, which flips whatever the width
+// would otherwise decide.
 func (m Model) previewVisible() bool {
-	wide := m.width >= previewMinWidth
-	return wide != m.previewToggled
+	fits := m.width >= previewMinWidthForStack
+	return fits != m.previewToggled
 }
 
 // applyLayout re-derives the list/preview split from the current terminal
-// size: list ~40% left, preview ~60% right when shown, full-width list when
-// the preview is hidden.
+// size: side-by-side (list ~40% left, preview ~60% right) on wide terminals,
+// stacked (list on top, preview below) on narrower ones down to
+// previewMinWidthForStack, and full-width list with no preview below that.
 func (m *Model) applyLayout() {
 	if !m.previewVisible() {
 		m.widget.SetSize(m.width, m.height)
 		m.previewWidth = 0
+		m.previewHeight = 0
+		m.previewStacked = false
 		return
 	}
-	leftWidth := m.width * 2 / 5
-	m.widget.SetSize(leftWidth, m.height)
-	m.previewWidth = m.width - leftWidth
+
+	if m.width >= previewMinWidth {
+		m.previewStacked = false
+		leftWidth := m.width * 2 / 5
+		m.widget.SetSize(leftWidth, m.height)
+		m.previewWidth = m.width - leftWidth
+		m.previewHeight = 0
+		return
+	}
+
+	m.previewStacked = true
+	topHeight := m.height * 3 / 5
+	m.widget.SetSize(m.width, topHeight)
+	m.previewWidth = m.width
+	m.previewHeight = m.height - topHeight
 }
 
 // recomputeFilter re-derives the displayed issue list from allItems and the
@@ -737,6 +761,8 @@ func (m Model) View() tea.View {
 		content = "Loading issues…"
 	case len(m.allItems) == 0:
 		content = emptyStateStyle.Render("No issues in scope.")
+	case m.previewVisible() && m.previewStacked:
+		content = lipgloss.JoinVertical(lipgloss.Left, m.widget.View(), m.renderPreview())
 	case m.previewVisible():
 		content = lipgloss.JoinHorizontal(lipgloss.Top, m.widget.View(), m.renderPreview())
 	default:
@@ -909,7 +935,11 @@ func renderIssueRow(issue Issue, readyIDs map[string]bool, query string, selecte
 // JoinHorizontal alignment with the list pane.
 func (m Model) renderPreview() string {
 	innerWidth := max(m.previewWidth-4, 20) // border (2) + horizontal padding (2)
-	box := previewStyle.Width(max(m.previewWidth, 10)).Height(max(m.height, 3))
+	boxHeight := m.height
+	if m.previewStacked {
+		boxHeight = m.previewHeight
+	}
+	box := previewStyle.Width(max(m.previewWidth, 10)).Height(max(boxHeight, 3))
 
 	issue, ok := m.selectedIssue()
 	if !ok {
@@ -955,7 +985,7 @@ func (m Model) renderPreview() string {
 	}
 
 	// Content lines = box height minus the top/bottom border.
-	maxLines := max(m.height-2, 1)
+	maxLines := max(boxHeight-2, 1)
 	if len(lines) > maxLines {
 		lines = lines[:maxLines]
 	}
