@@ -104,6 +104,12 @@ func newLauncherCmd(d deps) *cobra.Command {
 			}
 			directoryProvider := launcher.NewDirectoryProvider(expandedDirs, cfg.Launcher.DirectoryWeight)
 
+			// Commands provider: built-in, hardcoded launcher commands (reload, cleanurl).
+			commandsProvider := launcher.NewCommandsProvider(
+				launcher.NewBuiltinCommands(homeDir, appsCachePath),
+				cfg.Launcher.ScriptWeight,
+			)
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
@@ -112,18 +118,20 @@ func newLauncherCmd(d deps) *cobra.Command {
 					scriptsProvider,
 					settingsProvider,
 					directoryProvider,
+					commandsProvider,
 				},
-				ConfigErr:       cfgErr,
-				CopyText:        d.copyText,
-				CurrencyCache:   currencyCache,
-				AppsProvider:    appsProvider,
-				AppsCachePath:   appsCachePath,
-				HomeDir:         homeDir,
-				ScriptsProvider: scriptsProvider,
-				History:         launcherHistory,
-				HistoryPath:     historyPath,
-				LearnedRank:     launcherLearnedRank,
-				LearnedRankPath: learnedRankPath,
+				ConfigErr:        cfgErr,
+				CopyText:         d.copyText,
+				CurrencyCache:    currencyCache,
+				AppsProvider:     appsProvider,
+				AppsCachePath:    appsCachePath,
+				HomeDir:          homeDir,
+				ScriptsProvider:  scriptsProvider,
+				CommandsProvider: commandsProvider,
+				History:          launcherHistory,
+				HistoryPath:      historyPath,
+				LearnedRank:      launcherLearnedRank,
+				LearnedRankPath:  learnedRankPath,
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)
@@ -132,6 +140,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				OpenTarget: func(target string) error {
 					return platform.OpenURL(target)
 				},
+				ShowNotification: platform.ShowNotification,
 				HideTerminal: func() error {
 					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
 					return err

@@ -19,23 +19,25 @@ const maxResults = 200
 
 // ModelConfig holds injectable dependencies for the launcher model.
 type ModelConfig struct {
-	Providers       []Provider
-	ConfigErr       error
-	CopyText        func(string) error
-	HideTerminal    func() error
-	LaunchApp       func(string) error // optional; launches an app by path
-	OpenTarget      func(string) error // optional; opens a file/URL via `open` (no -a)
-	UseNerdFont     bool
-	CurrencyCache   *currency.Cache    // optional; nil disables currency refresh
-	AppsProvider    *AppsProvider      // optional; nil disables app search
-	AppsCachePath   string             // path to apps.json; empty disables refresh
-	HomeDir         string             // used by ReindexCmd
-	ScriptsProvider *ScriptsProvider   // optional; nil disables script execution
-	History         *history.History   // optional; nil disables history
-	HistoryPath     string             // path to persist history; empty skips persistence
-	LearnedRank     *learnedrank.Store // optional; nil disables the learned-rank feature
-	LearnedRankPath string             // path to persist learned ranks; empty skips persistence
-	HideDelay       time.Duration      // delay before hiding the terminal (see resetAndHide); 0 = immediate
+	Providers        []Provider
+	ConfigErr        error
+	CopyText         func(string) error
+	HideTerminal     func() error
+	LaunchApp        func(string) error // optional; launches an app by path
+	OpenTarget       func(string) error // optional; opens a file/URL via `open` (no -a)
+	UseNerdFont      bool
+	CurrencyCache    *currency.Cache                   // optional; nil disables currency refresh
+	AppsProvider     *AppsProvider                     // optional; nil disables app search
+	AppsCachePath    string                            // path to apps.json; empty disables refresh
+	HomeDir          string                            // used by ReindexCmd
+	ScriptsProvider  *ScriptsProvider                  // optional; nil disables script execution
+	CommandsProvider *CommandsProvider                 // optional; nil disables built-in command execution
+	History          *history.History                  // optional; nil disables history
+	HistoryPath      string                            // path to persist history; empty skips persistence
+	LearnedRank      *learnedrank.Store                // optional; nil disables the learned-rank feature
+	LearnedRankPath  string                            // path to persist learned ranks; empty skips persistence
+	HideDelay        time.Duration                     // delay before hiding the terminal (see resetAndHide); 0 = immediate
+	ShowNotification func(title, message string) error // optional; nil disables completion notifications
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -320,17 +322,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AppsReindexedMsg:
-		m.status = ""
-		if msg.Err == nil && msg.Index != nil && m.cfg.AppsProvider != nil {
+		switch {
+		case msg.Err != nil:
+			m.status = "reindex error: " + msg.Err.Error()
+		case msg.Index != nil && m.cfg.AppsProvider != nil:
 			m.cfg.AppsProvider.SetIndex(msg.Index)
 			m.lastAppsIndexedAt = msg.Index.IndexedAt
+			m.status = fmt.Sprintf("reindexed %d apps", len(msg.Index.Apps))
+		default:
+			m.status = ""
 		}
 		m.recomputeResults()
 		m.updateFooter()
+		cmds := []tea.Cmd{clearStatusAfter(1500 * time.Millisecond)}
 		if m.cfg.AppsCachePath != "" {
-			return m, ScheduleAppsRefresh(30 * time.Minute)
+			cmds = append(cmds, ScheduleAppsRefresh(30*time.Minute))
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case AppsRefreshTickMsg:
 		if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
@@ -378,8 +386,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// ignore or clipboard: reset and hide
 		return m, m.resetAndHide()
 
+	case CleanURLDoneMsg:
+		if msg.Err != nil {
+			m.status = "cleanurl error: " + msg.Err.Error()
+			m.updateFooter()
+			return m, nil
+		}
+		if m.cfg.ShowNotification != nil {
+			_ = m.cfg.ShowNotification("blf", "Cleaned URL copied to clipboard")
+		}
+		return m, m.resetAndHide()
+
 	case clearStatusMsg:
-		if m.status == "saved" {
+		if m.status == "saved" || strings.HasPrefix(m.status, "reindexed ") || strings.HasPrefix(m.status, "reindex error:") {
 			m.status = ""
 			m.updateFooter()
 		}
@@ -524,6 +543,19 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		m.status = "running…"
 		m.updateFooter()
 		return ScriptRunCmd(s), nil
+	case ActionCommand:
+		if m.cfg.CommandsProvider == nil {
+			return nil, fmt.Errorf("commands not available")
+		}
+		c, ok := m.cfg.CommandsProvider.Find(r.Action.Target)
+		if !ok {
+			return nil, fmt.Errorf("command not found: %s", r.Action.Target)
+		}
+		m.recordHistory(m.input.Value(), r)
+		m.recordLearnedRank(m.input.Value(), r)
+		m.status = "running…"
+		m.updateFooter()
+		return c.Run(), nil
 	case ActionOpen:
 		if m.cfg.OpenTarget == nil {
 			return nil, fmt.Errorf("open not available")

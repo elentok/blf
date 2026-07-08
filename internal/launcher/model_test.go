@@ -1,10 +1,12 @@
 package launcher
 
 import (
+	"errors"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/launcher/apps"
+	"github.com/elentok/blf/internal/launcher/commands"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/learnedrank"
 )
@@ -497,5 +499,134 @@ func TestLearnedRankDoesNotLeakAcrossQueries(t *testing.T) {
 	}
 	if got := m.results[0].Action.Target; got != "first" {
 		t.Fatalf("expected unaffected default ordering for a different query, got %q", got)
+	}
+}
+
+func TestEnterOnReloadCommand_matchesCtrlShiftR(t *testing.T) {
+	idx := &apps.Index{Apps: []apps.App{{Name: "TestApp", Path: "/Applications/TestApp.app"}}}
+	appsProvider := NewAppsProvider(1.0)
+
+	reloadCmd := commands.Command{
+		Name: "reload",
+		Run: func() tea.Cmd {
+			return func() tea.Msg { return AppsReindexedMsg{Index: idx} }
+		},
+	}
+	commandsProvider := NewCommandsProvider([]commands.Command{reloadCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		AppsProvider:     appsProvider,
+		CommandsProvider: commandsProvider,
+		HideDelay:        0,
+	})
+
+	m = typeText(t, m, "reload")
+	if len(m.results) == 0 {
+		t.Fatal("expected 'reload' command result")
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	if m.status != "running…" {
+		t.Errorf("status = %q, want %q", m.status, "running…")
+	}
+
+	msg := runCmd(cmd)
+	next, _ = m.Update(msg)
+	m = next.(Model)
+
+	if appsProvider.index != idx {
+		t.Error("expected reload command to update AppsProvider's index, same as ctrl+shift+r")
+	}
+	if m.status != "reindexed 1 apps" {
+		t.Errorf("expected transient reindexed status, got %q", m.status)
+	}
+
+	next, _ = m.Update(clearStatusMsg{})
+	m = next.(Model)
+	if m.status != "" {
+		t.Errorf("expected reindexed status cleared after clearStatusMsg, got %q", m.status)
+	}
+}
+
+func TestEnterOnCleanURLCommand_success_notifiesAndHides(t *testing.T) {
+	hidden := false
+	var notifyTitle, notifyMessage string
+
+	cleanURLCmd := commands.Command{
+		Name: "cleanurl",
+		Run: func() tea.Cmd {
+			return func() tea.Msg { return CleanURLDoneMsg{} }
+		},
+	}
+	commandsProvider := NewCommandsProvider([]commands.Command{cleanURLCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		HideTerminal:     func() error { hidden = true; return nil },
+		ShowNotification: func(title, message string) error {
+			notifyTitle = title
+			notifyMessage = message
+			return nil
+		},
+		HideDelay: 0,
+	})
+
+	m = typeText(t, m, "cleanurl")
+	if len(m.results) == 0 {
+		t.Fatal("expected 'cleanurl' command result")
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	msg := runCmd(cmd)
+	next, hideCmd := m.Update(msg)
+	m = next.(Model)
+
+	if notifyTitle == "" || notifyMessage == "" {
+		t.Errorf("expected ShowNotification to be called with a title/message, got %q/%q", notifyTitle, notifyMessage)
+	}
+
+	runCmd(hideCmd)
+	if !hidden {
+		t.Error("expected HideTerminal to be called after a successful cleanurl")
+	}
+}
+
+func TestEnterOnCleanURLCommand_failure_showsStatusAndStaysOpen(t *testing.T) {
+	hidden := false
+	cleanURLCmd := commands.Command{
+		Name: "cleanurl",
+		Run: func() tea.Cmd {
+			return func() tea.Msg { return CleanURLDoneMsg{Err: errors.New("clipboard empty")} }
+		},
+	}
+	commandsProvider := NewCommandsProvider([]commands.Command{cleanURLCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		HideTerminal:     func() error { hidden = true; return nil },
+		HideDelay:        0,
+	})
+
+	m = typeText(t, m, "cleanurl")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	msg := runCmd(cmd)
+	next, hideCmd := m.Update(msg)
+	m = next.(Model)
+
+	if m.status != "cleanurl error: clipboard empty" {
+		t.Errorf("status = %q, want %q", m.status, "cleanurl error: clipboard empty")
+	}
+
+	runCmd(hideCmd)
+	if hidden {
+		t.Error("expected launcher to stay open after a cleanurl error")
 	}
 }

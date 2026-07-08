@@ -50,12 +50,6 @@ var Builtins = []Script{
 		Body:     `tell application "Spotify" to playpause`,
 		Output:   OutputIgnore,
 	},
-	{
-		Name:   "cleanurl",
-		Type:   TypeBash,
-		Body:   "blf clean-url --clipboard",
-		Output: OutputIgnore,
-	},
 }
 
 // Merge returns the built-in scripts with user overrides applied.

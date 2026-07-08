@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.5] - 2026-07-08
+
+- Added **launcher commands**: `reload` (reindex apps) and `cleanurl` (clean the clipboard URL in place) now show up as fuzzy-matchable entries in the launcher, alongside the existing `ctrl+shift+r` reindex shortcut. `cleanurl` no longer shells out to `blf clean-url --clipboard` as a script; it runs in-process and shows a system notification on completion instead of a status-bar message.
+
 ## [v0.6.4] - 2026-07-08
 
 - Added **`blf beads`**: a Beads issue-browser TUI for the current project. It fuzzy-browses issues from the `bd` CLI, sorts them by readiness, shows a side preview with description + subtask/blocked-by trees, and copies the selected issue id on Enter so it can be handed straight to an AI agent.

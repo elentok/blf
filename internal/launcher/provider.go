@@ -10,11 +10,12 @@ import (
 type ActionType int
 
 const (
-	ActionCopy   ActionType = iota // copy a computed value to clipboard
-	ActionLaunch                   // launch an application
-	ActionRun                      // run a script
-	ActionRecall                   // populate input from history (no side-effects)
-	ActionOpen                     // open a file/URL via `open` (no -a flag)
+	ActionCopy    ActionType = iota // copy a computed value to clipboard
+	ActionLaunch                    // launch an application
+	ActionRun                       // run a script
+	ActionRecall                    // populate input from history (no side-effects)
+	ActionOpen                      // open a file/URL via `open` (no -a flag)
+	ActionCommand                   // run a built-in, hardcoded launcher command
 )
 
 // Action describes the operation performed when a result is selected.
@@ -44,6 +45,7 @@ const (
 	IconRoleLoading
 	IconRoleSettings
 	IconRoleDirectory
+	IconRoleCommand
 )
 
 // Result is one item in the launcher's ranked result list.
