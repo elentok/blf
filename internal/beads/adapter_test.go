@@ -1,6 +1,7 @@
 package beads
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -410,8 +411,8 @@ func TestGraph_unknownFormat(t *testing.T) {
 func TestGraphIssueCommand_UsesPagerWhenAvailable(t *testing.T) {
 	cmd := graphIssueCommand("/proj", "blf-bnt.1")
 
-	if got, want := cmd.Path, "/bin/sh"; got != want && got != "sh" {
-		t.Fatalf("Path = %q, want shell", got)
+	if got := filepath.Base(cmd.Path); got != "sh" {
+		t.Fatalf("Path = %q, want shell", cmd.Path)
 	}
 	joined := strings.Join(cmd.Args, " ")
 	if !strings.Contains(joined, "less -R") {
