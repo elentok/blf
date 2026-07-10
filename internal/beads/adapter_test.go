@@ -95,33 +95,21 @@ func wantIssue() Issue {
 func TestList_argvAndDecode(t *testing.T) {
 	tests := []struct {
 		name     string
-		scope    Scope
+		all      bool
 		dir      string
 		wantArgs []string
 	}{
 		{
-			name:     "actionable scope, no dir",
-			scope:    ScopeActionable,
+			name:     "default filter, no dir",
 			wantArgs: []string{"list", "--json", "--limit", "0"},
 		},
 		{
-			name:     "ready scope",
-			scope:    ScopeReady,
-			wantArgs: []string{"list", "--json", "--limit", "0", "--ready"},
-		},
-		{
-			name:     "blocked scope",
-			scope:    ScopeBlocked,
-			wantArgs: []string{"list", "--json", "--limit", "0", "--status", "blocked"},
-		},
-		{
-			name:     "all scope",
-			scope:    ScopeAll,
+			name:     "all",
+			all:      true,
 			wantArgs: []string{"list", "--json", "--limit", "0", "--all"},
 		},
 		{
 			name:     "threads -C dir before the op",
-			scope:    ScopeActionable,
 			dir:      "/tmp/some-project",
 			wantArgs: []string{"-C", "/tmp/some-project", "list", "--json", "--limit", "0"},
 		},
@@ -132,7 +120,7 @@ func TestList_argvAndDecode(t *testing.T) {
 			runner := &fakeRunner{output: []byte(issueFixture)}
 			a := &Adapter{Runner: runner, Dir: tt.dir}
 
-			issues, err := a.List(tt.scope)
+			issues, err := a.List(tt.all)
 			if err != nil {
 				t.Fatalf("List: unexpected error: %v", err)
 			}
@@ -143,31 +131,6 @@ func TestList_argvAndDecode(t *testing.T) {
 				t.Errorf("decoded issue = %+v, want %+v", issues, wantIssue())
 			}
 		})
-	}
-}
-
-func TestList_unknownScope(t *testing.T) {
-	runner := &fakeRunner{output: []byte(`[]`)}
-	a := &Adapter{Runner: runner}
-	if _, err := a.List(Scope("nonsense")); err == nil {
-		t.Fatal("expected error for unknown scope")
-	}
-}
-
-func TestReady_argvAndIDSet(t *testing.T) {
-	runner := &fakeRunner{output: []byte(issueFixture)}
-	a := &Adapter{Runner: runner, Dir: "/proj"}
-
-	set, err := a.Ready()
-	if err != nil {
-		t.Fatalf("Ready: unexpected error: %v", err)
-	}
-	wantArgs := []string{"-C", "/proj", "ready", "--json"}
-	if !reflect.DeepEqual(runner.gotArgs, wantArgs) {
-		t.Errorf("argv = %v, want %v", runner.gotArgs, wantArgs)
-	}
-	if !set["blf-bnt.1"] || len(set) != 1 {
-		t.Errorf("id set = %v, want {blf-bnt.1}", set)
 	}
 }
 

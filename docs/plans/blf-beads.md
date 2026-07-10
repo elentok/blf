@@ -2,10 +2,14 @@
 
 An interactive TUI over the `bd` (Beads) CLI: fuzzy-browse issues, preview detail
 (with subtasks + blocked-by trees), create/triage, and hand a chosen issue id to
-an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness**,
+an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **issue tree**,
 **issue preview**, **create mode**).
 
-## Design decisions (from /grill)
+> **Re-scoped** after initial shipping: the readiness/scope-cycle design below (task 2,
+> parts of task 4/5) was reversed in favor of a plain interactive view of `bd list`. See
+> the "Re-scope: plain bd-list view" section at the end and ADR 0009.
+
+## Design decisions (from /grill, original design — see re-scope section below for what changed)
 
 - **Source of truth**: shell out to `bd` (JSON), never read the beads db directly.
 - **Widget**: embed `internal/fuzzyfinder`; own item type, rendering, preview, actions.
@@ -33,7 +37,7 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
   - `ctrl+x` → close / reopen toggle (`bd close` / `bd reopen`)
   - `ctrl+e` → edit in `$EDITOR` (`bd edit <id>`), suspend/return
   - `ctrl+g` → dependency graph shell-out (`bd graph`, compact→pager or `--html`→browser)
-  - `ctrl+r` → refresh · `ctrl+f` → cycle scope filter (actionable→ready→blocked→all)
+  - `ctrl+r` → refresh (no scope cycle — see re-scope section: dropped `ctrl+f`)
   - `tab` → toggle preview · `esc`/`ctrl+c` → back out / quit
   - nav: up/down, ctrl+k/j, ctrl+p/n
 - **Command**: `blf beads`, single interactive command, `-C/--dir` passthrough.
@@ -89,12 +93,38 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **readiness*
 - The CLI boundary held cleanly: all Beads reads and writes still route through `bd`, which was stable enough to document as an ADR.
 
 ## Open / deferred
-- "Roots only" list mode (hide subtasks) — deferred unless the flat density bothers us.
 - "New blocked-by dependency" creation — out of scope for v1.
 - Live polling / auto-refresh — intentionally omitted.
+- Nav that skips dimmed ancestor rows — not implemented; dimming is visual only, rows stay
+  normally selectable (would require extending the shared `internal/fuzzyfinder` widget).
 
-## Possible ADR
-- **Shell out to `bd` CLI (JSON) as source of truth vs. reading the dolt db directly.**
-  Hard-ish to reverse, surprising to a future reader, real trade-off (CLI coupling &
-  process spawns vs. direct db access / a Go beads lib). Offer once implementation confirms
-  the boundary holds.
+## ADRs
+- **0008** — shell out to `bd` CLI (JSON) as source of truth vs. reading the dolt db directly.
+- **0009** — plain `bd list` view over readiness/scope-cycle triage queue (see below).
+
+## Re-scope: plain bd-list view (supersedes readiness/scope-cycle design)
+
+Reversed the original readiness-bucketed sort + `ctrl+f` scope cycle (actionable → ready →
+blocked → all) in favor of a direct interactive view of `bd list` / `bd list --all`. See
+ADR 0009 for the rationale and CONTEXT.md's **blf beads**/**issue tree** entries for the
+current terms.
+
+- [x] `internal/beads`: `Adapter.List(scope Scope)` → `Adapter.List(all bool)`; dropped
+      `Adapter.Ready()`, `Readiness`/`ClassifyReadiness`/`SortIssues` (readiness.go deleted)
+- [x] New `internal/beads/listtree.go`: `TreeRow`, `BuildIssueTree(issues, matchIDs)` —
+      groups by `parent`, sorts top-level/siblings by id (matching `bd list`'s own terminal
+      order, since `bd list --json` isn't tree-ordered), prunes non-matching subtrees while
+      dimming a non-matching ancestor of a match
+- [x] `internal/beads/model.go`: `ModelConfig.Scope` → `ModelConfig.All bool`; `displayRef`
+      is now `*[]TreeRow`; dropped `readyLoadedMsg`/`loadReadyCmd`/`loadSnapshotCmd`/
+      `nextScope`/the `ctrl+f` handler; row rendering drops the readiness glyph, `↓N ↑M`
+      badge, and epic/parent text tag in favor of tree indentation + bold/colored epic rows
+- [x] `internal/beads/styles.go`: readiness colors → `epicRowStyle` (bold + color),
+      `dimRowStyle` (dimmed ancestor context)
+- [x] `cmd/beads.go`: added `-a/--all` flag, wired to `ModelConfig.All`
+- [x] Updated `internal/beads/adapter_test.go`, `model_test.go`; added `listtree_test.go`
+- [x] Updated PRD (`docs/prds/blf-beads-tui.md`) and this plan for the new design
+- [x] Manual verification: `blf beads` / `blf beads -a` against this repo's `.beads` db —
+      confirmed nested epic/child rendering matches `bd list`'s terminal tree, epic rows
+      render bold+colored, and fuzzy-filtering dims a non-matching parent epic while keeping
+      a matching child visible

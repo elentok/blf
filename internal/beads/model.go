@@ -29,8 +29,7 @@ const previewDebounceDelay = 100 * time.Millisecond
 // IssueLister is the subset of Adapter behavior the TUI list depends on,
 // letting tests inject a stub instead of shelling out to bd.
 type IssueLister interface {
-	List(scope Scope) ([]Issue, error)
-	Ready() (map[string]bool, error)
+	List(all bool) ([]Issue, error)
 }
 
 // IssueMutator is the subset of Adapter behavior the TUI actions depend on.
@@ -53,12 +52,6 @@ const (
 type issuesLoadedMsg struct {
 	issues []Issue
 	err    error
-}
-
-// readyLoadedMsg carries the async result of a Ready call.
-type readyLoadedMsg struct {
-	ready map[string]bool
-	err   error
 }
 
 // previewDebounceMsg fires previewDebounceDelay after a selection change; if
@@ -93,26 +86,25 @@ type ModelConfig struct {
 	Lister     IssueLister
 	Preview    PreviewFetcher
 	Mutator    IssueMutator
-	Scope      Scope
+	All        bool               // mirrors `bd list --all` (closed included) when true
 	CopyText   func(string) error // optional; nil disables the clipboard write on enter
 	EditIssue  func(string) tea.Cmd
 	GraphIssue func(string) tea.Cmd
 }
 
-// Model is the bubbletea model for the `blf beads` picker: a flat fuzzy list
-// of issues in scope. Enter copies the selected issue id (via CopyText) and
-// quits; the id is also made available to the caller via SelectedID once the
-// program returns.
+// Model is the bubbletea model for the `blf beads` picker: an interactive
+// view of `bd list`'s issue tree. Enter copies the selected issue id (via
+// CopyText) and quits; the id is also made available to the caller via
+// SelectedID once the program returns.
 type Model struct {
 	cfg ModelConfig
 
 	queryRef   *string
-	displayRef *[]Issue
-	readyRef   *map[string]bool
+	displayRef *[]TreeRow
 	modeRef    *modeState
 	widget     fuzzyfinder.Model
 
-	scope    Scope
+	all      bool
 	allItems []Issue
 	loading  bool
 	loadErr  error
@@ -147,17 +139,15 @@ type Model struct {
 // NewModel returns a Model ready to embed/run.
 func NewModel(cfg ModelConfig) Model {
 	queryRef := new(string)
-	displayRef := new([]Issue)
-	readyRef := new(map[string]bool)
+	displayRef := new([]TreeRow)
 	modeRef := new(modeState)
 
 	m := Model{
 		cfg:          cfg,
 		queryRef:     queryRef,
 		displayRef:   displayRef,
-		readyRef:     readyRef,
 		modeRef:      modeRef,
-		scope:        cfg.Scope,
+		all:          cfg.All,
 		loading:      true,
 		previewCache: make(map[string]previewData),
 	}
@@ -174,7 +164,7 @@ func NewModel(cfg ModelConfig) Model {
 			if i >= len(display) {
 				return ""
 			}
-			return renderIssueRow(display[i], *readyRef, *queryRef, selected)
+			return renderIssueRow(display[i], *queryRef, selected)
 		},
 		Footer:    browseFooter,
 		ItemCount: 1,
@@ -184,42 +174,15 @@ func NewModel(cfg ModelConfig) Model {
 	return m
 }
 
-// Init starts the widget cursor blink and kicks off the initial issue and
-// ready-set loads.
+// Init starts the widget cursor blink and kicks off the initial issue load.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.widget.Init(), loadIssuesCmd(m.cfg.Lister, m.scope), loadReadyCmd(m.cfg.Lister))
+	return tea.Batch(m.widget.Init(), loadIssuesCmd(m.cfg.Lister, m.all))
 }
 
-func loadIssuesCmd(lister IssueLister, scope Scope) tea.Cmd {
+func loadIssuesCmd(lister IssueLister, all bool) tea.Cmd {
 	return func() tea.Msg {
-		issues, err := lister.List(scope)
+		issues, err := lister.List(all)
 		return issuesLoadedMsg{issues: issues, err: err}
-	}
-}
-
-func loadReadyCmd(lister IssueLister) tea.Cmd {
-	return func() tea.Msg {
-		ready, err := lister.Ready()
-		return readyLoadedMsg{ready: ready, err: err}
-	}
-}
-
-func loadSnapshotCmd(lister IssueLister, scope Scope) tea.Cmd {
-	return tea.Batch(loadIssuesCmd(lister, scope), loadReadyCmd(lister))
-}
-
-// nextScope returns the next scope in the ctrl+f cycle: actionable ->
-// ready-only -> blocked-only -> all incl. closed -> back to actionable.
-func nextScope(s Scope) Scope {
-	switch s {
-	case ScopeReady:
-		return ScopeBlocked
-	case ScopeBlocked:
-		return ScopeAll
-	case ScopeAll:
-		return ScopeActionable
-	default:
-		return ScopeReady
 	}
 }
 
@@ -261,17 +224,6 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loadErr = nil
 		m.allItems = msg.issues
-		SortIssues(m.allItems, *m.readyRef)
-		m.recomputeFilter()
-		m.restorePendingSelection()
-		return m, nil
-
-	case readyLoadedMsg:
-		if msg.err != nil {
-			return m, nil
-		}
-		*m.readyRef = msg.ready
-		SortIssues(m.allItems, *m.readyRef)
 		m.recomputeFilter()
 		m.restorePendingSelection()
 		return m, nil
@@ -334,15 +286,6 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewToggled = !m.previewToggled
 			m.applyLayout()
 			return m, nil
-
-		case "ctrl+f":
-			if m.mode != modeBrowse {
-				return m, nil
-			}
-			m.scope = nextScope(m.scope)
-			m.loading = true
-			m.loadErr = nil
-			return m, loadSnapshotCmd(m.cfg.Lister, m.scope)
 
 		case "ctrl+r":
 			if m.mode != modeBrowse {
@@ -420,7 +363,7 @@ func (m Model) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(display) == 0 || sel >= len(display) {
 				return m, nil
 			}
-			id := display[sel].ID
+			id := display[sel].Issue.ID
 			if m.cfg.CopyText != nil {
 				_ = m.cfg.CopyText(id)
 			}
@@ -591,7 +534,7 @@ func (m *Model) startReload(selectID string, invalidatePreview bool) tea.Cmd {
 	if invalidatePreview && selectID != "" {
 		delete(m.previewCache, selectID)
 	}
-	return loadSnapshotCmd(m.cfg.Lister, m.scope)
+	return loadIssuesCmd(m.cfg.Lister, m.all)
 }
 
 func (m *Model) restorePendingSelection() {
@@ -606,8 +549,8 @@ func (m *Model) selectByID(id string) {
 		return
 	}
 	display := *m.displayRef
-	for i, issue := range display {
-		if issue.ID == id {
+	for i, row := range display {
+		if row.Issue.ID == id {
 			m.widget.SetSelected(i)
 			return
 		}
@@ -627,9 +570,9 @@ func statusChoiceIndex(status string) int {
 // false if the display list is empty or the selection is out of range.
 func (m Model) selectedIssue() (Issue, bool) {
 	if m.mode == modeStatus {
-		for _, issue := range *m.displayRef {
-			if issue.ID == m.modeSavedSelectedID {
-				return issue, true
+		for _, row := range *m.displayRef {
+			if row.Issue.ID == m.modeSavedSelectedID {
+				return row.Issue, true
 			}
 		}
 		return Issue{}, false
@@ -639,7 +582,7 @@ func (m Model) selectedIssue() (Issue, bool) {
 	if len(display) == 0 || sel >= len(display) {
 		return Issue{}, false
 	}
-	return display[sel], true
+	return display[sel].Issue, true
 }
 
 // selectedRowID returns the id of the currently selected row, or "" if
@@ -718,27 +661,26 @@ func (m *Model) applyLayout() {
 	m.previewHeight = m.height - topHeight
 }
 
-// recomputeFilter re-derives the displayed issue list from allItems and the
-// widget's current query, via fuzzyfinder.Find (AND-semantics multi-word
-// match). An empty query shows every item in adapter order, matching Find's
-// documented "empty query returns nil" behavior rather than treating it as
-// "no matches".
+// recomputeFilter re-derives the displayed issue tree from allItems and the
+// widget's current query. An empty query builds the full **issue tree**
+// (see CONTEXT.md) undimmed; a non-empty query fuzzy-matches (via
+// fuzzyfinder.Find, AND-semantics multi-word match) and keeps only matches
+// plus their non-matching ancestors, which render dimmed for tree context.
 func (m *Model) recomputeFilter() {
 	query := m.widget.Query()
-	if query == "" {
-		*m.displayRef = m.allItems
-	} else {
+	var matchIDs map[string]bool
+	if query != "" {
 		candidates := make([]string, len(m.allItems))
 		for i, issue := range m.allItems {
 			candidates[i] = issue.ID + " " + issue.Title
 		}
 		matches := fuzzyfinder.Find(query, candidates)
-		display := make([]Issue, len(matches))
-		for i, match := range matches {
-			display[i] = m.allItems[match.Index]
+		matchIDs = make(map[string]bool, len(matches))
+		for _, match := range matches {
+			matchIDs[m.allItems[match.Index].ID] = true
 		}
-		*m.displayRef = display
 	}
+	*m.displayRef = BuildIssueTree(m.allItems, matchIDs)
 	m.widget.SetItemCount(max(len(*m.displayRef), 1))
 	m.widget.SetSelected(0)
 }
@@ -760,7 +702,7 @@ func (m Model) View() tea.View {
 	case m.loading:
 		content = "Loading issues…"
 	case len(m.allItems) == 0:
-		content = emptyStateStyle.Render("No issues in scope.")
+		content = emptyStateStyle.Render("No issues found.")
 	case m.previewVisible() && m.previewStacked:
 		content = lipgloss.JoinVertical(lipgloss.Left, m.widget.View(), m.renderPreview())
 	case m.previewVisible():
@@ -786,7 +728,6 @@ func (m Model) renderHelp() string {
 		{"ctrl+e", "edit the selected issue in $EDITOR"},
 		{"ctrl+g", "open the selected issue's graph"},
 		{"ctrl+r", "refresh the list and keep selection"},
-		{"ctrl+f", "cycle scope (actionable / ready / blocked / all)"},
 		{"tab", "toggle the preview pane"},
 		{"esc", "quit the picker"},
 		{"?", "toggle this help"},
@@ -825,74 +766,19 @@ func statusIcon(status string) string {
 	}
 }
 
-// readinessGlyph is the row's readiness indicator, distinct from statusIcon:
-// a filled dot for unblocked, a triangle for blocked, a dim middot otherwise.
-func readinessGlyph(r Readiness) string {
-	switch r {
-	case Unblocked:
-		return "●"
-	case Blocked:
-		return "▲"
-	default:
-		return "·"
-	}
-}
-
-func readinessStyle(r Readiness) lipgloss.Style {
-	switch r {
-	case Unblocked:
-		return readinessUnblockedStyle
-	case Blocked:
-		return readinessBlockedStyle
-	default:
-		return readinessOtherStyle
-	}
-}
-
-// readinessBadge renders the dim "↓N ↑M" blocker/dependent badge from
-// DependencyCount/DependentCount, hiding either side that's zero and
-// returning "" when both are zero.
-func readinessBadge(issue Issue) string {
-	var parts []string
-	if issue.DependencyCount > 0 {
-		parts = append(parts, fmt.Sprintf("↓%d", issue.DependencyCount))
-	}
-	if issue.DependentCount > 0 {
-		parts = append(parts, fmt.Sprintf("↑%d", issue.DependentCount))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, " ")
-}
-
-// rowTag returns the dim hierarchy tag for a row: "epic" for epic issues, a
-// "↳ <parent>" breadcrumb for subtasks, or "" for standalone issues.
-func rowTag(issue Issue) string {
-	if issue.IssueType == "epic" {
-		return "epic"
-	}
-	if issue.Parent != "" {
-		return "↳ " + issue.Parent
-	}
-	return ""
-}
-
 func renderStatusRow(status string, selected bool) string {
 	plain := lipgloss.NewStyle()
 	return fuzzyfinder.Highlight(statusIcon(status)+" "+status, nil, plain, selected)
 }
 
-// renderIssueRow renders "{readiness glyph} {status icon} {id}  {title}  {tag}  {badge}",
-// with title fuzzy-match characters highlighted. tag and badge are omitted
-// when empty.
-func renderIssueRow(issue Issue, readyIDs map[string]bool, query string, selected bool) string {
-	readiness := ClassifyReadiness(issue, readyIDs)
-	glyphStyle := readinessStyle(readiness)
-	if selected {
-		glyphStyle = glyphStyle.Background(fuzzyfinder.SelectedBg)
-	}
-	glyph := glyphStyle.Render(readinessGlyph(readiness) + " ")
+// renderIssueRow renders "{indent}{status icon} {id}  {title}", with title
+// fuzzy-match characters highlighted. row.Depth indents the row under its
+// parent in the **issue tree**; an epic's title renders bold in a distinct
+// color, and a row kept only as a non-matching ancestor's context
+// (row.Dimmed) renders dim instead.
+func renderIssueRow(row TreeRow, query string, selected bool) string {
+	issue := row.Issue
+	indent := strings.Repeat("  ", row.Depth)
 
 	icon := statusIcon(issue.Status) + " "
 	if selected {
@@ -901,24 +787,19 @@ func renderIssueRow(issue Issue, readyIDs map[string]bool, query string, selecte
 
 	ranges, _ := fuzzyfinder.MatchRanges(query, issue.Title)
 
-	plain := lipgloss.NewStyle()
+	base := lipgloss.NewStyle()
+	switch {
+	case row.Dimmed:
+		base = dimRowStyle
+	case issue.IssueType == "epic":
+		base = epicRowStyle
+	}
+
 	id := fuzzyfinder.Highlight(issue.ID, nil, fuzzyfinder.SubtitleStyle, selected)
-	sep := fuzzyfinder.Highlight("  ", nil, plain, selected)
-	title := fuzzyfinder.Highlight(issue.Title, ranges, plain, selected)
+	sep := fuzzyfinder.Highlight("  ", nil, base, selected)
+	title := fuzzyfinder.Highlight(issue.Title, ranges, base, selected)
 
-	line := glyph + icon + id + sep + title
-
-	if tag := rowTag(issue); tag != "" {
-		line += fuzzyfinder.Highlight("  ", nil, plain, selected) +
-			fuzzyfinder.Highlight(tag, nil, fuzzyfinder.SubtitleStyle, selected)
-	}
-
-	if badge := readinessBadge(issue); badge != "" {
-		line += fuzzyfinder.Highlight("  ", nil, plain, selected) +
-			fuzzyfinder.Highlight(badge, nil, fuzzyfinder.SubtitleStyle, selected)
-	}
-
-	return line
+	return indent + icon + id + sep + title
 }
 
 // renderPreview renders the side pane for the currently selected issue: a

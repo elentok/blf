@@ -6,12 +6,13 @@ var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#f38ba8"))
 
 var emptyStateStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).Italic(true)
 
-// Readiness row-indicator colors, distinct from the plain status icon.
-var (
-	readinessUnblockedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#a6e3a1")) // green
-	readinessBlockedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#f38ba8")) // red
-	readinessOtherStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")) // dim
-)
+// epicRowStyle highlights epic rows in the issue list so they read as
+// epics at a glance, distinct from plain task/subtask rows.
+var epicRowStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#f9e2af")) // yellow
+
+// dimRowStyle renders a non-matching ancestor row kept only for a matching
+// descendant's tree context (see CONTEXT.md's "issue tree" entry).
+var dimRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086"))
 
 var previewStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#cdd6f4")).

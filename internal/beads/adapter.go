@@ -6,20 +6,6 @@ import (
 	"sync"
 )
 
-// Scope selects which issues List returns.
-type Scope string
-
-const (
-	// ScopeActionable is bd list's default: open issues, closed excluded.
-	ScopeActionable Scope = "actionable"
-	// ScopeReady restricts to issues with no active blockers.
-	ScopeReady Scope = "ready"
-	// ScopeBlocked restricts to issues with the "blocked" status.
-	ScopeBlocked Scope = "blocked"
-	// ScopeAll includes every issue, closed included.
-	ScopeAll Scope = "all"
-)
-
 // Adapter is the read/write front-end over the bd CLI. Dir, if set, is
 // threaded as `bd -C <dir>` so the adapter targets a project other than the
 // working directory.
@@ -54,25 +40,18 @@ func (a *Adapter) run(args ...string) ([]byte, error) {
 	return a.Runner.Run(full)
 }
 
-// List returns the issues in scope, decoded from `bd list --json`. Bd's
+// List returns the issues decoded from `bd list --json`, mirroring bd
+// list's own default filter (closed issues excluded) unless all is true, in
+// which case it mirrors `bd list --all` (closed included). Bd's
 // unavailability or a missing database surfaces as this call's own error
 // (bd's stderr is descriptive on both counts), so callers don't need a
 // separate up-front check.
-func (a *Adapter) List(scope Scope) ([]Issue, error) {
+func (a *Adapter) List(all bool) ([]Issue, error) {
 	// bd list defaults to --limit 50; --limit 0 disables that cap so a
 	// large project's issue list doesn't get silently truncated.
 	args := []string{"list", "--json", "--limit", "0"}
-	switch scope {
-	case ScopeActionable, "":
-		// bd list's default already excludes closed issues.
-	case ScopeReady:
-		args = append(args, "--ready")
-	case ScopeBlocked:
-		args = append(args, "--status", "blocked")
-	case ScopeAll:
+	if all {
 		args = append(args, "--all")
-	default:
-		return nil, fmt.Errorf("beads: unknown scope %q", scope)
 	}
 
 	out, err := a.run(args...)
@@ -80,25 +59,6 @@ func (a *Adapter) List(scope Scope) ([]Issue, error) {
 		return nil, err
 	}
 	return decodeIssues(out)
-}
-
-// Ready returns the set of issue ids with no active blockers, per
-// `bd ready --json`. Readiness must come from this set membership, never
-// from DependencyCount (a closed blocker still counts toward the count).
-func (a *Adapter) Ready() (map[string]bool, error) {
-	out, err := a.run("ready", "--json")
-	if err != nil {
-		return nil, err
-	}
-	issues, err := decodeIssues(out)
-	if err != nil {
-		return nil, err
-	}
-	set := make(map[string]bool, len(issues))
-	for _, issue := range issues {
-		set[issue.ID] = true
-	}
-	return set, nil
 }
 
 // Show returns the full detail of a single issue via `bd show <id> --json`.

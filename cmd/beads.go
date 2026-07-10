@@ -10,6 +10,7 @@ import (
 
 func newBeadsCmd(d deps) *cobra.Command {
 	var dir string
+	var all bool
 
 	cmd := &cobra.Command{
 		Use:   "beads",
@@ -21,7 +22,7 @@ func newBeadsCmd(d deps) *cobra.Command {
 				Lister:     adapter,
 				Preview:    adapter,
 				Mutator:    adapter,
-				Scope:      beads.ScopeActionable,
+				All:        all,
 				CopyText:   d.copyText,
 				EditIssue:  func(id string) tea.Cmd { return beads.EditIssueCmd(dir, id) },
 				GraphIssue: func(id string) tea.Cmd { return beads.GraphIssueCmd(dir, id) },
@@ -36,5 +37,6 @@ func newBeadsCmd(d deps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "C", "", "Project directory (passed to bd -C)")
+	cmd.Flags().BoolVarP(&all, "all", "a", false, "Include closed issues (mirrors bd list --all)")
 	return cmd
 }

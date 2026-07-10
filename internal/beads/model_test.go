@@ -13,15 +13,10 @@ import (
 type stubLister struct {
 	issues []Issue
 	err    error
-	ready  map[string]bool
 }
 
-func (s stubLister) List(scope Scope) ([]Issue, error) {
+func (s stubLister) List(all bool) ([]Issue, error) {
 	return s.issues, s.err
-}
-
-func (s stubLister) Ready() (map[string]bool, error) {
-	return s.ready, nil
 }
 
 type stubMutator struct {
@@ -164,7 +159,6 @@ func TestEnterYieldsSelectedID(t *testing.T) {
 	copied := ""
 	m := NewModel(ModelConfig{
 		Lister:   stubLister{issues: testIssues()},
-		Scope:    ScopeActionable,
 		CopyText: func(s string) error { copied = s; return nil },
 	})
 	m = loadIssues(m, testIssues())
@@ -188,7 +182,7 @@ func TestEnterAfterFilterYieldsFilteredSelection(t *testing.T) {
 	m = loadIssues(m, testIssues())
 
 	m = modelType(m, "feature")
-	if len(*m.displayRef) != 1 || (*m.displayRef)[0].ID != "abc-2" {
+	if len(*m.displayRef) != 1 || (*m.displayRef)[0].Issue.ID != "abc-2" {
 		t.Fatalf("expected filtered list to contain only abc-2, got %+v", *m.displayRef)
 	}
 
@@ -244,29 +238,10 @@ func TestEmptyScopeShowsEmptyState(t *testing.T) {
 	}
 }
 
-func TestCtrlFCyclesScopeAndRefetches(t *testing.T) {
-	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}, Scope: ScopeActionable})
-	m = loadIssues(m, testIssues())
-
-	next, cmd := m.Update(tea.KeyPressMsg{Code: 'f', Mod: tea.ModCtrl})
-	m = next.(Model)
-
-	if m.scope != ScopeReady {
-		t.Errorf("scope after one ctrl+f = %v, want %v", m.scope, ScopeReady)
-	}
-	if cmd == nil {
-		t.Fatal("expected a re-fetch cmd after ctrl+f")
-	}
-}
-
-func TestScopeCycleOrder(t *testing.T) {
-	s := ScopeActionable
-	want := []Scope{ScopeReady, ScopeBlocked, ScopeAll, ScopeActionable}
-	for i, w := range want {
-		s = nextScope(s)
-		if s != w {
-			t.Fatalf("step %d: nextScope = %v, want %v", i, s, w)
-		}
+func TestAllFlagIsThreadedToLister(t *testing.T) {
+	m := NewModel(ModelConfig{Lister: stubLister{issues: testIssues()}, All: true})
+	if !m.all {
+		t.Fatal("expected All: true to set Model.all")
 	}
 }
 
@@ -373,8 +348,6 @@ func TestCreateModeEnterCreatesAndRefreshesSelection(t *testing.T) {
 	}
 
 	next, _ = m.Update(issuesLoadedMsg{issues: reloaded})
-	m = next.(Model)
-	next, _ = m.Update(readyLoadedMsg{ready: map[string]bool{"epic-1": true, "new-1": true}})
 	m = next.(Model)
 
 	if m.mode != modeBrowse {
@@ -488,56 +461,63 @@ func TestCtrlRStartsReloadAndReselectsCurrentIssue(t *testing.T) {
 	}
 }
 
-func TestReadyLoadedMsgResortsIssues(t *testing.T) {
+func TestLoadedIssuesBuildIssueTreeInModel(t *testing.T) {
 	issues := []Issue{
-		{ID: "blocked-1", Status: "open", DependencyCount: 1},
-		{ID: "unblocked-1", Status: "open", DependencyCount: 1},
+		{ID: "epic-1", Title: "Epic", IssueType: "epic"},
+		{ID: "epic-1.1", Title: "child", Parent: "epic-1"},
 	}
 	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}})
 	m = loadIssues(m, issues)
 
-	next, _ := m.Update(readyLoadedMsg{ready: map[string]bool{"unblocked-1": true}})
-	m = next.(Model)
-
-	if len(*m.displayRef) != 2 || (*m.displayRef)[0].ID != "unblocked-1" {
-		t.Fatalf("expected unblocked-1 sorted first once readiness loads, got %+v", *m.displayRef)
+	display := *m.displayRef
+	if len(display) != 2 || display[0].Issue.ID != "epic-1" || display[1].Issue.ID != "epic-1.1" {
+		t.Fatalf("expected issue tree [epic-1, epic-1.1], got %+v", display)
+	}
+	if display[1].Depth != 1 {
+		t.Errorf("expected child at depth 1, got %+v", display[1])
 	}
 }
 
-func TestRenderIssueRowShowsReadinessGlyphAndBadge(t *testing.T) {
-	issue := Issue{ID: "abc-1", Title: "do work", Status: "open", DependencyCount: 2, DependentCount: 1}
-
-	row := renderIssueRow(issue, map[string]bool{}, "", false)
-
-	if !strings.Contains(row, readinessGlyph(Blocked)) {
-		t.Errorf("expected blocked glyph in row, got %q", row)
+func TestFilteringDimsNonMatchingAncestor(t *testing.T) {
+	issues := []Issue{
+		{ID: "epic-1", Title: "Epic", IssueType: "epic"},
+		{ID: "epic-1.1", Title: "findme", Parent: "epic-1"},
 	}
-	if !strings.Contains(row, "↓2 ↑1") {
-		t.Errorf("expected badge %q in row, got %q", "↓2 ↑1", row)
+	m := NewModel(ModelConfig{Lister: stubLister{issues: issues}})
+	m = loadIssues(m, issues)
+
+	m = modelType(m, "findme")
+
+	display := *m.displayRef
+	if len(display) != 2 {
+		t.Fatalf("expected parent kept as dim context alongside the match, got %+v", display)
+	}
+	if !display[0].Dimmed {
+		t.Errorf("expected non-matching parent epic-1 to be dimmed, got %+v", display[0])
+	}
+	if display[1].Dimmed {
+		t.Errorf("expected matching child to not be dimmed, got %+v", display[1])
 	}
 }
 
-func TestRenderIssueRowHidesZeroBadge(t *testing.T) {
-	issue := Issue{ID: "abc-1", Title: "do work", Status: "open"}
+func TestRenderIssueRowStylesEpicBold(t *testing.T) {
+	epic := TreeRow{Issue: Issue{ID: "epic-1", Title: "big epic", IssueType: "epic"}}
+	row := renderIssueRow(epic, "", false)
+	if !strings.Contains(row, epicRowStyle.Render("big epic")) {
+		t.Errorf("expected epic title styled with epicRowStyle, got %q", row)
+	}
 
-	row := renderIssueRow(issue, map[string]bool{"abc-1": true}, "", false)
-
-	if strings.Contains(row, "↓") || strings.Contains(row, "↑") {
-		t.Errorf("expected no badge for zero blocker/dependent counts, got %q", row)
+	task := TreeRow{Issue: Issue{ID: "task-1", Title: "plain task"}}
+	row = renderIssueRow(task, "", false)
+	if strings.Contains(row, epicRowStyle.Render("plain task")) {
+		t.Errorf("expected non-epic row to not use epicRowStyle, got %q", row)
 	}
 }
 
-func TestRenderIssueRowTagsEpicAndSubtask(t *testing.T) {
-	epic := Issue{ID: "epic-1", Title: "big epic", IssueType: "epic"}
-	row := renderIssueRow(epic, map[string]bool{}, "", false)
-	if !strings.Contains(row, "epic") {
-		t.Errorf("expected epic tag in row, got %q", row)
-	}
-
-	subtask := Issue{ID: "sub-1", Title: "subtask", Parent: "epic-1"}
-	row = renderIssueRow(subtask, map[string]bool{}, "", false)
-	if !strings.Contains(row, "↳ epic-1") {
-		t.Errorf("expected parent breadcrumb in row, got %q", row)
+func TestRenderIssueRowIndentsByDepth(t *testing.T) {
+	row := renderIssueRow(TreeRow{Issue: Issue{ID: "sub-1", Title: "subtask"}, Depth: 1}, "", false)
+	if !strings.HasPrefix(row, "  ") {
+		t.Errorf("expected depth-1 row to be indented, got %q", row)
 	}
 }
 
