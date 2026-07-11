@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.6] - 2026-07-11
+
+- **`blf beads` now mirrors `bd list` directly** instead of doing its own readiness-bucketed triage: dropped the unblocked/blocked classification, blocker/dependent badges, and the ctrl+f scope cycle in favor of a plain tree view (with a new `-a`/`--all` flag for `bd list --all`). Epic rows are now highlighted instead of using a readiness glyph. See `docs/adr/0009-beads-plain-list-view-over-readiness-triage.md`.
+
 ## [v0.6.5] - 2026-07-08
 
 - Added **launcher commands**: `reload` (reindex apps) and `cleanurl` (clean the clipboard URL in place) now show up as fuzzy-matchable entries in the launcher, alongside the existing `ctrl+shift+r` reindex shortcut. `cleanurl` no longer shells out to `blf clean-url --clipboard` as a script; it runs in-process and shows a system notification on completion instead of a status-bar message.
