@@ -61,6 +61,7 @@ func Reindex(homeDir string) (*Index, error) {
 		appList = ScanMacDirs([]string{
 			"/Applications",
 			"/System/Applications",
+			"/System/Library/CoreServices/Applications",
 			filepath.Join(homeDir, "Applications"),
 		})
 	default:

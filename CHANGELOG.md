@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.7] - 2026-07-23
+
+- **`blf launcher`** - add missing /System/Library/CoreServices/Applications
+
 ## [v0.6.6] - 2026-07-11
 
 - **`blf beads` now mirrors `bd list` directly** instead of doing its own readiness-bucketed triage: dropped the unblocked/blocked classification, blocker/dependent badges, and the ctrl+f scope cycle in favor of a plain tree view (with a new `-a`/`--all` flag for `bd list --all`). Epic rows are now highlighted instead of using a readiness glyph. See `docs/adr/0009-beads-plain-list-view-over-readiness-triage.md`.
