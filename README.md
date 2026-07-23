@@ -217,7 +217,7 @@ These mappings are only examples. Because `blf kitty new-session` and `blf kitty
 - **Ctrl+R / Ctrl+F** — navigate backward/forward through history, populating the input each step.
 - **Ctrl+S** — save the current input to history without acting; a transient "saved" confirmation appears for 1.5 s.
 - **Ctrl+Shift+R** — rebuild the app index in the background; a brief loading indicator appears.
-- **Esc** — clear input and reset to the empty state (does not hide the terminal).
+- **Esc** — clear input, reset to the empty state, and hide the quick terminal.
 - **`?`** — toggle the key-binding help footer.
 - After a successful Enter action the launcher resets and hides the quick terminal; it never exits.
 
@@ -238,6 +238,17 @@ For a system-wide hotkey outside Kitty (using [skhd](https://github.com/koekeish
 # ~/.skhdrc — requires allow_remote_control yes in kitty.conf
 cmd - 2 : kitty @ kitten quick-access-terminal --instance-group quick
 ```
+
+Quick-terminal setup (Ghostty, macOS):
+
+1. Add a quick-terminal keybinding in `~/.config/ghostty/config`:
+
+```conf
+keybind = global:cmd+2=toggle_quick_terminal
+```
+
+2. Press Cmd+2, then run `blf launcher` once in the Ghostty quick terminal.
+3. The launcher stays running between appearances. Esc and successful actions reset it and hide the quick terminal via Ghostty's AppleScript API; macOS may request Automation permission the first time.
 
 Config (`~/.config/blf/config.toml`):
 

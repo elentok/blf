@@ -19,10 +19,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	ghosttyQuickTerminalEnv          = "GHOSTTY_QUICK_TERMINAL"
+	ghosttyToggleQuickTerminalScript = `tell application "Ghostty" to perform action "toggle_quick_terminal" on focused terminal of selected tab of front window`
+)
+
 func newLauncherCmd(d deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "launcher",
-		Short: "Terminal launcher (runs inside Kitty quick terminal)",
+		Short: "Terminal launcher (runs inside a Kitty or Ghostty quick terminal)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			homeDir, err := d.userHomeDir()
 			if err != nil {
@@ -141,10 +146,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 					return platform.OpenURL(target)
 				},
 				ShowNotification: platform.ShowNotification,
-				HideTerminal: func() error {
-					_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
-					return err
-				},
+				HideTerminal:     launcherHideTerminal(d),
 				// Defer the hide by one render tick so the cleared frame is flushed
 				// before Kitty saves the buffer (see Model.resetAndHide).
 				HideDelay:   50 * time.Millisecond,
@@ -159,6 +161,23 @@ func newLauncherCmd(d deps) *cobra.Command {
 
 	cmd.AddCommand(newLauncherReindexCmd(d))
 	return cmd
+}
+
+// launcherHideTerminal returns the hide command for the quick terminal that
+// launched BLF. Ghostty sets GHOSTTY_QUICK_TERMINAL only for its quick
+// terminal; all other environments retain the existing Kitty behavior.
+func launcherHideTerminal(d deps) func() error {
+	if _, ok := d.lookupEnv(ghosttyQuickTerminalEnv); ok {
+		return func() error {
+			_, err := d.runCommand("osascript", "-e", ghosttyToggleQuickTerminalScript)
+			return err
+		}
+	}
+
+	return func() error {
+		_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
+		return err
+	}
 }
 
 func newLauncherReindexCmd(d deps) *cobra.Command {

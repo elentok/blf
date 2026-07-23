@@ -651,7 +651,7 @@ func (m *Model) saveLearnedRank() {
 }
 
 // resetAndHide clears the launcher back to its empty state and returns a Cmd that
-// hides the Kitty quick terminal.
+// hides the configured quick terminal.
 //
 // The hide is deferred by cfg.HideDelay (rather than called inline) to dodge a
 // bubbletea v2 render race: Update stores the new view but the terminal is only
