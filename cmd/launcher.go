@@ -25,6 +25,8 @@ const (
 )
 
 func newLauncherCmd(d deps) *cobra.Command {
+	var noBorder bool
+
 	cmd := &cobra.Command{
 		Use:   "launcher",
 		Short: "Terminal launcher (runs inside a Kitty or Ghostty quick terminal)",
@@ -151,6 +153,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				// before Kitty saves the buffer (see Model.resetAndHide).
 				HideDelay:   50 * time.Millisecond,
 				UseNerdFont: true,
+				NoBorder:    noBorder,
 			})
 
 			p := tea.NewProgram(m)
@@ -159,6 +162,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&noBorder, "no-border", false, "don't render the outer frame/border")
 	cmd.AddCommand(newLauncherReindexCmd(d))
 	return cmd
 }

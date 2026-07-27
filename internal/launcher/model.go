@@ -38,6 +38,7 @@ type ModelConfig struct {
 	LearnedRankPath  string                            // path to persist learned ranks; empty skips persistence
 	HideDelay        time.Duration                     // delay before hiding the terminal (see resetAndHide); 0 = immediate
 	ShowNotification func(title, message string) error // optional; nil disables completion notifications
+	NoBorder         bool                              // disable the outer border frame
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -98,6 +99,7 @@ func NewModel(cfg ModelConfig) Model {
 		},
 		Footer:    "?: help",
 		ItemCount: 0,
+		NoBorder:  cfg.NoBorder,
 	})
 
 	m.input = inputProxy{queryRef: queryRef, widgetRef: &m.widget}
@@ -695,9 +697,14 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 }
 
 // visibleResultRows returns how many result rows fit in the current terminal.
-// Layout: border top (1) + input (1) + separator (1) + footer (1) + border bottom (1) = 5 overhead.
+// Layout: border top (1) + input (1) + separator (1) + footer (1) + border bottom (1) = 5 overhead,
+// or 3 (input + separator + footer) when the border is disabled.
 func (m Model) visibleResultRows() int {
-	n := m.height - 5
+	overhead := 5
+	if m.cfg.NoBorder {
+		overhead = 3
+	}
+	n := m.height - overhead
 	if n < 1 {
 		n = 1
 	}
@@ -708,7 +715,11 @@ func (m Model) View() tea.View {
 	if m.helpMode {
 		w := max(m.width, 14)
 		h := max(m.height, 6)
-		content := borderStyle.Width(w).Height(h).Render(m.renderHelp())
+		style := borderStyle
+		if m.cfg.NoBorder {
+			style = noBorderStyle
+		}
+		content := style.Width(w).Height(h).Render(m.renderHelp())
 		v := tea.NewView(content)
 		v.AltScreen = true
 		return v

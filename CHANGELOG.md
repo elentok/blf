@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.9] - 2026-07-27
+
+- **`blf launcher`** - add `--no-border` option (for Ghostty's quick terminal)
+
 ## [v0.6.8] - 2026-07-24
 
 - **`blf launcher`** - add support for ghostty's quick terminal

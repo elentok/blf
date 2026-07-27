@@ -29,6 +29,11 @@ var (
 			BorderForeground(lipgloss.Color(colorBorderFg)).
 			Padding(0, 1)
 
+	// noBorderStyle is used instead of borderStyle when the frame border is
+	// disabled; it keeps the same horizontal padding so row content stays
+	// aligned with the input/footer regardless of the --no-border flag.
+	noBorderStyle = lipgloss.NewStyle().Padding(0, 1)
+
 	inputPromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender))
 
 	separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSurface1))

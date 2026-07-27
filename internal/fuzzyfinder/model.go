@@ -23,6 +23,8 @@ type Config struct {
 	ItemCount int
 	// Prompt is shown before the input chevron. Defaults to "" (just "> ").
 	Prompt string
+	// NoBorder disables the outer border frame, keeping the padding.
+	NoBorder bool
 }
 
 // Model is an embedded TUI widget that renders a query input box, a scrollable
@@ -103,7 +105,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 // View renders the full widget (border + input + separator + rows + footer)
 // as a string for embedding in a consumer's tea.View.
 func (m Model) View() string {
-	w := max(m.width-4, 1) // border (2) + padding (2)
+	w := max(m.width-m.frameWidthOverhead(), 1)
 
 	var sb strings.Builder
 
@@ -141,7 +143,35 @@ func (m Model) View() string {
 
 	bw := max(m.width, 14)
 	bh := max(m.height, 6)
-	return borderStyle.Width(bw).Height(bh).Render(sb.String())
+	return m.frameStyle().Width(bw).Height(bh).Render(sb.String())
+}
+
+// frameStyle returns the outer chrome style to wrap the widget content in,
+// switching between the bordered and border-less padding-only variant.
+func (m Model) frameStyle() lipgloss.Style {
+	if m.cfg.NoBorder {
+		return noBorderStyle
+	}
+	return borderStyle
+}
+
+// frameWidthOverhead returns how many columns the frame chrome consumes:
+// border (2) + padding (2), or just padding (2) when the border is disabled.
+func (m Model) frameWidthOverhead() int {
+	if m.cfg.NoBorder {
+		return 2
+	}
+	return 4
+}
+
+// frameHeightOverhead returns how many rows the frame chrome consumes:
+// border-top(1) + input(1) + separator(1) + footer(1) + border-bottom(1),
+// or just input+separator+footer when the border is disabled.
+func (m Model) frameHeightOverhead() int {
+	if m.cfg.NoBorder {
+		return 3
+	}
+	return 5
 }
 
 // Query returns the current text input value.
@@ -227,7 +257,6 @@ func (m *Model) SetPrompt(s string) {
 }
 
 // visibleRows returns how many result rows fit within the current height.
-// Overhead: border-top(1) + input(1) + separator(1) + footer(1) + border-bottom(1) = 5.
 func (m Model) visibleRows() int {
-	return max(m.height-5, 1)
+	return max(m.height-m.frameHeightOverhead(), 1)
 }
