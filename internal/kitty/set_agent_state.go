@@ -18,6 +18,14 @@ var validAgentStates = map[string]bool{
 // or empty we are not inside a Kitty window, so this is a silent no-op (exit 0,
 // nothing run, nothing printed).
 //
+// KITTY_WINDOW_ID/KITTY_LISTEN_ON can also be set but stale: a multiplexer
+// (tmux, herdr) started under kitty keeps those env vars for panes later
+// viewed from a different terminal (e.g. ghostty), so remote control has
+// nothing live to reach. `kitty @` reports that the same way it reports "no
+// matching window" (exit status 1, see isKittyNoMatchError) — that case is
+// indistinguishable from "not really in kitty" and is treated the same way:
+// silent no-op, not an error.
+//
 // When onlyIfWorking is true the write is applied only if the window's current
 // AGENT_STATE is "working"; otherwise it is a silent no-op. This guards the
 // Notification → waiting hook: Claude Code fires Notification both when it needs
@@ -50,6 +58,9 @@ func SetAgentState(state string, onlyIfWorking bool, d Deps) error {
 	}
 
 	if _, err := d.RunCommand("kitty", "@", "set-user-vars", "AGENT_STATE="+state); err != nil {
+		if isKittyNoMatchError(err) {
+			return nil
+		}
 		return fmt.Errorf("set agent state: %w", err)
 	}
 
