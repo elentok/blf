@@ -76,6 +76,9 @@ func currentAgentState(id string, d Deps) (string, error) {
 
 	out, err := d.RunCommand("kitty", "@", "ls", "--match", "id:"+id)
 	if err != nil {
+		if isKittyNoMatchError(err) {
+			return "", nil
+		}
 		return "", fmt.Errorf("read agent state: %w", err)
 	}
 

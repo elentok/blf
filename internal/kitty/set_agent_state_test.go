@@ -1,6 +1,7 @@
 package kitty
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -131,6 +132,33 @@ func onlyIfWorkingDeps(t *testing.T, current string, wrote *bool) Deps {
 		},
 		Stdout: &strings.Builder{},
 		Stderr: &strings.Builder{},
+	}
+}
+
+// TestSetAgentStateStaleWindowIsSilentNoop covers a multiplexer (tmux, herdr)
+// pane whose KITTY_WINDOW_ID/KITTY_LISTEN_ON were inherited from a kitty
+// session but is now viewed from a different terminal (e.g. ghostty): `kitty
+// @` can't reach a live window and fails the same way it fails for "no
+// matching window" (exit status 1). That must stay a silent no-op, not a
+// surfaced error.
+func TestSetAgentStateStaleWindowIsSilentNoop(t *testing.T) {
+	stdout := &strings.Builder{}
+	d := Deps{
+		LookupEnv: func(string) (string, bool) {
+			return "42", true
+		},
+		RunCommand: func(string, ...string) ([]byte, error) {
+			return nil, errors.New("exit status 1")
+		},
+		Stdout: stdout,
+		Stderr: &strings.Builder{},
+	}
+
+	if err := SetAgentState("working", false, d); err != nil {
+		t.Fatalf("SetAgentState returned error: %v", err)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
 }
 
