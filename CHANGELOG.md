@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.10] - 2026-07-28
+
+- **`blf launcher`** - add a snippets source: press Enter on a snippet to copy its value to the
+  clipboard (configured in `~/.config/blf/snippets.toml`)
+- **`blf config`** - add `edit-snippets` command; `edit` and `edit-snippets` now generate a JSON
+  Schema and a shared `taplo.toml` for `config.toml`/`snippets.toml`, enabling validation and
+  completion in taplo-based editors
+- **Kitty sessions** - treat stale `KITTY_WINDOW_ID`/`KITTY_LISTEN_ON` env vars (e.g. panes viewed
+  through tmux/herdr from a different terminal) as a no-op instead of an error
+
 ## [v0.6.9] - 2026-07-27
 
 - **`blf launcher`** - add `--no-border` option (for Ghostty's quick terminal)
