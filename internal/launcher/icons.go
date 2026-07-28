@@ -73,6 +73,7 @@ var Icons = map[IconRole]string{
 	IconRoleSettings:  "󰒓 ", // nf-md-cog
 	IconRoleDirectory: "󰉋 ", // nf-md-folder
 	IconRoleCommand:   "󰆍 ", // nf-md-console (same glyph used for "terminal" apps below)
+	IconRoleSnippet:   "󰆒 ", // nf-md-content-copy
 }
 
 // ASCIIIcons is a plain-text fallback for environments without Nerd Fonts.
@@ -88,6 +89,7 @@ var ASCIIIcons = map[IconRole]string{
 	IconRoleSettings:  "* ",
 	IconRoleDirectory: "d ",
 	IconRoleCommand:   "% ",
+	IconRoleSnippet:   "c ",
 }
 
 // Icon returns the icon string for a given role.

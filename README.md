@@ -250,13 +250,19 @@ keybind = global:cmd+2=toggle_quick_terminal
 2. Press Cmd+2, then run `blf launcher` once in the Ghostty quick terminal.
 3. The launcher stays running between appearances. Esc and successful actions reset it and hide the quick terminal via Ghostty's AppleScript API; macOS may request Automation permission the first time.
 
-Config (`~/.config/blf/config.toml`):
+Config (`~/.config/blf/config.toml`). Run `blf config edit` to open it in `$EDITOR` (creating it with
+the encoded defaults first, if missing). This also (re)writes `~/.config/blf/config.schema.json` and
+`~/.config/blf/taplo.toml`, and ensures the file starts with a `#:schema ./config.schema.json` line —
+adding it if an existing `config.toml` predates this feature — so
+[taplo](https://taplo.tamasfe.dev/) (and editors built on it, e.g. the Even Better TOML VS Code
+extension) validate the file and offer completion:
 
 ```toml
 [launcher]
 script_weight    = 2.0  # scripts rank above apps (default 1.5)
 app_weight       = 1.0  # default
 directory_weight = 1.0  # default
+snippets_weight  = 1.0  # default
 
 # Built-in scripts include playpause and clean-url.
 # [[launcher.script]] entries add to or override them.
@@ -315,9 +321,37 @@ name = "Desktop"       # overrides the built-in Desktop's path
 path = "~/OtherDesktop"
 ```
 
+Snippets (`~/.config/blf/snippets.toml`) — selecting one copies its value to the clipboard. Run
+`blf config edit-snippets` to open the file in `$EDITOR` (creating it with a commented-out example
+first, if missing). Like `config edit`, this (re)writes `~/.config/blf/snippets.schema.json` and
+`~/.config/blf/taplo.toml`, and ensures the file starts with a `#:schema ./snippets.schema.json`
+line:
+
+```toml
+[[snippet]]
+name  = "shipping"
+value = """
+David Elentok
+123 Main St
+Springfield, IL 62704
+"""
+
+[[snippet]]
+name  = "billing"
+icon  = "󰆔"
+value = "456 Other Ave"
+```
+
 Data paths:
 
 - Config: `~/.config/blf/config.toml` (respects `$XDG_CONFIG_HOME`)
+- Config schema: `~/.config/blf/config.schema.json` (regenerated on every `blf config edit`,
+  respects `$XDG_CONFIG_HOME`)
+- Snippets: `~/.config/blf/snippets.toml` (respects `$XDG_CONFIG_HOME`)
+- Snippets schema: `~/.config/blf/snippets.schema.json` (regenerated on every `blf config
+  edit-snippets`, respects `$XDG_CONFIG_HOME`)
+- taplo config: `~/.config/blf/taplo.toml` (regenerated on every `blf config edit` or `edit-snippets`,
+  respects `$XDG_CONFIG_HOME`)
 - App index cache: `~/.cache/blf/apps.json` (respects `$XDG_CACHE_HOME`)
 - Currency rate cache: `~/.cache/blf/currency.json`
 - History: `~/.local/state/blf/launcher-history` (respects `$XDG_STATE_HOME`)

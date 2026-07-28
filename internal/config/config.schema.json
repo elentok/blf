@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "blf config",
+  "description": "blf's main configuration file.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "launcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "script_weight": {
+          "type": "number",
+          "description": "Source weight for user-defined scripts (default 1.5)."
+        },
+        "app_weight": {
+          "type": "number",
+          "description": "Source weight for installed applications (default 1.0)."
+        },
+        "directory_weight": {
+          "type": "number",
+          "description": "Source weight for directories (default 1.0)."
+        },
+        "snippets_weight": {
+          "type": "number",
+          "description": "Source weight for snippets (default 1.0)."
+        },
+        "currencies": {
+          "type": "array",
+          "description": "Ordered list of ISO currency codes shown in conversion results.",
+          "items": { "type": "string" }
+        },
+        "unit_group": {
+          "type": "array",
+          "description": "User-defined unit conversion groups.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "unit": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "symbols", "factor"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "symbols": { "type": "array", "items": { "type": "string" } },
+                    "factor": {
+                      "type": "number",
+                      "description": "Relative to the group's base unit (first unit, factor = 1.0)."
+                    },
+                    "offset": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "script": {
+          "type": "array",
+          "description": "User scripts that add to or override the built-in defaults.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "type", "body"],
+            "properties": {
+              "name": { "type": "string" },
+              "icon": {
+                "type": "string",
+                "description": "Optional Nerd Font glyph."
+              },
+              "type": { "type": "string", "enum": ["bash", "osascript"] },
+              "platform": {
+                "type": "string",
+                "enum": ["mac", "linux", ""],
+                "description": "\"mac\", \"linux\", or omitted for both."
+              },
+              "body": { "type": "string" },
+              "output": {
+                "type": "string",
+                "enum": ["ignore", "show", "clipboard"]
+              }
+            }
+          }
+        },
+        "directory": {
+          "type": "array",
+          "description": "User directories that add to or override the built-in defaults.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "path"],
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": "string", "description": "May start with \"~\"." }
+            }
+          }
+        }
+      }
+    }
+  }
+}

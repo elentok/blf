@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "blf snippets",
+  "description": "Snippets copied to the clipboard when selected in `blf launcher`.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "snippet": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The text you type in the launcher to find this snippet."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Optional Nerd Font glyph shown next to the snippet in the launcher."
+          },
+          "value": {
+            "type": "string",
+            "description": "The text copied to the clipboard when this snippet is selected."
+          }
+        }
+      }
+    }
+  }
+}

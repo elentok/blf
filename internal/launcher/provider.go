@@ -46,6 +46,7 @@ const (
 	IconRoleSettings
 	IconRoleDirectory
 	IconRoleCommand
+	IconRoleSnippet
 )
 
 // Result is one item in the launcher's ranked result list.

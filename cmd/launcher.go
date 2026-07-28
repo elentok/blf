@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -117,6 +118,13 @@ func newLauncherCmd(d deps) *cobra.Command {
 				cfg.Launcher.ScriptWeight,
 			)
 
+			// Snippets provider: loaded from a separate snippets.toml file.
+			snippets, snippetsErr := config.LoadSnippets(d.readFile, homeDir)
+			if snippetsErr != nil {
+				cfgErr = errors.Join(cfgErr, snippetsErr)
+			}
+			snippetsProvider := launcher.NewSnippetsProvider(snippets, cfg.Launcher.SnippetsWeight)
+
 			m := launcher.NewModel(launcher.ModelConfig{
 				Providers: []launcher.Provider{
 					launcher.CalcProvider{},
@@ -126,6 +134,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 					settingsProvider,
 					directoryProvider,
 					commandsProvider,
+					snippetsProvider,
 				},
 				ConfigErr:        cfgErr,
 				CopyText:         d.copyText,

@@ -4,12 +4,59 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
+
+//go:embed snippets.schema.json
+var snippetsSchemaJSON []byte
+
+// SnippetsSchemaJSON is the JSON Schema for snippets.toml, understood by
+// taplo (and editors built on it, e.g. Even Better TOML) via a `#:schema`
+// magic comment.
+func SnippetsSchemaJSON() []byte {
+	return snippetsSchemaJSON
+}
+
+// SnippetsSchemaFilename is the name of the schema file written alongside
+// snippets.toml.
+const SnippetsSchemaFilename = "snippets.schema.json"
+
+//go:embed config.schema.json
+var configSchemaJSON []byte
+
+// ConfigSchemaJSON is the JSON Schema for config.toml, understood by taplo
+// (and editors built on it, e.g. Even Better TOML) via a `#:schema` magic
+// comment.
+func ConfigSchemaJSON() []byte {
+	return configSchemaJSON
+}
+
+// ConfigSchemaFilename is the name of the schema file written alongside
+// config.toml.
+const ConfigSchemaFilename = "config.schema.json"
+
+// TaploTomlFilename is the taplo config file written to the blf config
+// directory, associating both config.toml and snippets.toml with their
+// schemas by filename (belt-and-suspenders alongside each file's own
+// `#:schema` pragma — see https://taplo.tamasfe.dev/configuration/).
+const TaploTomlFilename = "taplo.toml"
+
+// TaploTomlContent is the content written to TaploTomlFilename.
+func TaploTomlContent() []byte {
+	return []byte(`[[schema]]
+path = "./` + ConfigSchemaFilename + `"
+include = ["config.toml"]
+
+[[schema]]
+path = "./` + SnippetsSchemaFilename + `"
+include = ["snippets.toml"]
+`)
+}
 
 // Config holds the full blf configuration. Only the [launcher] section is
 // used by the launcher; other sections are reserved for future commands.
@@ -33,6 +80,8 @@ type LauncherConfig struct {
 	DirectoryWeight float64 `toml:"directory_weight"`
 	// Directories lists user directories that add to or override the built-in defaults.
 	Directories []DirectoryConfig `toml:"directory"`
+	// SnippetsWeight is the source weight for snippets (default 1.0).
+	SnippetsWeight float64 `toml:"snippets_weight"`
 }
 
 // DirectoryConfig is a named filesystem location in the config file.
@@ -65,6 +114,19 @@ type UnitConfig struct {
 	Offset  float64  `toml:"offset"`
 }
 
+// SnippetConfig is a named text value in snippets.toml, copied to the
+// clipboard when selected in the launcher.
+type SnippetConfig struct {
+	Name  string `toml:"name"`
+	Icon  string `toml:"icon"` // optional nerd-font glyph
+	Value string `toml:"value"`
+}
+
+// Snippets holds the top-level contents of snippets.toml.
+type Snippets struct {
+	Snippets []SnippetConfig `toml:"snippet"`
+}
+
 var defaultCurrencies = []string{"USD", "ILS", "GBP", "EUR"}
 
 // DefaultConfig returns the Config used when no config file is present, and
@@ -75,6 +137,7 @@ func DefaultConfig() Config {
 			ScriptWeight:    1.5,
 			AppWeight:       1.0,
 			DirectoryWeight: 1.0,
+			SnippetsWeight:  1.0,
 			Currencies:      defaultCurrencies,
 		},
 	}
@@ -103,11 +166,40 @@ func LoadConfig(readFile func(string) ([]byte, error), homeDir string) (Config, 
 
 // XDGConfigPath returns the path to the blf config file.
 func XDGConfigPath(homeDir string) string {
-	configDir := filepath.Join(homeDir, ".config", "blf")
+	return filepath.Join(xdgConfigDir(homeDir), "config.toml")
+}
+
+// XDGSnippetsPath returns the path to the blf snippets file.
+func XDGSnippetsPath(homeDir string) string {
+	return filepath.Join(xdgConfigDir(homeDir), "snippets.toml")
+}
+
+func xdgConfigDir(homeDir string) string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		configDir = filepath.Join(d, "blf")
+		return filepath.Join(d, "blf")
 	}
-	return filepath.Join(configDir, "config.toml")
+	return filepath.Join(homeDir, ".config", "blf")
+}
+
+// LoadSnippets reads ~/.config/blf/snippets.toml (respecting
+// XDG_CONFIG_HOME). If the file is absent it returns an empty list with no
+// error. If the file is malformed it returns an empty list plus a non-nil
+// error so the caller can show a non-blocking notice without crashing.
+func LoadSnippets(readFile func(string) ([]byte, error), homeDir string) ([]SnippetConfig, error) {
+	path := XDGSnippetsPath(homeDir)
+	data, err := readFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read snippets %s: %w", path, err)
+	}
+
+	var snippets Snippets
+	if _, err := toml.Decode(string(data), &snippets); err != nil {
+		return nil, fmt.Errorf("malformed snippets %s: %w", path, err)
+	}
+	return snippets.Snippets, nil
 }
 
 // XDGCacheDir returns the blf cache directory (~/.cache/blf or $XDG_CACHE_HOME/blf).
