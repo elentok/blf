@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.6.11] - 2026-07-30
+
+- **`blf launcher`** - the `reload` command now also clears the input and reloads snippets (not
+  just the apps index)
+- **`blf cli`** - nest `tmux-links`/`tmux-targets` under `blf tmux links`/`blf tmux targets`, and
+  replace top-level `blf claude-statusline` with `blf claude statusline --install`, which
+  idempotently writes the command into `~/.claude/settings.json`'s `statusLine` entry
+- **Kitty sessions** - fix `read-agent-state --only-if-working` to also treat stale
+  `KITTY_WINDOW_ID`/`KITTY_LISTEN_ON` env vars as a no-op
+
 ## [v0.6.10] - 2026-07-28
 
 - **`blf launcher`** - add a snippets source: press Enter on a snippet to copy its value to the
