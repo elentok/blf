@@ -54,7 +54,7 @@ func runTopLevel() error {
 		return err
 	}
 
-	cmdStr := fmt.Sprintf("blf tmux-targets --popup --target %s", shellQuote(paneID))
+	cmdStr := fmt.Sprintf("blf tmux targets --popup --target %s", shellQuote(paneID))
 	if err := runCmd(
 		"tmux", "display-popup",
 		"-t", paneID,

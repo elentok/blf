@@ -16,7 +16,7 @@ func RunStatusLine(args []string, stdin io.Reader, stdout io.Writer) error {
 		case "--demo":
 			demo = true
 		default:
-			return fmt.Errorf("usage: blf claude-statusline [--silent] [--demo]")
+			return fmt.Errorf("usage: blf claude statusline [--silent] [--demo]")
 		}
 	}
 	if demo {

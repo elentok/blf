@@ -93,16 +93,14 @@ func execute(args []string, d deps) error {
 	root.SetErr(d.stderr)
 
 	root.AddCommand(
-		newTmuxLinksCmd(d),
+		newTmuxCmd(d),
 		newOpenCmd(d),
 		newCopyCmd(d),
 		newCopyRefCmd(d),
-		newTmuxTargetsCmd(d),
 		newNPMScriptsCmd(d),
 		newQueryStringCmd(d),
 		newCalCmd(d),
 		newSumCmd(d),
-		newClaudeStatusLineCmd(d),
 		newClaudeCmd(d),
 		newKittyCmd(d),
 		newDimPathCmd(d),
@@ -115,21 +113,6 @@ func execute(args []string, d deps) error {
 
 	root.SetArgs(args)
 	return root.Execute()
-}
-
-func newTmuxLinksCmd(d deps) *cobra.Command {
-	return &cobra.Command{
-		Use:   "tmux-links <open|copy>",
-		Short: "Open or copy tmux links",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			mode := args[0]
-			if mode != tmuxlinks.ModeOpen && mode != tmuxlinks.ModeCopy {
-				return fmt.Errorf("invalid tmux-links mode %q (expected open or copy)", mode)
-			}
-			return d.runTmuxLinks(mode)
-		},
-	}
 }
 
 func newOpenCmd(d deps) *cobra.Command {
@@ -193,22 +176,6 @@ func newCopyRefCmd(d deps) *cobra.Command {
 	}
 }
 
-func newTmuxTargetsCmd(d deps) *cobra.Command {
-	var popup bool
-	var target string
-
-	cmd := &cobra.Command{
-		Use:   "tmux-targets",
-		Short: "Show tmux targets",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return d.runTargets(popup, target)
-		},
-	}
-	cmd.Flags().BoolVar(&popup, "popup", false, "Show in popup")
-	cmd.Flags().StringVar(&target, "target", "", "Target pane")
-	return cmd
-}
-
 func newNPMScriptsCmd(d deps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "npm-scripts",
@@ -254,18 +221,6 @@ func newSumCmd(d deps) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&echo, "echo", "e", false, "Echo each line")
 	return cmd
-}
-
-func newClaudeStatusLineCmd(d deps) *cobra.Command {
-	return &cobra.Command{
-		Use:   "claude-statusline",
-		Short: "Show Claude status line",
-		// pass remaining args through to the internal function
-		DisableFlagParsing: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClaudeStatusLine(args, d)
-		},
-	}
 }
 
 func newVersionCmd(d deps) *cobra.Command {

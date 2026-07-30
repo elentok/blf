@@ -56,8 +56,8 @@ Start a new shell for completions to take effect.
 - `blf open <url>`: open a URL with the system default browser.
 - `blf copy <text>`: copy text to the system clipboard. Use `blf copy -` to read the text from stdin (e.g. `echo hello | blf copy -`); trailing newlines are trimmed.
 - `blf copy-ref <file>...`: copy one or more files to the clipboard as references (paste the actual files in GUI apps). Resolves relative and `~` paths, accepts directories, and validates all paths before copying (macOS via `osascript`, Linux/Wayland via `wl-copy`).
-- `blf tmux-links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
-- `blf tmux-targets`: open an interactive popup to navigate and act on detected targets.
+- `blf tmux links <open|copy>`: scan the current tmux pane for URLs and open a centered tmux menu.
+- `blf tmux targets`: open an interactive popup to navigate and act on detected targets.
 - `blf kitty list-os-windows`: print kitty OS windows and their tab titles, highlighting the active and last-focused rows.
 - `blf kitty ls`: print a readable tree for `kitty @ ls`, including OS windows, tabs, windows, cmdlines, and foreground processes.
 - `blf kitty goto-os-window [id]`: focus a kitty OS window directly by id, or pick one with `fzf`.
@@ -70,7 +70,7 @@ Start a new shell for completions to take effect.
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
-- `blf claude-statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line.
+- `blf claude statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line. `--install` writes the command into `~/.claude/settings.json`'s `statusLine` entry.
 - `blf claude history`: TUI for browsing Claude Code conversation history — list projects, drill into a project's conversations, grep across transcripts, export to markdown, and resume a session.
 - `blf beads`: TUI for browsing and triaging Beads issues in the current project.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
@@ -83,7 +83,7 @@ Start a new shell for completions to take effect.
 - `blf launcher`: Terminal launcher TUI (math, unit/currency conversion, app launch, scripts). Designed to run as a long-lived process inside Kitty's quick-access terminal; Cmd+2 toggles it into view.
 - `blf launcher reindex`: rebuild the application index (`~/.cache/blf/apps.json`) manually. Run this on first use or after installing new apps.
 
-`tmux-links` behavior:
+`tmux links` behavior:
 
 - Captures the last 10,000 lines from the current pane.
 - Uses tmux `-J` capture mode to join soft-wrapped lines, so wrapped URLs are preserved.
@@ -91,7 +91,7 @@ Start a new shell for completions to take effect.
 - Shows up to 30 URLs in a centered menu titled `Open URL` or `Copy URL`.
 - On failure, posts a tmux status message via `tmux display-message`.
 
-`tmux-targets` behavior:
+`tmux targets` behavior:
 
 - Opens a popup at `80%` width/height and captures the visible viewport of the target pane.
 - Popup title is `Select a target`.
@@ -111,12 +111,12 @@ Start a new shell for completions to take effect.
 tmux binding example:
 
 ```tmux
-bind-key t run 'blf tmux-targets'
+bind-key t run 'blf tmux targets'
 ```
 
 `kitty targets` behavior:
 
-- Captures the visible viewport of the current Kitty window and detects the same targets as `tmux-targets`.
+- Captures the visible viewport of the current Kitty window and detects the same targets as `tmux targets`.
 - Runs directly inside the Kitty window or overlay where it was launched.
 - When launched in an overlay, it reads and acts on the covered window via Kitty's `state:overlay_parent` match.
 - Reuses the shared targets UI for navigation, search, copy, open, and resume-command actions.
@@ -166,7 +166,7 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 - Runs `kitty @ ls` and renders a readable tree grouped by OS window, tab, and window.
 - Highlights active/last-focused state and includes per-window command line and foreground process when available.
 
-`claude-statusline` behavior:
+`claude statusline` behavior:
 
 - Reads JSON from stdin and renders model, tokens, context usage, and 5h/weekly usage in a single line.
 - Context usage is shown as a progress bar with thresholds: `0-20%` green, `21-40%` orange, `41%+` red.
@@ -174,6 +174,7 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 - Missing/invalid fields render as `"<field> missing/invalid"` (or include raw invalid value), and malformed JSON prints an error and exits non-zero.
 - `--silent` suppresses missing/invalid field segments.
 - `--demo` ignores stdin and prints three sample lines (`10%`, `30%`, `60%`) for quick theme/style previews.
+- `--install` idempotently writes `{"type": "command", "command": "blf claude statusline"}` into `~/.claude/settings.json`'s `statusLine` entry.
 
 kitty binding example:
 
