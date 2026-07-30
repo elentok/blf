@@ -21,6 +21,11 @@ func NewSnippetsProvider(snippets []config.SnippetConfig, weight float64) *Snipp
 	return &SnippetsProvider{snippets: snippets, weight: weight}
 }
 
+// SetSnippets replaces the provider's snippet list.
+func (p *SnippetsProvider) SetSnippets(snippets []config.SnippetConfig) {
+	p.snippets = snippets
+}
+
 func (p *SnippetsProvider) Query(input string) []Result {
 	if Classify(input) == Computational {
 		return nil

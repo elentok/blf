@@ -32,6 +32,7 @@ type ModelConfig struct {
 	HomeDir          string                            // used by ReindexCmd
 	ScriptsProvider  *ScriptsProvider                  // optional; nil disables script execution
 	CommandsProvider *CommandsProvider                 // optional; nil disables built-in command execution
+	SnippetsProvider *SnippetsProvider                 // optional; nil disables snippet reload on "reload"
 	History          *history.History                  // optional; nil disables history
 	HistoryPath      string                            // path to persist history; empty skips persistence
 	LearnedRank      *learnedrank.Store                // optional; nil disables the learned-rank feature
@@ -342,6 +343,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 
+	case ReloadDoneMsg:
+		var parts []string
+		if msg.AppsErr != nil {
+			parts = append(parts, "apps: "+msg.AppsErr.Error())
+		} else if msg.AppsIndex != nil && m.cfg.AppsProvider != nil {
+			m.cfg.AppsProvider.SetIndex(msg.AppsIndex)
+			m.lastAppsIndexedAt = msg.AppsIndex.IndexedAt
+			parts = append(parts, fmt.Sprintf("%d apps", len(msg.AppsIndex.Apps)))
+		}
+		if msg.SnippetsErr != nil {
+			parts = append(parts, "snippets: "+msg.SnippetsErr.Error())
+		} else if m.cfg.SnippetsProvider != nil {
+			m.cfg.SnippetsProvider.SetSnippets(msg.Snippets)
+			parts = append(parts, fmt.Sprintf("%d snippets", len(msg.Snippets)))
+		}
+		if len(parts) > 0 {
+			m.status = "reloaded " + strings.Join(parts, ", ")
+		} else {
+			m.status = ""
+		}
+		m.recomputeResults()
+		m.updateFooter()
+		return m, clearStatusAfter(1500 * time.Millisecond)
+
 	case AppsRefreshTickMsg:
 		if m.cfg.AppsProvider != nil && m.cfg.HomeDir != "" {
 			return m, ReindexCmd(m.cfg.HomeDir, m.cfg.AppsCachePath)
@@ -400,7 +425,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.resetAndHide()
 
 	case clearStatusMsg:
-		if m.status == "saved" || strings.HasPrefix(m.status, "reindexed ") || strings.HasPrefix(m.status, "reindex error:") {
+		if m.status == "saved" || strings.HasPrefix(m.status, "reindexed ") || strings.HasPrefix(m.status, "reindex error:") || strings.HasPrefix(m.status, "reloaded ") {
 			m.status = ""
 			m.updateFooter()
 		}
@@ -555,8 +580,12 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		}
 		m.recordHistory(m.input.Value(), r)
 		m.recordLearnedRank(m.input.Value(), r)
+		m.setQuery("")
+		m.historyIdx = -1
+		m.scriptOutput = nil
 		m.status = "running…"
 		m.updateFooter()
+		m.recomputeResults()
 		return c.Run(), nil
 	case ActionOpen:
 		if m.cfg.OpenTarget == nil {

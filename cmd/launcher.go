@@ -114,7 +114,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 
 			// Commands provider: built-in, hardcoded launcher commands (reload, cleanurl).
 			commandsProvider := launcher.NewCommandsProvider(
-				launcher.NewBuiltinCommands(homeDir, appsCachePath),
+				launcher.NewBuiltinCommands(homeDir, appsCachePath, d.readFile),
 				cfg.Launcher.ScriptWeight,
 			)
 
@@ -144,6 +144,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				HomeDir:          homeDir,
 				ScriptsProvider:  scriptsProvider,
 				CommandsProvider: commandsProvider,
+				SnippetsProvider: snippetsProvider,
 				History:          launcherHistory,
 				HistoryPath:      historyPath,
 				LearnedRank:      launcherLearnedRank,

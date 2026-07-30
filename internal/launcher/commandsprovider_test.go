@@ -1,6 +1,7 @@
 package launcher_test
 
 import (
+	"os"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -88,7 +89,9 @@ func TestCommandsProvider_LookupResult(t *testing.T) {
 }
 
 func TestNewBuiltinCommands(t *testing.T) {
-	cmds := launcher.NewBuiltinCommands("/home/user", "/home/user/.cache/apps.json")
+	cmds := launcher.NewBuiltinCommands("/home/user", "/home/user/.cache/apps.json", func(string) ([]byte, error) {
+		return nil, os.ErrNotExist
+	})
 	if len(cmds) != 2 {
 		t.Fatalf("expected 2 builtin commands, got %d", len(cmds))
 	}

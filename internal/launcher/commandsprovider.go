@@ -6,9 +6,37 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/elentok/blf/internal/cleanurl"
+	"github.com/elentok/blf/internal/config"
 	"github.com/elentok/blf/internal/fuzzyfinder"
+	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/commands"
 )
+
+// ReloadDoneMsg is emitted when the "reload" command finishes refreshing all
+// reloadable sources (apps and snippets).
+type ReloadDoneMsg struct {
+	AppsIndex   *apps.Index
+	AppsErr     error
+	Snippets    []config.SnippetConfig
+	SnippetsErr error
+}
+
+// ReloadCmd reindexes apps and reloads snippets from disk.
+func ReloadCmd(homeDir, appsCachePath string, readFile func(string) ([]byte, error)) tea.Cmd {
+	return func() tea.Msg {
+		idx, appsErr := apps.Reindex(homeDir)
+		if appsErr == nil && appsCachePath != "" {
+			_ = apps.Save(appsCachePath, idx)
+		}
+		snippets, snippetsErr := config.LoadSnippets(readFile, homeDir)
+		return ReloadDoneMsg{
+			AppsIndex:   idx,
+			AppsErr:     appsErr,
+			Snippets:    snippets,
+			SnippetsErr: snippetsErr,
+		}
+	}
+}
 
 // CleanURLDoneMsg is emitted when the cleanurl command finishes.
 type CleanURLDoneMsg struct {
@@ -24,10 +52,11 @@ func CleanURLCmd() tea.Cmd {
 }
 
 // NewBuiltinCommands returns the built-in commands wired to their live
-// implementations; homeDir/cachePath feed the reload command's ReindexCmd.
-func NewBuiltinCommands(homeDir, cachePath string) []commands.Command {
+// implementations; homeDir/cachePath/readFile feed the reload command's
+// ReloadCmd.
+func NewBuiltinCommands(homeDir, cachePath string, readFile func(string) ([]byte, error)) []commands.Command {
 	return commands.NewBuiltins(
-		func() tea.Cmd { return ReindexCmd(homeDir, cachePath) },
+		func() tea.Cmd { return ReloadCmd(homeDir, cachePath, readFile) },
 		CleanURLCmd,
 	)
 }
