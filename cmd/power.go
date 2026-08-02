@@ -155,7 +155,7 @@ func spawnDaemon(d deps, homeDir string) error {
 		return err
 	}
 
-	debugLog, err := os.OpenFile(filepath.Join(dir, "daemon.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	debugLog, err := openAppendFile(filepath.Join(dir, "daemon.log"))
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func runDaemonLoop(d deps, homeDir string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return os.Remove(pidFilePath(homeDir))
+			return d.removeFile(pidFilePath(homeDir))
 		case tick := <-ticker.C:
 			if !sameDay(tick, currentDay) {
 				currentDay = tick
@@ -260,12 +260,17 @@ func runSampleTick(d deps, homeDir string, now time.Time) {
 // direct os.OpenFile (not d.writeFile, which overwrites) since JSONL lines
 // must accumulate across ticks.
 func appendToLogFile(path string, line []byte) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := openAppendFile(path)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 	_, _ = f.Write(line)
+}
+
+// openAppendFile opens path for appending, creating it if needed.
+func openAppendFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 }
 
 func runPowerStop(d deps) error {
