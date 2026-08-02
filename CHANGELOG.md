@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- **`blf power`** - add background power/battery monitor daemon: `start`/`stop`/`status` commands.
+  `start` re-execs itself detached and samples CPU/GPU/combined power, thermal pressure, top-10
+  per-process energy impact (`powermetrics`) and battery state (`ioreg`) every 30s into
+  `<XDG_STATE_HOME>/blf/power/samples-YYYY-MM-DD.jsonl` (14-day rolling retention). `stop` sends
+  SIGTERM, escalating to SIGKILL after 5s; `status` reports pid/since-when/log path/last-sample
+  time. A dead pidfile self-heals silently rather than surfacing an error. Requires a one-time
+  `sudo` setup step for `powermetrics` (documented in the README).
+
 ## [v0.6.11] - 2026-07-30
 
 - **`blf launcher`** - the `reload` command now also clears the input and reloads snippets (not

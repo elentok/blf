@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/elentok/blf/internal/platform"
@@ -36,6 +37,7 @@ type deps struct {
 	getwd                   func() (string, error)
 	userHomeDir             func() (string, error)
 	now                     func() time.Time
+	signalProcess           func(pid int, sig syscall.Signal) error
 }
 
 func defaultDeps() deps {
@@ -74,6 +76,9 @@ func defaultDeps() deps {
 		getwd:          os.Getwd,
 		userHomeDir:    os.UserHomeDir,
 		now:            time.Now,
+		signalProcess: func(pid int, sig syscall.Signal) error {
+			return syscall.Kill(pid, sig)
+		},
 	}
 }
 
@@ -108,6 +113,7 @@ func execute(args []string, d deps) error {
 		newLauncherCmd(d),
 		newBeadsCmd(d),
 		newConfigCmd(d),
+		newPowerCmd(d),
 		newVersionCmd(d),
 	)
 

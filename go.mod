@@ -12,6 +12,7 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/spf13/cobra v1.10.2
+	howett.net/plist v1.0.1
 )
 
 require (

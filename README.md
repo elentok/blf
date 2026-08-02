@@ -73,6 +73,9 @@ Start a new shell for completions to take effect.
 - `blf claude statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line. `--install` writes the command into `~/.claude/settings.json`'s `statusLine` entry.
 - `blf claude history`: TUI for browsing Claude Code conversation history — list projects, drill into a project's conversations, grep across transcripts, export to markdown, and resume a session.
 - `blf beads`: TUI for browsing and triaging Beads issues in the current project.
+- `blf power start`: start a background daemon that samples CPU/GPU/combined power, thermal pressure, top-10 per-process energy impact (`powermetrics`) and battery state (`ioreg`) every 30 seconds, writing one JSONL line per tick to `<XDG_STATE_HOME>/blf/power/samples-YYYY-MM-DD.jsonl` (14-day rolling retention). Requires a one-time sudoers setup (see below). Errors if already running.
+- `blf power stop`: stop the daemon (SIGTERM, escalating to SIGKILL after 5s). Prints `blf power: not running` (exit 0) if it isn't running.
+- `blf power status`: print running/not-running, pid/since-when, log path, and last-sample time.
 - `blf npm-scripts`: print `package.json` scripts in declaration order with aligned green names.
 - `blf querystring <querystring|-> [key]` (alias: `blf qs`): parse and print query string params.
 - `blf cal [date]`: print previous, current, and next month calendars with week numbers.
@@ -160,6 +163,17 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 - Shows a side preview for the selected issue with full description, an epic subtask tree, and the transitive blocked-by tree. Narrow terminals hide the preview by default; `tab` toggles it.
 - Press `enter` to copy the selected issue id to the clipboard, print it to stdout, and quit.
 - Press `?` for in-TUI key help. Main actions: `ctrl+a` create, `ctrl+s` status picker, `ctrl+x` close/reopen, `ctrl+e` edit in `$EDITOR`, `ctrl+g` open `bd graph`, `ctrl+r` refresh, `ctrl+f` cycle scope.
+
+`blf power` setup and behavior:
+
+- One-time setup: `powermetrics` requires root, so `blf power start` needs a passwordless `sudo` rule scoped to that one binary. Run `sudo visudo -f /etc/sudoers.d/blf-powermetrics` and add (substituting your username and `which powermetrics`, which should be `/usr/bin/powermetrics`):
+  ```
+  <username> ALL=(root) NOPASSWD: /usr/bin/powermetrics
+  ```
+- `start` re-execs itself detached (`Setsid`, no controlling terminal) so it survives the launching shell closing; it does not survive logout/reboot (no LaunchAgent).
+- Each 30s tick runs one-shot `sudo -n powermetrics -n1 ...` and `ioreg -rc AppleSmartBattery -a` calls — never a long-lived sampling session — so `stop` never has to kill through `sudo`.
+- A pidfile whose process is gone (crashed, killed externally) is treated as "not running" and silently cleaned up, never surfaced as an error.
+- 14-day retention prunes whole day-files, checked at daemon start and at each day-rollover.
 
 `kitty ls` behavior:
 
