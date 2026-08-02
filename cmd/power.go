@@ -7,14 +7,18 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/elentok/blf/internal/config"
 	"github.com/elentok/blf/internal/power"
 	"github.com/spf13/cobra"
 )
+
+var powerReportBoldStyle = lipgloss.NewStyle().Bold(true)
 
 // daemonEnvVar, when set to "1" in the process environment, marks this
 // process as the already-re-exec'd daemon (see spawnDaemon) rather than a
@@ -38,6 +42,7 @@ func newPowerCmd(d deps) *cobra.Command {
 		newPowerStartCmd(d),
 		newPowerStopCmd(d),
 		newPowerStatusCmd(d),
+		newPowerReportCmd(d),
 	)
 
 	return powerCmd
@@ -71,6 +76,19 @@ func newPowerStatusCmd(d deps) *cobra.Command {
 			return runPowerStatus(d)
 		},
 	}
+}
+
+func newPowerReportCmd(d deps) *cobra.Command {
+	var since string
+	cmd := &cobra.Command{
+		Use:   "report",
+		Short: "Summarize a window of sampled power/battery data",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPowerReport(d, since)
+		},
+	}
+	cmd.Flags().StringVar(&since, "since", "24h", "window to summarize, e.g. 24h, 7d, 3d")
+	return cmd
 }
 
 func powerStateDir(homeDir string) string {
@@ -331,6 +349,97 @@ func runPowerStatus(d deps) error {
 	fmt.Fprintf(d.stdout, "log: %s\n", logPath)
 	fmt.Fprintf(d.stdout, "last sample: %s\n", lastSampleTime(d, logPath))
 	return nil
+}
+
+func runPowerReport(d deps, since string) error {
+	homeDir, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("power report: %w", err)
+	}
+
+	duration, err := power.ParseSinceWindow(since)
+	if err != nil {
+		return fmt.Errorf("power report: %w", err)
+	}
+
+	now := d.now()
+	samples := readSamplesInWindow(d, homeDir, now, duration)
+
+	if len(samples) == 0 {
+		fmt.Fprintf(d.stdout, "no samples found in the last %s (is the daemon running? try 'blf power status')\n", since)
+		return nil
+	}
+
+	report := power.BuildReport(samples, duration, now)
+	fmt.Fprint(d.stdout, renderPowerReport(since, report))
+	return nil
+}
+
+// readSamplesInWindow reads every day-file overlapping [now-since, now],
+// decodes each line, and returns the samples whose Ts falls within that
+// window, sorted ascending by Ts. Missing or unreadable day-files are
+// skipped (the daemon may not have been running for the full window).
+func readSamplesInWindow(d deps, homeDir string, now time.Time, since time.Duration) []power.Sample {
+	windowStart := now.Add(-since)
+
+	var samples []power.Sample
+	for _, name := range power.DayFilesForWindow(now, since) {
+		data, err := d.readFile(filepath.Join(powerStateDir(homeDir), name))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+			if line == "" {
+				continue
+			}
+			sample, err := power.DecodeLine([]byte(line))
+			if err != nil {
+				continue
+			}
+			if sample.Ts.Before(windowStart) || sample.Ts.After(now) {
+				continue
+			}
+			samples = append(samples, sample)
+		}
+	}
+
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i].Ts.Before(samples[j].Ts)
+	})
+	return samples
+}
+
+func renderPowerReport(since string, r power.Report) string {
+	var b strings.Builder
+
+	header := fmt.Sprintf("Power report — last %s (%s → %s)", since,
+		r.WindowStart.Format("2006-01-02 15:04"), r.WindowEnd.Format("2006-01-02 15:04"))
+	fmt.Fprintf(&b, "%s\n\n", powerReportBoldStyle.Render(header))
+
+	fmt.Fprintln(&b, powerReportBoldStyle.Render("Battery"))
+	fmt.Fprintf(&b, "  Net change:      %+d%%  (%d%% → %d%%)\n", r.Battery.NetChangePct, r.Battery.StartPct, r.Battery.EndPct)
+	if r.Battery.HasDischargeRate {
+		fmt.Fprintf(&b, "  Discharge rate:  %.1f%%/hour  (while unplugged)\n", r.Battery.DischargeRatePctPerHour)
+	} else {
+		fmt.Fprintln(&b, "  Discharge rate:  n/a (no discharging samples in window)")
+	}
+	fmt.Fprintln(&b)
+
+	fmt.Fprintln(&b, powerReportBoldStyle.Render("Top energy consumers"))
+	for i, p := range r.TopProcesses {
+		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)\n",
+			i+1, p.Name, p.MeanEnergyImpact, p.TicksPresent, r.TicksInWindow)
+	}
+	fmt.Fprintln(&b)
+
+	fmt.Fprintln(&b, powerReportBoldStyle.Render("Thermal"))
+	parts := make([]string, len(r.Thermal))
+	for i, t := range r.Thermal {
+		parts[i] = fmt.Sprintf("%s: %.0f%% of samples", t.Value, t.Percent)
+	}
+	fmt.Fprintln(&b, "  "+strings.Join(parts, " · "))
+
+	return b.String()
 }
 
 func lastSampleTime(d deps, logPath string) string {

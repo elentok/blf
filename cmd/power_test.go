@@ -258,6 +258,92 @@ func TestPowerStatusRunningWithLastSample(t *testing.T) {
 	}
 }
 
+func writeSampleLine(t *testing.T, homeDir string, sample power.Sample) {
+	t.Helper()
+	logPath := logFilePath(homeDir, sample.Ts)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	line, err := power.EncodeLine(sample)
+	if err != nil {
+		t.Fatalf("EncodeLine: %v", err)
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatalf("open log file: %v", err)
+	}
+	defer f.Close()
+	if _, err := f.Write(line); err != nil {
+		t.Fatalf("write log line: %v", err)
+	}
+}
+
+func TestPowerReportNoSamplesInWindow(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+
+	if err := execute([]string{"power", "report"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	want := "no samples found in the last 24h (is the daemon running? try 'blf power status')\n"
+	if got := out.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestPowerReportInvalidSince(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, _, _ := powerTestDeps(t, now)
+
+	err := execute([]string{"power", "report", "--since", "1w"}, d)
+	if err == nil {
+		t.Fatal("execute returned no error, want one for invalid --since")
+	}
+}
+
+func TestPowerReportSummarizesWindow(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+	home, _ := d.userHomeDir()
+
+	writeSampleLine(t, home, power.BuildSample(now.Add(-2*time.Hour), power.PowermetricsResult{
+		ThermalPressure: "Nominal",
+		Processes:       []power.ProcessSample{{PID: 1, Name: "WindowServer", EnergyImpactPerS: 800}},
+	}, power.BatteryInfo{CurrentCapacity: 67, IsCharging: false}))
+	writeSampleLine(t, home, power.BuildSample(now.Add(-time.Hour), power.PowermetricsResult{
+		ThermalPressure: "Nominal",
+		Processes:       []power.ProcessSample{{PID: 1, Name: "WindowServer", EnergyImpactPerS: 900}},
+	}, power.BatteryInfo{CurrentCapacity: 33, IsCharging: false}))
+
+	// Outside the default 24h window -- must not affect the report.
+	writeSampleLine(t, home, power.BuildSample(now.Add(-48*time.Hour), power.PowermetricsResult{
+		ThermalPressure: "Nominal",
+		Processes:       []power.ProcessSample{{PID: 1, Name: "Excluded", EnergyImpactPerS: 99999}},
+	}, power.BatteryInfo{CurrentCapacity: 100, IsCharging: false}))
+
+	if err := execute([]string{"power", "report"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		"Power report",
+		"Net change:      -34%  (67% → 33%)",
+		"1. WindowServer",
+		"850.0  energy impact   (2/2 ticks)",
+		"Discharge rate:  34.0%/hour",
+		"Nominal: 100% of samples",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stdout missing %q; got:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Excluded") {
+		t.Errorf("stdout contains sample outside the window; got:\n%s", got)
+	}
+}
+
 func TestPowerStatusRunningWithNoSampleYet(t *testing.T) {
 	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	d, out, _ := powerTestDeps(t, now)
