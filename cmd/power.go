@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -43,6 +44,7 @@ func newPowerCmd(d deps) *cobra.Command {
 		newPowerStopCmd(d),
 		newPowerStatusCmd(d),
 		newPowerReportCmd(d),
+		newPowerWatchCmd(d),
 	)
 
 	return powerCmd
@@ -89,6 +91,109 @@ func newPowerReportCmd(d deps) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&since, "since", "24h", "window to summarize, e.g. 24h, 7d, 3d")
 	return cmd
+}
+
+func newPowerWatchCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "watch",
+		Short: "Tail today's power samples live",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+			defer stop()
+			return runPowerWatch(ctx, d)
+		},
+	}
+}
+
+// watchPollInterval is how often runPowerWatch re-reads the log file looking
+// for newly appended lines.
+var watchPollInterval = 500 * time.Millisecond
+
+var (
+	watchTimeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	watchPowerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	watchThermalStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true)
+	watchOnStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	watchOffStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+)
+
+// runPowerWatch tails today's day-file, rendering samples as they're
+// appended, until ctx is cancelled (SIGINT/SIGTERM). It reads the whole file
+// on each poll (day-files are small) and tracks how many lines it has
+// already rendered rather than a byte offset, so restarts never re-render.
+func runPowerWatch(ctx context.Context, d deps) error {
+	homeDir, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("power watch: %w", err)
+	}
+
+	path := logFilePath(homeDir, d.now())
+	fmt.Fprintf(d.stdout, "blf power watch: %s\n", path)
+
+	rendered := 0
+	waiting := false
+	for {
+		data, err := d.readFile(path)
+		if err != nil {
+			if !waiting {
+				fmt.Fprintln(d.stdout, "blf power watch: waiting for samples...")
+				waiting = true
+			}
+		} else {
+			waiting = false
+			rendered = renderNewSamples(d.stdout, data, rendered)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(watchPollInterval):
+		}
+	}
+}
+
+// renderNewSamples decodes and renders the lines in data beyond the already
+// rendered count, returning the updated count. Lines that fail to decode
+// (e.g. a torn write caught mid-append) are skipped rather than aborting the
+// watch.
+func renderNewSamples(w io.Writer, data []byte, rendered int) int {
+	lines := splitLogLines(data)
+	if len(lines) <= rendered {
+		return rendered
+	}
+
+	for _, line := range lines[rendered:] {
+		sample, err := power.DecodeLine([]byte(line))
+		if err != nil {
+			continue
+		}
+		fmt.Fprintln(w, renderWatchSample(sample))
+	}
+
+	return len(lines)
+}
+
+func renderWatchSample(s power.Sample) string {
+	ts := watchTimeStyle.Render(s.Ts.Format("15:04:05"))
+
+	cpu := watchPowerStyle.Render(fmt.Sprintf("%.2fW", s.CPUPowerMW/1000))
+	gpu := watchPowerStyle.Render(fmt.Sprintf("%.2fW", s.GPUPowerMW/1000))
+	combined := watchPowerStyle.Render(fmt.Sprintf("%.2fW", s.CombinedPowerMW/1000))
+
+	thermal := s.ThermalPressure
+	if !strings.EqualFold(thermal, "nominal") {
+		thermal = watchThermalStyle.Render(thermal)
+	}
+
+	state := watchOffStyle.Render("discharging")
+	if s.BatteryCharging {
+		state = watchOnStyle.Render("charging")
+	} else if s.BatteryACConnected {
+		state = watchOnStyle.Render("AC")
+	}
+
+	return fmt.Sprintf("%s  cpu=%s gpu=%s combined=%s thermal=%s battery=%d%% (%s)",
+		ts, cpu, gpu, combined, thermal, s.BatteryPct, state)
 }
 
 func powerStateDir(homeDir string) string {
@@ -291,6 +396,17 @@ func openAppendFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 }
 
+// splitLogLines splits raw day-file bytes into JSONL lines, dropping the
+// trailing newline. Returns nil for empty data (rather than a single ""
+// entry), so callers can use len() to tell "no lines yet" from "one line".
+func splitLogLines(data []byte) []string {
+	trimmed := strings.TrimRight(string(data), "\n")
+	if trimmed == "" {
+		return nil
+	}
+	return strings.Split(trimmed, "\n")
+}
+
 func runPowerStop(d deps) error {
 	homeDir, err := d.userHomeDir()
 	if err != nil {
@@ -448,11 +564,11 @@ func lastSampleTime(d deps, logPath string) string {
 		return "none yet"
 	}
 
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	last := lines[len(lines)-1]
-	if last == "" {
+	lines := splitLogLines(data)
+	if len(lines) == 0 {
 		return "none yet"
 	}
+	last := lines[len(lines)-1]
 
 	sample, err := power.DecodeLine([]byte(last))
 	if err != nil {

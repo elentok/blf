@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -361,5 +362,107 @@ func TestPowerStatusRunningWithNoSampleYet(t *testing.T) {
 		"last sample: none yet\n"
 	if got := out.String(); got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func withWatchPollInterval(t *testing.T, interval time.Duration) {
+	t.Helper()
+	orig := watchPollInterval
+	watchPollInterval = interval
+	t.Cleanup(func() { watchPollInterval = orig })
+}
+
+func TestPowerWatchRendersExistingSamples(t *testing.T) {
+	withWatchPollInterval(t, 5*time.Millisecond)
+
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+	home, _ := d.userHomeDir()
+
+	logPath := logFilePath(home, now)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	sample := power.BuildSample(now, power.PowermetricsResult{
+		CPUPowerMW: 1000, GPUPowerMW: 500, CombinedPowerMW: 1500, ThermalPressure: "Nominal",
+	}, power.BatteryInfo{CurrentCapacity: 80, IsCharging: true})
+	line, err := power.EncodeLine(sample)
+	if err != nil {
+		t.Fatalf("EncodeLine: %v", err)
+	}
+	if err := os.WriteFile(logPath, line, 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := runPowerWatch(ctx, d); err != nil {
+		t.Fatalf("runPowerWatch returned error: %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{logPath, "10:00:00", "cpu=", "1.00W", "gpu=", "0.50W", "combined=", "1.50W", "battery=80%", "charging"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stdout missing %q; got %q", want, got)
+		}
+	}
+}
+
+func TestPowerWatchWaitsForMissingLogFile(t *testing.T) {
+	withWatchPollInterval(t, 5*time.Millisecond)
+
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := runPowerWatch(ctx, d); err != nil {
+		t.Fatalf("runPowerWatch returned error: %v", err)
+	}
+
+	if got := out.String(); !strings.Contains(got, "waiting for samples") {
+		t.Errorf("stdout = %q, want a waiting-for-samples message", got)
+	}
+}
+
+func TestPowerWatchPicksUpAppendedSamples(t *testing.T) {
+	withWatchPollInterval(t, 5*time.Millisecond)
+
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+	home, _ := d.userHomeDir()
+	logPath := logFilePath(home, now)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- runPowerWatch(ctx, d) }()
+
+	time.Sleep(15 * time.Millisecond)
+
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	sample := power.BuildSample(now, power.PowermetricsResult{
+		CPUPowerMW: 2000, GPUPowerMW: 100, CombinedPowerMW: 2100, ThermalPressure: "Heavy",
+	}, power.BatteryInfo{CurrentCapacity: 55})
+	line, err := power.EncodeLine(sample)
+	if err != nil {
+		t.Fatalf("EncodeLine: %v", err)
+	}
+	if err := os.WriteFile(logPath, line, 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("runPowerWatch returned error: %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{"waiting for samples", "cpu=", "2.00W", "battery=55%", "discharging", "Heavy"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stdout missing %q; got %q", want, got)
+		}
 	}
 }
