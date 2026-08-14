@@ -510,17 +510,8 @@ func runPowerReport(d deps, since string, sinceMark bool, sinceExplicit bool) er
 		return fmt.Errorf("power report: %w", err)
 	}
 
-	now := d.now()
-	samples := readSamplesInWindow(d, homeDir, now, duration)
-
-	if len(samples) == 0 {
-		fmt.Fprintf(d.stdout, "no samples found in the last %s (is the daemon running? try 'blf power status')\n", since)
-		return nil
-	}
-
-	report := power.BuildReport(samples, duration, now)
-	fmt.Fprint(d.stdout, renderPowerReport("last "+since, report))
-	return nil
+	emptyMsg := fmt.Sprintf("no samples found in the last %s (is the daemon running? try 'blf power status')", since)
+	return runPowerReportWindow(d, homeDir, d.now(), duration, "last "+since, emptyMsg)
 }
 
 // runPowerReportSinceMark reports the window from the last `power mark`
@@ -548,15 +539,24 @@ func runPowerReportSinceMark(d deps, homeDir string) error {
 
 	now := d.now()
 	duration := now.Sub(markTime)
+	emptyMsg := fmt.Sprintf("no samples found since mark (%s) (is the daemon running? try 'blf power status')", markTime.Format(time.RFC3339))
+	return runPowerReportWindow(d, homeDir, now, duration, "since mark", emptyMsg)
+}
+
+// runPowerReportWindow reads samples in [now-duration, now], reports emptyMsg
+// if none are found, and otherwise builds and renders the report under
+// windowLabel. Shared by runPowerReport and runPowerReportSinceMark, which
+// differ only in where duration comes from and the wording of emptyMsg.
+func runPowerReportWindow(d deps, homeDir string, now time.Time, duration time.Duration, windowLabel, emptyMsg string) error {
 	samples := readSamplesInWindow(d, homeDir, now, duration)
 
 	if len(samples) == 0 {
-		fmt.Fprintf(d.stdout, "no samples found since mark (%s) (is the daemon running? try 'blf power status')\n", markTime.Format(time.RFC3339))
+		fmt.Fprintln(d.stdout, emptyMsg)
 		return nil
 	}
 
 	report := power.BuildReport(samples, duration, now)
-	fmt.Fprint(d.stdout, renderPowerReport("since mark", report))
+	fmt.Fprint(d.stdout, renderPowerReport(windowLabel, report))
 	return nil
 }
 
@@ -592,10 +592,7 @@ func readSamplesInWindow(d deps, homeDir string, now time.Time, since time.Durat
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
-			if line == "" {
-				continue
-			}
+		for _, line := range splitLogLines(data) {
 			sample, err := power.DecodeLine([]byte(line))
 			if err != nil {
 				continue
