@@ -197,6 +197,69 @@ func TestBuildReportMeanCPUGPUPower(t *testing.T) {
 	}
 }
 
+func TestBuildReportAttributesBatteryPctShareProportionally(t *testing.T) {
+	base := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
+	samples := []Sample{
+		makeReportSample(base, 100, false, "Nominal",
+			ProcessSample{Name: "hog", EnergyImpactPerS: 300},
+			ProcessSample{Name: "quiet", EnergyImpactPerS: 100},
+		),
+		makeReportSample(base.Add(time.Hour), 90, false, "Nominal"),
+	}
+
+	r := BuildReport(samples, time.Hour, base.Add(time.Hour))
+
+	if !r.Battery.HasDischargeRate {
+		t.Fatal("HasDischargeRate = false, want true")
+	}
+	if r.Battery.DischargeDropPct != 10 {
+		t.Fatalf("DischargeDropPct = %d, want 10", r.Battery.DischargeDropPct)
+	}
+
+	var hog, quiet *ProcessReportEntry
+	for i := range r.TopProcesses {
+		switch r.TopProcesses[i].Name {
+		case "hog":
+			hog = &r.TopProcesses[i]
+		case "quiet":
+			quiet = &r.TopProcesses[i]
+		}
+	}
+	if hog == nil || quiet == nil {
+		t.Fatalf("TopProcesses = %+v, want hog and quiet entries", r.TopProcesses)
+	}
+
+	// hog: 300/(300+100) * 10 = 7.5; quiet: 100/400 * 10 = 2.5.
+	if hog.BatteryPctShare == nil || *hog.BatteryPctShare != 7.5 {
+		t.Errorf("hog.BatteryPctShare = %v, want 7.5", hog.BatteryPctShare)
+	}
+	if quiet.BatteryPctShare == nil || *quiet.BatteryPctShare != 2.5 {
+		t.Errorf("quiet.BatteryPctShare = %v, want 2.5", quiet.BatteryPctShare)
+	}
+}
+
+func TestBuildReportOmitsBatteryPctShareWhenNoDischargeRate(t *testing.T) {
+	base := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
+	samples := []Sample{
+		makeReportSample(base, 50, true, "Nominal",
+			ProcessSample{Name: "hog", EnergyImpactPerS: 300},
+		),
+		makeReportSample(base.Add(time.Hour), 60, true, "Nominal"),
+	}
+
+	r := BuildReport(samples, time.Hour, base.Add(time.Hour))
+
+	if r.Battery.HasDischargeRate {
+		t.Fatal("HasDischargeRate = true, want false")
+	}
+	if len(r.TopProcesses) != 1 {
+		t.Fatalf("len(TopProcesses) = %d, want 1", len(r.TopProcesses))
+	}
+	if r.TopProcesses[0].BatteryPctShare != nil {
+		t.Errorf("BatteryPctShare = %v, want nil (n/a)", *r.TopProcesses[0].BatteryPctShare)
+	}
+}
+
 func TestBuildReportThermalBreakdown(t *testing.T) {
 	base := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
 	var samples []Sample

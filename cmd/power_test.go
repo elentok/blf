@@ -339,6 +339,7 @@ func TestPowerReportSummarizesWindow(t *testing.T) {
 		"Net change:      -34%  (67% → 33%)",
 		"1. WindowServer",
 		"850.0  energy impact   (2/2 ticks)",
+		"~34.0% of the 34% drop",
 		"Discharge rate:  34.0%/hour",
 		"Nominal: 100% of samples",
 	} {
@@ -377,6 +378,36 @@ func TestRenderPowerReportAnnotatesSyntheticBuckets(t *testing.T) {
 	}
 	if strings.Contains(windowServerLine, "energy from processes that exited during the window") {
 		t.Errorf("normal process row should not carry the synthetic-bucket annotation; got: %q", windowServerLine)
+	}
+}
+
+func TestRenderPowerReportOmitsBatteryPctShareWhenAbsent(t *testing.T) {
+	share := 7.5
+	r := power.Report{
+		TopProcesses: []power.ProcessReportEntry{
+			{Name: "hasShare", MeanEnergyImpact: 300, TicksPresent: 1, BatteryPctShare: &share},
+			{Name: "noShare", MeanEnergyImpact: 100, TicksPresent: 1},
+		},
+		Battery: power.BatteryReport{HasDischargeRate: true, DischargeDropPct: 10},
+	}
+
+	got := renderPowerReport("1h", r)
+
+	if !strings.Contains(got, "hasShare") || !strings.Contains(got, "~7.5% of the 10% drop") {
+		t.Errorf("stdout missing hasShare's battery-%% share; got:\n%s", got)
+	}
+	lines := strings.Split(got, "\n")
+	var noShareLine string
+	for _, l := range lines {
+		if strings.Contains(l, "noShare") {
+			noShareLine = l
+		}
+	}
+	if strings.Contains(noShareLine, "of the") {
+		t.Errorf("noShare line should omit battery-%% share; got: %q", noShareLine)
+	}
+	if !strings.Contains(got, "approximation") {
+		t.Errorf("stdout missing approximation note; got:\n%s", got)
 	}
 }
 

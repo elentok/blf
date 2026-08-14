@@ -67,6 +67,15 @@ type ProcessReportEntry struct {
 	TotalContribution float64
 
 	TicksPresent int
+
+	// BatteryPctShare is this process's estimated share of the window's
+	// discharging %-drop, allocated proportionally to its share of total
+	// energy impact over the window. This is an approximation --
+	// EnergyImpactPerS has no stated linear correlation with actual
+	// watt-hours -- not a precise physical measurement. Nil when the
+	// window has no discharging stretch to attribute against (see
+	// BatteryReport.HasDischargeRate).
+	BatteryPctShare *float64
 }
 
 // BatteryReport is a Report's battery section.
@@ -79,6 +88,12 @@ type BatteryReport struct {
 	// stretch of at least two samples (nothing to average a rate over).
 	HasDischargeRate        bool
 	DischargeRatePctPerHour float64
+
+	// DischargeDropPct is the total %-drop summed across discharging
+	// stretches (excluding any rise while charging). Only meaningful
+	// when HasDischargeRate is true -- it's the total allocated across
+	// processes' BatteryPctShare.
+	DischargeDropPct int
 }
 
 // ThermalReportEntry is one observed thermal_pressure value's share of the
@@ -108,13 +123,14 @@ type Report struct {
 // the report was generated at, used (with since) for the window header.
 func BuildReport(samples []Sample, since time.Duration, end time.Time) Report {
 	meanCPU, meanGPU := meanCPUGPUPower(samples)
+	battery := buildBatteryReport(samples)
 	return Report{
 		WindowStart: end.Add(-since),
 		WindowEnd:   end,
 
 		TicksInWindow: len(samples),
-		TopProcesses:  rankProcesses(samples, len(samples)),
-		Battery:       buildBatteryReport(samples),
+		TopProcesses:  rankProcesses(samples, len(samples), battery),
+		Battery:       battery,
 		Thermal:       buildThermalReport(samples),
 
 		MeanCPUPowerMW: meanCPU,
@@ -136,7 +152,7 @@ func meanCPUGPUPower(samples []Sample) (meanCPU, meanGPU float64) {
 	return sumCPU / n, sumGPU / n
 }
 
-func rankProcesses(samples []Sample, ticksInWindow int) []ProcessReportEntry {
+func rankProcesses(samples []Sample, ticksInWindow int, battery BatteryReport) []ProcessReportEntry {
 	type agg struct {
 		sum   float64
 		ticks int
@@ -144,6 +160,7 @@ func rankProcesses(samples []Sample, ticksInWindow int) []ProcessReportEntry {
 
 	byName := make(map[string]*agg)
 	var order []string
+	var totalImpact float64
 	for _, s := range samples {
 		for _, p := range s.Processes {
 			a, ok := byName[p.Name]
@@ -154,18 +171,24 @@ func rankProcesses(samples []Sample, ticksInWindow int) []ProcessReportEntry {
 			}
 			a.sum += p.EnergyImpactPerS
 			a.ticks++
+			totalImpact += p.EnergyImpactPerS
 		}
 	}
 
 	entries := make([]ProcessReportEntry, 0, len(order))
 	for _, name := range order {
 		a := byName[name]
-		entries = append(entries, ProcessReportEntry{
+		entry := ProcessReportEntry{
 			Name:              name,
 			MeanEnergyImpact:  a.sum / float64(a.ticks),
 			TotalContribution: a.sum / float64(ticksInWindow),
 			TicksPresent:      a.ticks,
-		})
+		}
+		if battery.HasDischargeRate && totalImpact > 0 {
+			share := a.sum / totalImpact * float64(battery.DischargeDropPct)
+			entry.BatteryPctShare = &share
+		}
+		entries = append(entries, entry)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -215,6 +238,7 @@ func buildBatteryReport(samples []Sample) BatteryReport {
 	if totalDuration > 0 {
 		br.HasDischargeRate = true
 		br.DischargeRatePctPerHour = float64(totalDropPct) / totalDuration.Hours()
+		br.DischargeDropPct = totalDropPct
 	}
 
 	return br

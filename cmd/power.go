@@ -560,8 +560,12 @@ func renderPowerReport(since string, r power.Report) string {
 		if note, ok := powerSyntheticBuckets[p.Name]; ok {
 			fmt.Fprintf(&b, "  %s", powerReportDimStyle.Render("("+note+")"))
 		}
+		if p.BatteryPctShare != nil {
+			fmt.Fprintf(&b, "   ~%.1f%% of the %d%% drop", *p.BatteryPctShare, r.Battery.DischargeDropPct)
+		}
 		fmt.Fprintln(&b)
 	}
+	fmt.Fprintln(&b, "  (battery-% share is an approximation, not a precise physical measurement)")
 	fmt.Fprintln(&b)
 
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Thermal"))
