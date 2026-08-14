@@ -310,10 +310,14 @@ func TestPowerReportSummarizesWindow(t *testing.T) {
 
 	writeSampleLine(t, home, power.BuildSample(now.Add(-2*time.Hour), power.PowermetricsResult{
 		ThermalPressure: "Nominal",
+		CPUPowerMW:      1000,
+		GPUPowerMW:      2000,
 		Processes:       []power.ProcessSample{{PID: 1, Name: "WindowServer", EnergyImpactPerS: 800}},
 	}, power.BatteryInfo{CurrentCapacity: 67, IsCharging: false}))
 	writeSampleLine(t, home, power.BuildSample(now.Add(-time.Hour), power.PowermetricsResult{
 		ThermalPressure: "Nominal",
+		CPUPowerMW:      2000,
+		GPUPowerMW:      4000,
 		Processes:       []power.ProcessSample{{PID: 1, Name: "WindowServer", EnergyImpactPerS: 900}},
 	}, power.BatteryInfo{CurrentCapacity: 33, IsCharging: false}))
 
@@ -330,6 +334,8 @@ func TestPowerReportSummarizesWindow(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"Power report",
+		"CPU:  1.50W",
+		"GPU:  3.00W",
 		"Net change:      -34%  (67% → 33%)",
 		"1. WindowServer",
 		"850.0  energy impact   (2/2 ticks)",

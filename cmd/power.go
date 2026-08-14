@@ -541,6 +541,11 @@ func renderPowerReport(since string, r power.Report) string {
 	}
 	fmt.Fprintln(&b)
 
+	fmt.Fprintln(&b, powerReportBoldStyle.Render("Power"))
+	fmt.Fprintf(&b, "  CPU:  %.2fW\n", r.MeanCPUPowerMW/1000)
+	fmt.Fprintf(&b, "  GPU:  %.2fW\n", r.MeanGPUPowerMW/1000)
+	fmt.Fprintln(&b)
+
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Top energy consumers"))
 	for i, p := range r.TopProcesses {
 		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)\n",

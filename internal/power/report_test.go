@@ -172,6 +172,23 @@ func TestBuildReportNoDischargeRateWhenAlwaysCharging(t *testing.T) {
 	}
 }
 
+func TestBuildReportMeanCPUGPUPower(t *testing.T) {
+	base := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
+	samples := []Sample{
+		{SchemaVersion: CurrentSchemaVersion, Ts: base, CPUPowerMW: 1000, GPUPowerMW: 2000},
+		{SchemaVersion: CurrentSchemaVersion, Ts: base.Add(time.Minute), CPUPowerMW: 2000, GPUPowerMW: 4000},
+	}
+
+	r := BuildReport(samples, time.Hour, base.Add(time.Hour))
+
+	if r.MeanCPUPowerMW != 1500 {
+		t.Errorf("MeanCPUPowerMW = %v, want 1500", r.MeanCPUPowerMW)
+	}
+	if r.MeanGPUPowerMW != 3000 {
+		t.Errorf("MeanGPUPowerMW = %v, want 3000", r.MeanGPUPowerMW)
+	}
+}
+
 func TestBuildReportThermalBreakdown(t *testing.T) {
 	base := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
 	var samples []Sample

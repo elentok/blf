@@ -88,12 +88,16 @@ type Report struct {
 	TopProcesses  []ProcessReportEntry
 	Battery       BatteryReport
 	Thermal       []ThermalReportEntry
+
+	MeanCPUPowerMW float64
+	MeanGPUPowerMW float64
 }
 
 // BuildReport aggregates samples -- already filtered to the report window
 // and sorted by Ts ascending -- into a Report. end is the wall-clock time
 // the report was generated at, used (with since) for the window header.
 func BuildReport(samples []Sample, since time.Duration, end time.Time) Report {
+	meanCPU, meanGPU := meanCPUGPUPower(samples)
 	return Report{
 		WindowStart: end.Add(-since),
 		WindowEnd:   end,
@@ -102,7 +106,24 @@ func BuildReport(samples []Sample, since time.Duration, end time.Time) Report {
 		TopProcesses:  rankProcesses(samples),
 		Battery:       buildBatteryReport(samples),
 		Thermal:       buildThermalReport(samples),
+
+		MeanCPUPowerMW: meanCPU,
+		MeanGPUPowerMW: meanGPU,
 	}
+}
+
+func meanCPUGPUPower(samples []Sample) (meanCPU, meanGPU float64) {
+	if len(samples) == 0 {
+		return 0, 0
+	}
+
+	var sumCPU, sumGPU float64
+	for _, s := range samples {
+		sumCPU += s.CPUPowerMW
+		sumGPU += s.GPUPowerMW
+	}
+	n := float64(len(samples))
+	return sumCPU / n, sumGPU / n
 }
 
 func rankProcesses(samples []Sample) []ProcessReportEntry {
