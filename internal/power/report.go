@@ -54,9 +54,19 @@ func dateOnly(t time.Time) time.Time {
 
 // ProcessReportEntry is one row of a Report's top energy-consumers table.
 type ProcessReportEntry struct {
-	Name             string
+	Name string
+
+	// MeanEnergyImpact is the mean energy impact while the process was
+	// present (sum / TicksPresent) -- intensity when active.
 	MeanEnergyImpact float64
-	TicksPresent     int
+
+	// TotalContribution is the mean energy impact spread across the full
+	// window (sum / TicksInWindow) -- actual cost over the reported window,
+	// including ticks the process was absent for. Ranking uses this so a
+	// brief high spike doesn't outrank a steadier, more costly process.
+	TotalContribution float64
+
+	TicksPresent int
 }
 
 // BatteryReport is a Report's battery section.
@@ -103,7 +113,7 @@ func BuildReport(samples []Sample, since time.Duration, end time.Time) Report {
 		WindowEnd:   end,
 
 		TicksInWindow: len(samples),
-		TopProcesses:  rankProcesses(samples),
+		TopProcesses:  rankProcesses(samples, len(samples)),
 		Battery:       buildBatteryReport(samples),
 		Thermal:       buildThermalReport(samples),
 
@@ -126,7 +136,7 @@ func meanCPUGPUPower(samples []Sample) (meanCPU, meanGPU float64) {
 	return sumCPU / n, sumGPU / n
 }
 
-func rankProcesses(samples []Sample) []ProcessReportEntry {
+func rankProcesses(samples []Sample, ticksInWindow int) []ProcessReportEntry {
 	type agg struct {
 		sum   float64
 		ticks int
@@ -151,14 +161,15 @@ func rankProcesses(samples []Sample) []ProcessReportEntry {
 	for _, name := range order {
 		a := byName[name]
 		entries = append(entries, ProcessReportEntry{
-			Name:             name,
-			MeanEnergyImpact: a.sum / float64(a.ticks),
-			TicksPresent:     a.ticks,
+			Name:              name,
+			MeanEnergyImpact:  a.sum / float64(a.ticks),
+			TotalContribution: a.sum / float64(ticksInWindow),
+			TicksPresent:      a.ticks,
 		})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].MeanEnergyImpact > entries[j].MeanEnergyImpact
+		return entries[i].TotalContribution > entries[j].TotalContribution
 	})
 	if len(entries) > topReportProcessCount {
 		entries = entries[:topReportProcessCount]

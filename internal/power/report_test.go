@@ -71,34 +71,42 @@ func makeReportSample(ts time.Time, batteryPct int, charging bool, thermal strin
 	}
 }
 
-func TestBuildReportRanksProcessesByMeanEnergyImpact(t *testing.T) {
+func TestBuildReportRanksProcessesByTotalContribution(t *testing.T) {
 	base := time.Date(2026, 7, 31, 12, 0, 0, 0, time.UTC)
-	samples := []Sample{
-		makeReportSample(base, 50, false, "Nominal",
-			ProcessSample{Name: "high", EnergyImpactPerS: 100},
-			ProcessSample{Name: "spike", EnergyImpactPerS: 900},
-		),
-		makeReportSample(base.Add(30*time.Second), 50, false, "Nominal",
-			ProcessSample{Name: "high", EnergyImpactPerS: 200},
-		),
+	var samples []Sample
+	for i := range 7 {
+		ts := base.Add(time.Duration(i) * time.Minute)
+		procs := []ProcessSample{
+			{Name: "steady", EnergyImpactPerS: 50},
+		}
+		if i == 0 {
+			// "spike" appears in only 1 of 7 ticks, but with a much higher
+			// mean-while-present impact than "steady".
+			procs = append(procs, ProcessSample{Name: "spike", EnergyImpactPerS: 200})
+		}
+		samples = append(samples, makeReportSample(ts, 50, false, "Nominal", procs...))
 	}
 
-	r := BuildReport(samples, time.Hour, base.Add(time.Minute))
+	r := BuildReport(samples, time.Hour, base.Add(7*time.Minute))
 
-	if r.TicksInWindow != 2 {
-		t.Fatalf("TicksInWindow = %d, want 2", r.TicksInWindow)
+	if r.TicksInWindow != 7 {
+		t.Fatalf("TicksInWindow = %d, want 7", r.TicksInWindow)
 	}
 	if len(r.TopProcesses) != 2 {
 		t.Fatalf("len(TopProcesses) = %d, want 2", len(r.TopProcesses))
 	}
 
-	// "spike" appeared once at 900, mean energy impact 900 -- ranks first
-	// despite lower coverage than "high" (mean (100+200)/2 = 150).
-	if r.TopProcesses[0].Name != "spike" || r.TopProcesses[0].MeanEnergyImpact != 900 || r.TopProcesses[0].TicksPresent != 1 {
-		t.Errorf("TopProcesses[0] = %+v, want spike/900/1 ticks", r.TopProcesses[0])
+	// "spike"'s mean-while-present impact (200) is higher than "steady"'s
+	// (50), but spread across the full 7-tick window its total
+	// contribution (200/7 ~= 28.6) is lower than steady's, which is
+	// present every tick (350/7 = 50). Ranking by total contribution puts
+	// the steadier, costlier process first.
+	if r.TopProcesses[0].Name != "steady" || r.TopProcesses[0].TotalContribution != 50 || r.TopProcesses[0].TicksPresent != 7 {
+		t.Errorf("TopProcesses[0] = %+v, want steady/total=50/7 ticks", r.TopProcesses[0])
 	}
-	if r.TopProcesses[1].Name != "high" || r.TopProcesses[1].MeanEnergyImpact != 150 || r.TopProcesses[1].TicksPresent != 2 {
-		t.Errorf("TopProcesses[1] = %+v, want high/150/2 ticks", r.TopProcesses[1])
+	wantSpikeTotal := 200.0 / 7
+	if r.TopProcesses[1].Name != "spike" || r.TopProcesses[1].TotalContribution != wantSpikeTotal || r.TopProcesses[1].MeanEnergyImpact != 200 || r.TopProcesses[1].TicksPresent != 1 {
+		t.Errorf("TopProcesses[1] = %+v, want spike/total=%v/mean=200/1 ticks", r.TopProcesses[1], wantSpikeTotal)
 	}
 }
 

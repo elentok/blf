@@ -556,7 +556,7 @@ func renderPowerReport(since string, r power.Report) string {
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Top energy consumers"))
 	for i, p := range r.TopProcesses {
 		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)",
-			i+1, p.Name, p.MeanEnergyImpact, p.TicksPresent, r.TicksInWindow)
+			i+1, p.Name, p.TotalContribution, p.TicksPresent, r.TicksInWindow)
 		if note, ok := powerSyntheticBuckets[p.Name]; ok {
 			fmt.Fprintf(&b, "  %s", powerReportDimStyle.Render("("+note+")"))
 		}
