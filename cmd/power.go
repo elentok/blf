@@ -635,6 +635,7 @@ func renderPowerReport(windowLabel string, r power.Report) string {
 	fmt.Fprintln(&b)
 
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Top energy consumers"))
+	hasBatteryPctShare := false
 	for i, p := range r.TopProcesses {
 		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)",
 			i+1, p.Name, p.TotalContribution, p.TicksPresent, r.TicksInWindow)
@@ -642,11 +643,14 @@ func renderPowerReport(windowLabel string, r power.Report) string {
 			fmt.Fprintf(&b, "  %s", powerReportDimStyle.Render("("+note+")"))
 		}
 		if p.BatteryPctShare != nil {
+			hasBatteryPctShare = true
 			fmt.Fprintf(&b, "   ~%.1f%% of the %d%% drop", *p.BatteryPctShare, r.Battery.DischargeDropPct)
 		}
 		fmt.Fprintln(&b)
 	}
-	fmt.Fprintln(&b, "  (battery-% share is an approximation, not a precise physical measurement)")
+	if hasBatteryPctShare {
+		fmt.Fprintln(&b, "  (battery-% share is an approximation, not a precise physical measurement)")
+	}
 	fmt.Fprintln(&b)
 
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Thermal"))

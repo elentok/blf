@@ -544,6 +544,21 @@ func TestRenderPowerReportOmitsBatteryPctShareWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestRenderPowerReportOmitsDisclaimerWhenNoBatteryPctShare(t *testing.T) {
+	r := power.Report{
+		TopProcesses: []power.ProcessReportEntry{
+			{Name: "WindowServer", MeanEnergyImpact: 300, TicksPresent: 1},
+		},
+		Battery: power.BatteryReport{HasDischargeRate: false},
+	}
+
+	got := renderPowerReport("1h", r)
+
+	if strings.Contains(got, "approximation") {
+		t.Errorf("stdout should omit battery-%% share disclaimer when no entry has a share; got:\n%s", got)
+	}
+}
+
 func TestPowerStatusRunningWithNoSampleYet(t *testing.T) {
 	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	d, out, _ := powerTestDeps(t, now)
