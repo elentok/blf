@@ -52,6 +52,7 @@ func newPowerCmd(d deps) *cobra.Command {
 		newPowerStatusCmd(d),
 		newPowerReportCmd(d),
 		newPowerWatchCmd(d),
+		newPowerMarkCmd(d),
 	)
 
 	return powerCmd
@@ -89,15 +90,27 @@ func newPowerStatusCmd(d deps) *cobra.Command {
 
 func newPowerReportCmd(d deps) *cobra.Command {
 	var since string
+	var sinceMark bool
 	cmd := &cobra.Command{
 		Use:   "report",
 		Short: "Summarize a window of sampled power/battery data",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPowerReport(d, since)
+			return runPowerReport(d, since, sinceMark, cmd.Flags().Changed("since"))
 		},
 	}
 	cmd.Flags().StringVar(&since, "since", "24h", "window to summarize, e.g. 24h, 7d, 3d")
+	cmd.Flags().BoolVar(&sinceMark, "since-mark", false, "report the window from the last 'power mark' checkpoint to now")
 	return cmd
+}
+
+func newPowerMarkCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "mark",
+		Short: "Write a checkpoint for 'power report --since-mark'",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPowerMark(d)
+		},
+	}
 }
 
 func newPowerWatchCmd(d deps) *cobra.Command {
@@ -213,6 +226,10 @@ func pidFilePath(homeDir string) string {
 
 func logFilePath(homeDir string, date time.Time) string {
 	return filepath.Join(powerStateDir(homeDir), power.SamplesFileName(date))
+}
+
+func markFilePath(homeDir string) string {
+	return filepath.Join(powerStateDir(homeDir), "mark")
 }
 
 // liveDaemon reads and validates the pidfile at path. A missing pidfile, a
@@ -474,10 +491,18 @@ func runPowerStatus(d deps) error {
 	return nil
 }
 
-func runPowerReport(d deps, since string) error {
+func runPowerReport(d deps, since string, sinceMark bool, sinceExplicit bool) error {
+	if sinceMark && sinceExplicit {
+		return fmt.Errorf("power report: --since and --since-mark are mutually exclusive")
+	}
+
 	homeDir, err := d.userHomeDir()
 	if err != nil {
 		return fmt.Errorf("power report: %w", err)
+	}
+
+	if sinceMark {
+		return runPowerReportSinceMark(d, homeDir)
 	}
 
 	duration, err := power.ParseSinceWindow(since)
@@ -494,7 +519,63 @@ func runPowerReport(d deps, since string) error {
 	}
 
 	report := power.BuildReport(samples, duration, now)
-	fmt.Fprint(d.stdout, renderPowerReport(since, report))
+	fmt.Fprint(d.stdout, renderPowerReport("last "+since, report))
+	return nil
+}
+
+// runPowerReportSinceMark reports the window from the last `power mark`
+// checkpoint to now. It errors rather than falling back to a default window
+// when no mark file is present, since a silent fallback would mask the
+// checkpoint never having been written.
+func runPowerReportSinceMark(d deps, homeDir string) error {
+	markPath := markFilePath(homeDir)
+	exists, err := d.fileExists(markPath)
+	if err != nil {
+		return fmt.Errorf("power report: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("power report: no checkpoint found; run 'blf power mark' first")
+	}
+
+	data, err := d.readFile(markPath)
+	if err != nil {
+		return fmt.Errorf("power report: %w", err)
+	}
+	markTime, err := power.ParseMarkFile(data)
+	if err != nil {
+		return fmt.Errorf("power report: %w", err)
+	}
+
+	now := d.now()
+	duration := now.Sub(markTime)
+	samples := readSamplesInWindow(d, homeDir, now, duration)
+
+	if len(samples) == 0 {
+		fmt.Fprintf(d.stdout, "no samples found since mark (%s) (is the daemon running? try 'blf power status')\n", markTime.Format(time.RFC3339))
+		return nil
+	}
+
+	report := power.BuildReport(samples, duration, now)
+	fmt.Fprint(d.stdout, renderPowerReport("since mark", report))
+	return nil
+}
+
+func runPowerMark(d deps) error {
+	homeDir, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("power mark: %w", err)
+	}
+
+	dir := powerStateDir(homeDir)
+	if err := d.mkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("power mark: %w", err)
+	}
+
+	if err := d.writeFile(markFilePath(homeDir), power.FormatMarkFile(d.now()), 0o644); err != nil {
+		return fmt.Errorf("power mark: %w", err)
+	}
+
+	fmt.Fprintln(d.stdout, "blf power: mark set")
 	return nil
 }
 
@@ -532,10 +613,10 @@ func readSamplesInWindow(d deps, homeDir string, now time.Time, since time.Durat
 	return samples
 }
 
-func renderPowerReport(since string, r power.Report) string {
+func renderPowerReport(windowLabel string, r power.Report) string {
 	var b strings.Builder
 
-	header := fmt.Sprintf("Power report — last %s (%s → %s)", since,
+	header := fmt.Sprintf("Power report — %s (%s → %s)", windowLabel,
 		r.WindowStart.Format("2006-01-02 15:04"), r.WindowEnd.Format("2006-01-02 15:04"))
 	fmt.Fprintf(&b, "%s\n\n", powerReportBoldStyle.Render(header))
 

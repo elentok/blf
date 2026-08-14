@@ -303,6 +303,139 @@ func TestPowerReportInvalidSince(t *testing.T) {
 	}
 }
 
+func TestPowerMarkWritesCheckpoint(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+
+	if err := execute([]string{"power", "mark"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if got := out.String(); got != "blf power: mark set\n" {
+		t.Fatalf("stdout = %q", got)
+	}
+
+	home, _ := d.userHomeDir()
+	data, err := os.ReadFile(markFilePath(home))
+	if err != nil {
+		t.Fatalf("read mark file: %v", err)
+	}
+	got, err := power.ParseMarkFile(data)
+	if err != nil {
+		t.Fatalf("parse mark file: %v", err)
+	}
+	if !got.Equal(now) {
+		t.Errorf("mark time = %v, want %v", got, now)
+	}
+}
+
+func TestPowerMarkOverwritesPriorMark(t *testing.T) {
+	first := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	d, _, _ := powerTestDeps(t, first)
+
+	if err := execute([]string{"power", "mark"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	second := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d.now = func() time.Time { return second }
+	if err := execute([]string{"power", "mark"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	home, _ := d.userHomeDir()
+	data, err := os.ReadFile(markFilePath(home))
+	if err != nil {
+		t.Fatalf("read mark file: %v", err)
+	}
+	got, err := power.ParseMarkFile(data)
+	if err != nil {
+		t.Fatalf("parse mark file: %v", err)
+	}
+	if !got.Equal(second) {
+		t.Errorf("mark time = %v, want %v (overwritten)", got, second)
+	}
+}
+
+func TestPowerReportSinceMarkNoMarkFile(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, _, _ := powerTestDeps(t, now)
+
+	err := execute([]string{"power", "report", "--since-mark"}, d)
+	if err == nil {
+		t.Fatal("execute returned no error, want one for missing mark file")
+	}
+}
+
+func TestPowerReportSinceAndSinceMarkMutuallyExclusive(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, _, _ := powerTestDeps(t, now)
+
+	err := execute([]string{"power", "report", "--since", "7d", "--since-mark"}, d)
+	if err == nil {
+		t.Fatal("execute returned no error, want one for --since + --since-mark")
+	}
+}
+
+func TestPowerReportSinceMarkReportsWindowFromMarkToNow(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+	home, _ := d.userHomeDir()
+
+	markTime := now.Add(-90 * time.Minute)
+	if err := os.MkdirAll(powerStateDir(home), 0o755); err != nil {
+		t.Fatalf("mkdir power state dir: %v", err)
+	}
+	if err := os.WriteFile(markFilePath(home), power.FormatMarkFile(markTime), 0o644); err != nil {
+		t.Fatalf("write mark file: %v", err)
+	}
+
+	// Before the mark -- must not affect the report.
+	writeSampleLine(t, home, power.BuildSample(now.Add(-2*time.Hour), power.PowermetricsResult{
+		ThermalPressure: "Nominal",
+		Processes:       []power.ProcessSample{{PID: 1, Name: "Excluded", EnergyImpactPerS: 99999}},
+	}, power.BatteryInfo{CurrentCapacity: 100, IsCharging: false}))
+	// After the mark -- must be included.
+	writeSampleLine(t, home, power.BuildSample(now.Add(-time.Hour), power.PowermetricsResult{
+		ThermalPressure: "Nominal",
+		Processes:       []power.ProcessSample{{PID: 1, Name: "WindowServer", EnergyImpactPerS: 900}},
+	}, power.BatteryInfo{CurrentCapacity: 50, IsCharging: false}))
+
+	if err := execute([]string{"power", "report", "--since-mark"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "Excluded") {
+		t.Errorf("stdout contains sample before the mark; got:\n%s", got)
+	}
+	for _, want := range []string{"since mark", "WindowServer"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stdout missing %q; got:\n%s", want, got)
+		}
+	}
+}
+
+func TestPowerReportSinceMarkNoSamplesInWindow(t *testing.T) {
+	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
+	d, out, _ := powerTestDeps(t, now)
+	home, _ := d.userHomeDir()
+
+	markTime := now.Add(-time.Hour)
+	if err := os.MkdirAll(powerStateDir(home), 0o755); err != nil {
+		t.Fatalf("mkdir power state dir: %v", err)
+	}
+	if err := os.WriteFile(markFilePath(home), power.FormatMarkFile(markTime), 0o644); err != nil {
+		t.Fatalf("write mark file: %v", err)
+	}
+
+	if err := execute([]string{"power", "report", "--since-mark"}, d); err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "no samples found since mark") {
+		t.Fatalf("stdout = %q, want a no-samples-since-mark message", got)
+	}
+}
+
 func TestPowerReportSummarizesWindow(t *testing.T) {
 	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	d, out, _ := powerTestDeps(t, now)
