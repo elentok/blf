@@ -351,6 +351,35 @@ func TestPowerReportSummarizesWindow(t *testing.T) {
 	}
 }
 
+func TestRenderPowerReportAnnotatesSyntheticBuckets(t *testing.T) {
+	r := power.Report{
+		TopProcesses: []power.ProcessReportEntry{
+			{Name: "DEAD_TASKS", MeanEnergyImpact: 500, TicksPresent: 2},
+			{Name: "WindowServer", MeanEnergyImpact: 300, TicksPresent: 2},
+		},
+		TicksInWindow: 2,
+	}
+
+	got := renderPowerReport("24h", r)
+
+	if !strings.Contains(got, "DEAD_TASKS") || !strings.Contains(got, "energy from processes that exited during the window") {
+		t.Errorf("expected DEAD_TASKS row with clarifying annotation; got:\n%s", got)
+	}
+
+	windowServerLine := ""
+	for line := range strings.SplitSeq(got, "\n") {
+		if strings.Contains(line, "WindowServer") {
+			windowServerLine = line
+		}
+	}
+	if windowServerLine == "" {
+		t.Fatalf("expected a WindowServer row; got:\n%s", got)
+	}
+	if strings.Contains(windowServerLine, "energy from processes that exited during the window") {
+		t.Errorf("normal process row should not carry the synthetic-bucket annotation; got: %q", windowServerLine)
+	}
+}
+
 func TestPowerStatusRunningWithNoSampleYet(t *testing.T) {
 	now := time.Date(2026, 8, 2, 10, 0, 0, 0, time.UTC)
 	d, out, _ := powerTestDeps(t, now)

@@ -20,6 +20,13 @@ import (
 )
 
 var powerReportBoldStyle = lipgloss.NewStyle().Bold(true)
+var powerReportDimStyle = lipgloss.NewStyle().Faint(true)
+
+// powerSyntheticBuckets maps powermetrics' synthetic aggregate bucket names to a
+// clarifying note explaining they aren't a real running process.
+var powerSyntheticBuckets = map[string]string{
+	"DEAD_TASKS": "energy from processes that exited during the window",
+}
 
 // daemonEnvVar, when set to "1" in the process environment, marks this
 // process as the already-re-exec'd daemon (see spawnDaemon) rather than a
@@ -548,8 +555,12 @@ func renderPowerReport(since string, r power.Report) string {
 
 	fmt.Fprintln(&b, powerReportBoldStyle.Render("Top energy consumers"))
 	for i, p := range r.TopProcesses {
-		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)\n",
+		fmt.Fprintf(&b, "  %d. %-20s %8.1f  energy impact   (%d/%d ticks)",
 			i+1, p.Name, p.MeanEnergyImpact, p.TicksPresent, r.TicksInWindow)
+		if note, ok := powerSyntheticBuckets[p.Name]; ok {
+			fmt.Fprintf(&b, "  %s", powerReportDimStyle.Render("("+note+")"))
+		}
+		fmt.Fprintln(&b)
 	}
 	fmt.Fprintln(&b)
 
