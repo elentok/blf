@@ -51,6 +51,27 @@ func CleanURLCmd() tea.Cmd {
 	}
 }
 
+// AIPromptKind identifies which ai-prompt-mode command entered the mode.
+type AIPromptKind string
+
+const (
+	AIPromptKindAI      AIPromptKind = "ai"
+	AIPromptKindImprove AIPromptKind = "improve"
+)
+
+// EnterAIPromptModeMsg flips the launcher into ai prompt mode for Kind. A
+// command's Run returns a tea.Cmd and cannot mutate the model directly, so
+// the ai/improve commands emit this message and Update performs the
+// transition — the same shape ReloadCmd/CleanURLCmd already use.
+type EnterAIPromptModeMsg struct {
+	Kind AIPromptKind
+}
+
+// AIPromptCmd enters ai prompt mode for kind.
+func AIPromptCmd(kind AIPromptKind) tea.Cmd {
+	return func() tea.Msg { return EnterAIPromptModeMsg{Kind: kind} }
+}
+
 // NewBuiltinCommands returns the built-in commands wired to their live
 // implementations; homeDir/cachePath/readFile feed the reload command's
 // ReloadCmd.
@@ -58,6 +79,8 @@ func NewBuiltinCommands(homeDir, cachePath string, readFile func(string) ([]byte
 	return commands.NewBuiltins(
 		func() tea.Cmd { return ReloadCmd(homeDir, cachePath, readFile) },
 		CleanURLCmd,
+		func() tea.Cmd { return AIPromptCmd(AIPromptKindAI) },
+		func() tea.Cmd { return AIPromptCmd(AIPromptKindImprove) },
 	)
 }
 

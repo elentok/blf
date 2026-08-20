@@ -92,14 +92,20 @@ func TestNewBuiltinCommands(t *testing.T) {
 	cmds := launcher.NewBuiltinCommands("/home/user", "/home/user/.cache/apps.json", func(string) ([]byte, error) {
 		return nil, os.ErrNotExist
 	})
-	if len(cmds) != 2 {
-		t.Fatalf("expected 2 builtin commands, got %d", len(cmds))
+	if len(cmds) != 4 {
+		t.Fatalf("expected 4 builtin commands, got %d", len(cmds))
 	}
-	names := []string{cmds[0].Name, cmds[1].Name}
-	if names[0] != "reload" || names[1] != "cleanurl" {
-		t.Errorf("names = %v, want [reload cleanurl]", names)
+	names := []string{cmds[0].Name, cmds[1].Name, cmds[2].Name, cmds[3].Name}
+	want := []string{"reload", "cleanurl", "ai", "improve"}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Errorf("names = %v, want %v", names, want)
+			break
+		}
 	}
-	if cmds[0].Run == nil || cmds[1].Run == nil {
-		t.Error("expected both builtin commands to have a non-nil Run func")
+	for _, c := range cmds {
+		if c.Run == nil {
+			t.Errorf("expected builtin command %q to have a non-nil Run func", c.Name)
+		}
 	}
 }

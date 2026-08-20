@@ -71,11 +71,15 @@ type Model struct {
 	width             int
 	height            int
 	helpMode          bool
-	status            string    // transient status / error message
-	lastAppsIndexedAt time.Time // mtime of last loaded apps cache
-	scriptOutput      []Result  // non-nil after a "show" script; overrides provider results
-	historyIdx        int       // -1 = not navigating; >=0 = index into history entries
+	status            string       // transient status / error message
+	lastAppsIndexedAt time.Time    // mtime of last loaded apps cache
+	scriptOutput      []Result     // non-nil after a "show" script; overrides provider results
+	historyIdx        int          // -1 = not navigating; >=0 = index into history entries
+	aiPromptKind      AIPromptKind // "" = not in ai prompt mode; else the kind that entered it
 }
+
+// aiPromptModeLegend is the footer key legend shown while in ai prompt mode.
+const aiPromptModeLegend = "esc: cancel"
 
 // NewModel creates a launcher Model ready to run.
 func NewModel(cfg ModelConfig) Model {
@@ -160,6 +164,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.helpMode {
 			m.helpMode = false
 			return m, nil
+		}
+		if m.aiPromptKind != "" {
+			switch key {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.exitAIPromptMode()
+				return m, nil
+			case "up", "down", "ctrl+k", "ctrl+j", "ctrl+p", "ctrl+n":
+				// Navigation is swallowed: results are not recomputed
+				// while in mode, so there is nothing to navigate.
+				return m, nil
+			default:
+				var cmd tea.Cmd
+				m.widget, cmd = m.widget.Update(msg)
+				return m, cmd
+			}
 		}
 		switch key {
 		case "ctrl+c":
@@ -425,6 +446,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.resetAndHide()
 
+	case EnterAIPromptModeMsg:
+		m.enterAIPromptMode(msg.Kind)
+		return m, nil
+
 	case clearStatusMsg:
 		if m.status == "saved" || strings.HasPrefix(m.status, "reindexed ") || strings.HasPrefix(m.status, "reindex error:") || strings.HasPrefix(m.status, "reloaded ") {
 			m.status = ""
@@ -508,15 +533,40 @@ func (m *Model) syncWidget() {
 	m.widget.SetSelected(m.selected)
 }
 
-// updateFooter updates the widget footer to reflect the current status/configErr.
+// updateFooter updates the widget footer to reflect the current mode/status/
+// configErr. It is called from several background message handlers (apps
+// reindex, reload, the periodic apps refresh) that know nothing about modes,
+// so the mode check comes first: while in ai prompt mode the footer always
+// shows the mode's key legend, never the status message.
 func (m *Model) updateFooter() {
-	if m.status != "" {
+	if m.aiPromptKind != "" {
+		m.widget.SetFooter(aiPromptModeLegend)
+	} else if m.status != "" {
 		m.widget.SetFooter(m.status)
 	} else if m.cfg.ConfigErr != nil {
 		m.widget.SetFooter("config: " + m.cfg.ConfigErr.Error())
 	} else {
 		m.widget.SetFooter("?: help")
 	}
+}
+
+// enterAIPromptMode flips the launcher into ai prompt mode for kind: the
+// input prompt names the kind and the footer switches to the mode's key
+// legend. Called from Update on EnterAIPromptModeMsg, since a command's Run
+// returns a tea.Cmd and cannot mutate the model directly.
+func (m *Model) enterAIPromptMode(kind AIPromptKind) {
+	m.aiPromptKind = kind
+	m.widget.SetPrompt(string(kind) + " ")
+	m.updateFooter()
+}
+
+// exitAIPromptMode returns the launcher to normal operation, leaving it
+// visible rather than hiding it, so a mistaken pick costs one key.
+func (m *Model) exitAIPromptMode() {
+	m.aiPromptKind = ""
+	m.status = ""
+	m.widget.SetPrompt("")
+	m.updateFooter()
 }
 
 func (m *Model) act(r Result) (tea.Cmd, error) {

@@ -2,6 +2,7 @@ package launcher
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -644,5 +645,184 @@ func TestModelConfigUsesInjectedReadClipboard(t *testing.T) {
 	}
 	if text != "fake clipboard text" {
 		t.Errorf("ReadClipboard() = %q, want %q", text, "fake clipboard text")
+	}
+}
+
+// commandEnteringAIPromptMode builds a commands.Command that, when run,
+// emits EnterAIPromptModeMsg for kind — the same shape the real ai/improve
+// commands' Run funcs use (they can't mutate the model directly).
+func commandEnteringAIPromptMode(name string, kind AIPromptKind) commands.Command {
+	return commands.Command{
+		Name: name,
+		Run: func() tea.Cmd {
+			return func() tea.Msg { return EnterAIPromptModeMsg{Kind: kind} }
+		},
+	}
+}
+
+func TestPickingAICommand_entersAIPromptModeSetsChromeAndRecordsHistory(t *testing.T) {
+	aiCmd := commandEnteringAIPromptMode("ai", AIPromptKindAI)
+	commandsProvider := NewCommandsProvider([]commands.Command{aiCmd}, 1.0)
+	hist := history.New()
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		History:          hist,
+		HideDelay:        0,
+	})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	m = typeText(t, m, "ai")
+	if len(m.results) == 0 {
+		t.Fatal("expected 'ai' command result")
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	msg := runCmd(cmd)
+	next, _ = m.Update(msg)
+	m = next.(Model)
+
+	if m.aiPromptKind != AIPromptKindAI {
+		t.Fatalf("aiPromptKind = %q, want %q", m.aiPromptKind, AIPromptKindAI)
+	}
+
+	view := m.widget.View()
+	if !strings.Contains(view, "ai") {
+		t.Errorf("expected widget prompt to name the kind, view:\n%s", view)
+	}
+	if !strings.Contains(view, aiPromptModeLegend) {
+		t.Errorf("expected footer to show the key legend %q, view:\n%s", aiPromptModeLegend, view)
+	}
+
+	if hist.Len() != 1 || hist.Entries()[0].Label != "ai" {
+		t.Errorf("expected a history entry for the 'ai' command, got entries=%v", hist.Entries())
+	}
+}
+
+func TestPickingImproveCommand_entersAIPromptModeWithImproveKind(t *testing.T) {
+	improveCmd := commandEnteringAIPromptMode("improve", AIPromptKindImprove)
+	commandsProvider := NewCommandsProvider([]commands.Command{improveCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		HideDelay:        0,
+	})
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = sized.(Model)
+
+	m = typeText(t, m, "improve")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(runCmd(cmd))
+	m = next.(Model)
+
+	if m.aiPromptKind != AIPromptKindImprove {
+		t.Fatalf("aiPromptKind = %q, want %q", m.aiPromptKind, AIPromptKindImprove)
+	}
+	if !strings.Contains(m.widget.View(), "improve") {
+		t.Errorf("expected widget prompt to name the kind, view:\n%s", m.widget.View())
+	}
+}
+
+func TestAIPromptMode_navigationSwallowedAndResultsNotRecomputed(t *testing.T) {
+	aiCmd := commandEnteringAIPromptMode("ai", AIPromptKindAI)
+	commandsProvider := NewCommandsProvider([]commands.Command{aiCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider, fakeProvider{}},
+		CommandsProvider: commandsProvider,
+		HideDelay:        0,
+	})
+
+	m = typeText(t, m, "ai")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(runCmd(cmd))
+	m = next.(Model)
+
+	resultsBefore := m.results
+	selectedBefore := m.selected
+
+	for _, key := range []tea.KeyMsg{
+		tea.KeyPressMsg{Code: tea.KeyUp},
+		tea.KeyPressMsg{Code: tea.KeyDown},
+	} {
+		next, _ = m.Update(key)
+		m = next.(Model)
+	}
+	m = typeText(t, m, "prompt text")
+
+	if len(m.results) != len(resultsBefore) {
+		t.Errorf("expected results not to be recomputed while in mode, got %d results, want %d", len(m.results), len(resultsBefore))
+	}
+	if m.selected != selectedBefore {
+		t.Errorf("expected navigation to be swallowed while in mode, selected = %d, want %d", m.selected, selectedBefore)
+	}
+}
+
+func TestAIPromptMode_escExitsModeAndLeavesLauncherVisible(t *testing.T) {
+	hidden := false
+	aiCmd := commandEnteringAIPromptMode("ai", AIPromptKindAI)
+	commandsProvider := NewCommandsProvider([]commands.Command{aiCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		HideTerminal:     func() error { hidden = true; return nil },
+		HideDelay:        0,
+	})
+
+	m = typeText(t, m, "ai")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(runCmd(cmd))
+	m = next.(Model)
+
+	next, escCmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = next.(Model)
+
+	if m.aiPromptKind != "" {
+		t.Errorf("aiPromptKind = %q, want empty after esc", m.aiPromptKind)
+	}
+	runCmd(escCmd)
+	if hidden {
+		t.Error("expected esc to leave the launcher visible, but HideTerminal was called")
+	}
+}
+
+func TestAIPromptMode_backgroundMessageLeavesFooterLegendIntact(t *testing.T) {
+	aiCmd := commandEnteringAIPromptMode("ai", AIPromptKindAI)
+	commandsProvider := NewCommandsProvider([]commands.Command{aiCmd}, 1.0)
+
+	m := NewModel(ModelConfig{
+		Providers:        []Provider{commandsProvider},
+		CommandsProvider: commandsProvider,
+		HideDelay:        0,
+	})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	m = typeText(t, m, "ai")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(runCmd(cmd))
+	m = next.(Model)
+
+	// A background handler (apps reindex) that knows nothing about modes
+	// must not clobber the mode's key legend with its own status text.
+	next, _ = m.Update(AppsReindexedMsg{Err: errors.New("boom")})
+	m = next.(Model)
+
+	view := m.widget.View()
+	if !strings.Contains(view, aiPromptModeLegend) {
+		t.Errorf("expected footer to still show the key legend after a background message, view:\n%s", view)
+	}
+	if strings.Contains(view, "reindex error") {
+		t.Errorf("expected the background message's status not to reach the footer while in mode, view:\n%s", view)
 	}
 }

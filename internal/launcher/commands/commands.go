@@ -15,12 +15,15 @@ type Command struct {
 }
 
 // NewBuiltins returns the built-in commands, wired to the given run funcs.
-// reload and cleanURL are injected rather than called directly because their
-// implementations live in internal/launcher, which imports this package to
-// build a CommandsProvider — this package can't import back without a cycle.
-func NewBuiltins(reload, cleanURL func() tea.Cmd) []Command {
+// reload, cleanURL, ai and improve are injected rather than called directly
+// because their implementations live in internal/launcher, which imports
+// this package to build a CommandsProvider — this package can't import back
+// without a cycle.
+func NewBuiltins(reload, cleanURL, ai, improve func() tea.Cmd) []Command {
 	return []Command{
 		{Name: "reload", Run: reload},
 		{Name: "cleanurl", Run: cleanURL},
+		{Name: "ai", Run: ai},
+		{Name: "improve", Run: improve},
 	}
 }
