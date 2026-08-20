@@ -2,15 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [v0.7.0] - 2026-08-20
 
-- **`blf power`** - add background power/battery monitor daemon: `start`/`stop`/`status` commands.
-  `start` re-execs itself detached and samples CPU/GPU/combined power, thermal pressure, top-10
-  per-process energy impact (`powermetrics`) and battery state (`ioreg`) every 30s into
-  `<XDG_STATE_HOME>/blf/power/samples-YYYY-MM-DD.jsonl` (14-day rolling retention). `stop` sends
-  SIGTERM, escalating to SIGKILL after 5s; `status` reports pid/since-when/log path/last-sample
-  time. A dead pidfile self-heals silently rather than surfacing an error. Requires a one-time
-  `sudo` setup step for `powermetrics` (documented in the README).
+- **`blf power`** - new command group for tracking where battery goes on macOS:
+  - `start`/`stop`/`status` run a background monitor daemon. `start` re-execs itself detached and
+    samples CPU/GPU/combined power, thermal pressure, top-10 per-process energy impact
+    (`powermetrics`) and battery state (`ioreg`) every 30s into
+    `<XDG_STATE_HOME>/blf/power/samples-YYYY-MM-DD.jsonl` (14-day rolling retention). `stop` sends
+    SIGTERM, escalating to SIGKILL after 5s; `status` reports pid/since-when/log path/last-sample
+    time. A dead pidfile self-heals silently rather than surfacing an error. Requires a one-time
+    `sudo` setup step for `powermetrics` (documented in the README).
+  - `report --since <window>` summarizes a sampled window: mean CPU/GPU power breakdown, the top 10
+    energy consumers ranked by their total contribution across the window (with tick coverage and
+    each one's estimated share of the actual battery drain), net battery change plus a
+    discharge-only %/hour drop rate, and a thermal-pressure breakdown. Synthetic `powermetrics`
+    buckets such as `DEAD_TASKS` are annotated so they aren't mistaken for running processes.
+  - `mark` writes a checkpoint and `report --since-mark` reports from that checkpoint to now,
+    instead of a fixed relative duration.
+  - `watch` tails today's samples and renders each new one live as the daemon appends it.
+- **`blf launcher`** - new `ai` and `improve` commands. Picking either flips the launcher into ai
+  prompt mode: the prompt line and footer change and the result list is replaced by a full-viewport
+  preview of the clipboard. Type a prompt, or leave the input empty to send the clipboard as
+  previewed; Enter fires the request in the background and the launcher resets and hides
+  immediately. When it finishes, the response is copied to the clipboard and shown in a system
+  notification. `improve` is the same flow with a fixed "fix grammar, spelling, punctuation and
+  flow, change nothing else" instruction. Requests go to a cheap model with no tools, no MCP servers
+  and no user settings for minimum latency.
+- **`blf launcher`** - recent ai runs (the 5 newest successful ones) now appear at the top of the
+  launcher's recent items. Enter re-copies the stored response to the clipboard without re-firing
+  the request; ctrl+x deletes the run, the same key that already forgets history rows.
+- **config** - new `[launcher.ai]` section with `model` (default `haiku`) and `timeout` (default
+  `120s`) knobs. An unparseable timeout falls back to the default and raises a config error.
+- **deps** - add `howett.net/plist` (used to parse `powermetrics` output).
 
 ## [v0.6.11] - 2026-07-30
 
