@@ -16,6 +16,7 @@ const (
 	ActionRecall                    // populate input from history (no side-effects)
 	ActionOpen                      // open a file/URL via `open` (no -a flag)
 	ActionCommand                   // run a built-in, hardcoded launcher command
+	ActionAIRun                     // act on a stored ai run (Target is the run ID)
 )
 
 // Action describes the operation performed when a result is selected.
@@ -47,6 +48,8 @@ const (
 	IconRoleDirectory
 	IconRoleCommand
 	IconRoleSnippet
+	IconRoleAI
+	IconRoleImprove
 )
 
 // Result is one item in the launcher's ranked result list.

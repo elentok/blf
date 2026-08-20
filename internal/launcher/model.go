@@ -50,6 +50,7 @@ type ModelConfig struct {
 	AITimeout        time.Duration                     // per-run deadline passed to ai.Invoke; 0 disables it
 	AIRunsStore      *ai.Store                         // optional; nil disables the ai runs store
 	AIRunsStorePath  string                            // path to persist ai runs; empty skips persistence
+	AIProvider       *AIProvider                       // optional; nil disables ai rows in recent items
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -526,31 +527,37 @@ func (m *Model) recomputeResults() {
 		return
 	}
 	query := m.input.Value()
-	// Empty input: show recent history instead of provider results.
-	if query == "" && m.cfg.History != nil && m.cfg.History.Len() > 0 {
-		entries := m.cfg.History.Entries()
-		m.results = make([]Result, len(entries))
-		for i := range entries {
-			e := entries[i]
-			icon := IconRoleHistory
-			iconGlyph := ""
-			subtitle := ""
-			if e.ActionType == history.ActionTypeCopy {
-				subtitle = m.historyHint(e.Label)
-			} else if r, ok := m.lookupHistoryResult(e); ok {
-				icon = r.Icon
-				iconGlyph = r.IconGlyph
-				subtitle = r.Subtitle
-			}
-			m.results[i] = Result{
-				Title:        e.Label,
-				Subtitle:     subtitle,
-				Icon:         icon,
-				IconGlyph:    iconGlyph,
-				Action:       Action{Type: ActionRecall, Target: e.Label},
-				HistoryEntry: &entries[i],
+	// Empty input: show ai rows above recent history instead of provider results.
+	if query == "" {
+		var results []Result
+		if m.cfg.AIProvider != nil {
+			results = append(results, m.cfg.AIProvider.Query("")...)
+		}
+		if m.cfg.History != nil && m.cfg.History.Len() > 0 {
+			entries := m.cfg.History.Entries()
+			for i := range entries {
+				e := entries[i]
+				icon := IconRoleHistory
+				iconGlyph := ""
+				subtitle := ""
+				if e.ActionType == history.ActionTypeCopy {
+					subtitle = m.historyHint(e.Label)
+				} else if r, ok := m.lookupHistoryResult(e); ok {
+					icon = r.Icon
+					iconGlyph = r.IconGlyph
+					subtitle = r.Subtitle
+				}
+				results = append(results, Result{
+					Title:        e.Label,
+					Subtitle:     subtitle,
+					Icon:         icon,
+					IconGlyph:    iconGlyph,
+					Action:       Action{Type: ActionRecall, Target: e.Label},
+					HistoryEntry: &entries[i],
+				})
 			}
 		}
+		m.results = results
 		if m.selected >= len(m.results) {
 			m.selected = 0
 			m.offset = 0

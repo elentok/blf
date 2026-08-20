@@ -1352,3 +1352,61 @@ func TestAIRunDone_recomputesResultsOnlyWhenInputEmpty(t *testing.T) {
 		t.Errorf("expected results left alone on completion with typed input, got %+v", m.results)
 	}
 }
+
+func TestEmptyQuery_AIRowsAboveHistory(t *testing.T) {
+	h := history.New()
+	h.Append(copyHistoryEntry("alpha"))
+	store := ai.NewStore()
+	store.Append(ai.Run{ID: "run1", Kind: ai.KindAI, Input: "input", Response: "response", Status: ai.StatusSuccess})
+	m := NewModel(ModelConfig{
+		History:    h,
+		AIProvider: NewAIProvider(store),
+	})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	if len(m.results) != 2 {
+		t.Fatalf("expected 2 rows (1 ai + 1 history), got %d", len(m.results))
+	}
+	if m.results[0].Action.Type != ActionAIRun {
+		t.Errorf("expected ai row first, got %v", m.results[0].Action.Type)
+	}
+	if m.results[1].Action.Type != ActionRecall {
+		t.Errorf("expected history row second, got %v", m.results[1].Action.Type)
+	}
+}
+
+func TestEmptyQuery_FailedAIRunsNeverAppear(t *testing.T) {
+	store := ai.NewStore()
+	store.Append(ai.Run{ID: "bad", Kind: ai.KindAI, Input: "input", Response: "response", Status: ai.StatusFailure})
+	m := NewModel(ModelConfig{AIProvider: NewAIProvider(store)})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	for _, r := range m.results {
+		if r.Action.Type == ActionAIRun {
+			t.Fatalf("expected no ai rows for a failed run, got %+v", r)
+		}
+	}
+}
+
+func TestEmptyQuery_EmptyAIStore_MatchesPreExistingHistoryList(t *testing.T) {
+	h := history.New()
+	h.Append(copyHistoryEntry("alpha"))
+	h.Append(copyHistoryEntry("beta"))
+	withProvider := NewModel(ModelConfig{History: h, AIProvider: NewAIProvider(ai.NewStore())})
+	next, _ := withProvider.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	withProvider = next.(Model)
+	withoutProvider := NewModel(ModelConfig{History: h})
+	next, _ = withoutProvider.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	withoutProvider = next.(Model)
+
+	if len(withProvider.results) != len(withoutProvider.results) {
+		t.Fatalf("expected equal result counts, got %d vs %d", len(withProvider.results), len(withoutProvider.results))
+	}
+	for i := range withProvider.results {
+		if withProvider.results[i].Action != withoutProvider.results[i].Action {
+			t.Errorf("row %d differs: %+v vs %+v", i, withProvider.results[i], withoutProvider.results[i])
+		}
+	}
+}
