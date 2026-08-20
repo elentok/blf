@@ -209,6 +209,87 @@ func TestCtrlXRemovesCorrectEntry_whenLabelsCollide(t *testing.T) {
 	}
 }
 
+func TestCtrlXDeletesSelectedAIRun(t *testing.T) {
+	store := ai.NewStore()
+	store.Append(ai.Run{ID: "run1", Kind: ai.KindAI, Input: "input", Response: "response", Status: ai.StatusSuccess})
+	m := NewModel(ModelConfig{AIRunsStore: store, AIProvider: NewAIProvider(store)})
+
+	m.recomputeResults()
+	if len(m.results) != 1 || m.results[0].Action.Type != ActionAIRun {
+		t.Fatalf("expected 1 ai row, got %+v", m.results)
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	if store.Len() != 0 {
+		t.Errorf("expected the run removed from the store, len=%d", store.Len())
+	}
+	if len(m.results) != 0 {
+		t.Errorf("expected the list refreshed with no rows, got %+v", m.results)
+	}
+}
+
+func TestCtrlXOnAIRow_noStore_noop(t *testing.T) {
+	store := ai.NewStore()
+	store.Append(ai.Run{ID: "run1", Kind: ai.KindAI, Input: "input", Response: "response", Status: ai.StatusSuccess})
+	m := NewModel(ModelConfig{AIProvider: NewAIProvider(store)})
+
+	m.recomputeResults()
+	if len(m.results) != 1 {
+		t.Fatalf("expected 1 ai row, got %+v", m.results)
+	}
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
+	m = next.(Model)
+
+	if store.Len() != 1 {
+		t.Errorf("expected the run untouched, len=%d", store.Len())
+	}
+}
+
+func TestEnterOnAIRow_copiesStoredResponseAndResetsAndHides(t *testing.T) {
+	store := ai.NewStore()
+	store.Append(ai.Run{ID: "run1", Kind: ai.KindAI, Input: "input", Response: "stored response", Status: ai.StatusSuccess})
+	var copied string
+	hidden := false
+	execCalled := false
+	m := NewModel(ModelConfig{
+		AIRunsStore:  store,
+		AIProvider:   NewAIProvider(store),
+		CopyText:     func(s string) error { copied = s; return nil },
+		HideTerminal: func() error { hidden = true; return nil },
+		HideDelay:    0,
+		AIExec: func(context.Context, string, []string, io.Reader) ([]byte, []byte, error) {
+			execCalled = true
+			return nil, nil, nil
+		},
+	})
+
+	m.recomputeResults()
+	if len(m.results) != 1 || m.results[0].Action.Type != ActionAIRun {
+		t.Fatalf("expected 1 ai row, got %+v", m.results)
+	}
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	if copied != "stored response" {
+		t.Errorf("copied = %q, want the stored response", copied)
+	}
+	if m.input.Value() != "" {
+		t.Errorf("expected input reset, got %q", m.input.Value())
+	}
+
+	runCmd(cmd)
+	if !hidden {
+		t.Error("expected HideTerminal to be called (reset-and-hide path, not the async command path)")
+	}
+	if execCalled {
+		t.Error("expected the ai run to never be re-fired")
+	}
+}
+
 func TestEnterOnLaunchHistoryRow_directFires(t *testing.T) {
 	h := history.New()
 	h.Append(history.Entry{Label: "Kitty", ActionType: launchHistoryActionType, Target: "/Applications/kitty.app"})

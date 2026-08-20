@@ -338,17 +338,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, clearStatusAfter(1500 * time.Millisecond)
 
 		case "ctrl+x":
-			// Delete the selected entry from history (only when history rows are shown).
-			if m.cfg.History == nil || len(m.results) == 0 {
+			// Delete the selected entry (history row, or ai run row) and refresh the list.
+			if len(m.results) == 0 {
 				return m, nil
 			}
 			result := m.results[m.selected]
-			if result.Action.Type != ActionRecall || result.HistoryEntry == nil {
+			var deleted bool
+			switch {
+			case result.Action.Type == ActionRecall && result.HistoryEntry != nil:
+				if m.cfg.History == nil {
+					return m, nil
+				}
+				deleted = m.cfg.History.Remove(*result.HistoryEntry)
+				if deleted {
+					m.saveHistory()
+					m.historyIdx = -1
+				}
+			case result.Action.Type == ActionAIRun:
+				if m.cfg.AIRunsStore == nil {
+					return m, nil
+				}
+				deleted = m.cfg.AIRunsStore.Delete(result.Action.Target)
+				if deleted {
+					m.saveAIRuns()
+				}
+			default:
 				return m, nil
 			}
-			if m.cfg.History.Remove(*result.HistoryEntry) {
-				m.saveHistory()
-				m.historyIdx = -1
+			if deleted {
 				m.recomputeResults()
 				// Keep the cursor near the deleted row instead of jumping to top.
 				if m.selected >= len(m.results) && len(m.results) > 0 {
@@ -842,6 +859,18 @@ func (m *Model) act(r Result) (tea.Cmd, error) {
 		m.updateFooter()
 		m.recomputeResults()
 		return c.Run(), nil
+	case ActionAIRun:
+		// Copies the stored response synchronously rather than re-dispatching
+		// the run: re-using an earlier answer must cost no model call.
+		if m.cfg.AIRunsStore == nil || m.cfg.CopyText == nil {
+			return nil, fmt.Errorf("ai run not available")
+		}
+		for _, run := range m.cfg.AIRunsStore.Runs() {
+			if run.ID == r.Action.Target {
+				return nil, m.cfg.CopyText(run.Response)
+			}
+		}
+		return nil, fmt.Errorf("ai run not found")
 	case ActionOpen:
 		if m.cfg.OpenTarget == nil {
 			return nil, fmt.Errorf("open not available")
@@ -1044,7 +1073,7 @@ func (m Model) renderHelp() string {
 		{"ctrl+r", "recall previous history entry"},
 		{"ctrl+f", "recall next history entry"},
 		{"ctrl+s", "save current input to history"},
-		{"ctrl+x", "delete selected history entry"},
+		{"ctrl+x", "delete selected history/ai entry"},
 		{"ctrl+shift+r", "reindex apps"},
 		{"esc", "dismiss launcher and clear input"},
 		{"?", "toggle this help"},
