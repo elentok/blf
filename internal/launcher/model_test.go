@@ -1201,3 +1201,154 @@ func TestAIPromptMode_concurrentRunsAreIndependent(t *testing.T) {
 	close(release)
 	wg.Wait()
 }
+
+func TestAIRunDone_successAppendsCopiesAndNotifies(t *testing.T) {
+	store := ai.NewStore()
+	var copied string
+	var notifyTitle, notifyMessage string
+
+	m := NewModel(ModelConfig{
+		AIRunsStore: store,
+		CopyText:    func(s string) error { copied = s; return nil },
+		ShowNotification: func(title, message string) error {
+			notifyTitle = title
+			notifyMessage = message
+			return nil
+		},
+	})
+
+	next, _ := m.Update(AIRunDoneMsg{
+		Kind:  AIPromptKindAI,
+		Input: "hello",
+		Result: ai.InvokeResult{
+			Status:   ai.StatusSuccess,
+			Response: "line one\nline two",
+		},
+	})
+	m = next.(Model)
+
+	runs := store.Runs()
+	if len(runs) != 1 {
+		t.Fatalf("expected 1 run in the store, got %d", len(runs))
+	}
+	run := runs[0]
+	if run.ID == "" {
+		t.Error("expected a non-empty run id")
+	}
+	if run.Kind != ai.KindAI || run.Input != "hello" || run.Response != "line one\nline two" || run.Status != ai.StatusSuccess {
+		t.Errorf("unexpected run: %+v", run)
+	}
+
+	if copied != "line one\nline two" {
+		t.Errorf("copied = %q, want the full response", copied)
+	}
+	if notifyTitle != "ai" {
+		t.Errorf("notifyTitle = %q, want %q", notifyTitle, "ai")
+	}
+	if notifyMessage != "line one\nline two" {
+		t.Errorf("notifyMessage = %q, want the full multi-line response", notifyMessage)
+	}
+}
+
+func TestAIRunDone_failureAppendsNotifiesAndLeavesClipboard(t *testing.T) {
+	store := ai.NewStore()
+	copyCalled := false
+	var notifyTitle, notifyMessage string
+
+	m := NewModel(ModelConfig{
+		AIRunsStore: store,
+		CopyText:    func(s string) error { copyCalled = true; return nil },
+		ShowNotification: func(title, message string) error {
+			notifyTitle = title
+			notifyMessage = message
+			return nil
+		},
+	})
+
+	next, _ := m.Update(AIRunDoneMsg{
+		Kind:  AIPromptKindImprove,
+		Input: "hello",
+		Result: ai.InvokeResult{
+			Status: ai.StatusFailure,
+			Err:    errors.New("boom"),
+		},
+	})
+	m = next.(Model)
+
+	runs := store.Runs()
+	if len(runs) != 1 || runs[0].Status != ai.StatusFailure {
+		t.Fatalf("expected 1 failed run in the store, got %+v", runs)
+	}
+
+	if copyCalled {
+		t.Error("expected the clipboard left untouched on failure")
+	}
+	if !strings.Contains(notifyTitle, "improve") {
+		t.Errorf("notifyTitle = %q, want it to name the kind", notifyTitle)
+	}
+	if notifyTitle == "improve" {
+		t.Errorf("notifyTitle = %q, want a failure marker distinct from the success title", notifyTitle)
+	}
+	if notifyMessage != "boom" {
+		t.Errorf("notifyMessage = %q, want the error", notifyMessage)
+	}
+}
+
+func TestAIRunDone_noLauncherHistoryEntry(t *testing.T) {
+	h := history.New()
+	m := NewModel(ModelConfig{
+		AIRunsStore: ai.NewStore(),
+		History:     h,
+	})
+
+	next, _ := m.Update(AIRunDoneMsg{
+		Kind: AIPromptKindAI,
+		Result: ai.InvokeResult{
+			Status:   ai.StatusSuccess,
+			Response: "r",
+		},
+	})
+	m = next.(Model)
+
+	next, _ = m.Update(AIRunDoneMsg{
+		Kind: AIPromptKindAI,
+		Result: ai.InvokeResult{
+			Status: ai.StatusFailure,
+			Err:    errors.New("boom"),
+		},
+	})
+	m = next.(Model)
+
+	if h.Len() != 0 {
+		t.Errorf("expected no launcher-history entries, got %d", h.Len())
+	}
+}
+
+func TestAIRunDone_recomputesResultsOnlyWhenInputEmpty(t *testing.T) {
+	m := NewModel(ModelConfig{Providers: []Provider{fakeProvider{}}})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	// Empty input: completion must recompute, replacing whatever was left over.
+	m.results = []Result{{Title: "stale"}}
+	next, _ = m.Update(AIRunDoneMsg{
+		Kind:   AIPromptKindAI,
+		Result: ai.InvokeResult{Status: ai.StatusSuccess, Response: "r"},
+	})
+	m = next.(Model)
+	if len(m.results) == 1 && m.results[0].Title == "stale" {
+		t.Errorf("expected results recomputed on completion with empty input, got %+v", m.results)
+	}
+
+	// Non-empty input: completion must leave the in-progress results alone.
+	m = typeText(t, m, "query")
+	m.results = []Result{{Title: "sentinel"}}
+	next, _ = m.Update(AIRunDoneMsg{
+		Kind:   AIPromptKindAI,
+		Result: ai.InvokeResult{Status: ai.StatusSuccess, Response: "r"},
+	})
+	m = next.(Model)
+	if len(m.results) != 1 || m.results[0].Title != "sentinel" {
+		t.Errorf("expected results left alone on completion with typed input, got %+v", m.results)
+	}
+}

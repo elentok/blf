@@ -2,6 +2,8 @@ package launcher
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -46,6 +48,8 @@ type ModelConfig struct {
 	AIExec           ai.ExecFunc                       // optional; nil disables ai run dispatch
 	AIModel          string                            // claude model alias passed to ai.Invoke
 	AITimeout        time.Duration                     // per-run deadline passed to ai.Invoke; 0 disables it
+	AIRunsStore      *ai.Store                         // optional; nil disables the ai runs store
+	AIRunsStorePath  string                            // path to persist ai runs; empty skips persistence
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -87,9 +91,7 @@ type Model struct {
 }
 
 // AIRunDoneMsg carries the outcome of one ai run dispatched from ai prompt
-// mode's Enter handler. Handling completion — appending to the runs store,
-// copying to the clipboard, notifying — is a later ticket; dispatch only
-// needs the message shape to fire the background command.
+// mode's Enter handler; see handleAIRunDone for how completion is handled.
 type AIRunDoneMsg struct {
 	Kind   AIPromptKind
 	Input  string
@@ -496,6 +498,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.enterAIPromptMode(msg.Kind)
 		return m, nil
 
+	case AIRunDoneMsg:
+		m.handleAIRunDone(msg)
+		return m, nil
+
 	case clearStatusMsg:
 		if m.status == "saved" || strings.HasPrefix(m.status, "reindexed ") || strings.HasPrefix(m.status, "reindex error:") || strings.HasPrefix(m.status, "reloaded ") {
 			m.status = ""
@@ -692,6 +698,72 @@ func (m *Model) dispatchAIRun() tea.Cmd {
 
 	m.exitAIPromptMode()
 	return tea.Batch(runCmd, m.resetAndHide())
+}
+
+// handleAIRunDone processes a completed ai run. It always appends the run to
+// the runs store and shows a notification titled by the kind; on success it
+// also copies the response to the clipboard, and on failure the title
+// carries a failure marker instead and the clipboard is left untouched, so a
+// failure can never destroy what the user had copied. No launcher-history
+// entry is written — runs are surfaced through a separate path.
+//
+// The store write happens here, in the update loop, rather than in the
+// goroutine that produced msg — bubbletea serialises Update calls, which is
+// what makes unbounded concurrent runs safe against racing on the store
+// file.
+//
+// Results are recomputed only when the input is empty: a run completing
+// after the reset-and-hide path must repopulate the pre-populated list (see
+// resetAndHide), but a run completing while the user has a query typed must
+// leave their in-progress results alone.
+func (m *Model) handleAIRunDone(msg AIRunDoneMsg) {
+	run := ai.Run{
+		ID:        newRunID(),
+		Timestamp: time.Now(),
+		Kind:      ai.Kind(msg.Kind),
+		Input:     msg.Input,
+		Response:  msg.Result.Response,
+		Status:    msg.Result.Status,
+	}
+	if m.cfg.AIRunsStore != nil {
+		m.cfg.AIRunsStore.Append(run)
+		m.saveAIRuns()
+	}
+
+	title := string(msg.Kind)
+	body := msg.Result.Response
+	if msg.Result.Status == ai.StatusSuccess {
+		if m.cfg.CopyText != nil {
+			_ = m.cfg.CopyText(msg.Result.Response)
+		}
+	} else {
+		title = string(msg.Kind) + " failed"
+		if msg.Result.Err != nil {
+			body = msg.Result.Err.Error()
+		}
+	}
+	if m.cfg.ShowNotification != nil {
+		_ = m.cfg.ShowNotification(title, body)
+	}
+
+	if m.input.Value() == "" {
+		m.recomputeResults()
+	}
+}
+
+// saveAIRuns persists the ai runs store to disk if AIRunsStorePath is set.
+func (m *Model) saveAIRuns() {
+	if m.cfg.AIRunsStore == nil || m.cfg.AIRunsStorePath == "" {
+		return
+	}
+	_ = m.cfg.AIRunsStore.Save(m.cfg.AIRunsStorePath)
+}
+
+// newRunID returns a random hex id for a runs-store record.
+func newRunID() string {
+	var b [8]byte
+	_, _ = crand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 func (m *Model) act(r Result) (tea.Cmd, error) {

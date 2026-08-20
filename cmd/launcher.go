@@ -83,6 +83,10 @@ func newLauncherCmd(d deps) *cobra.Command {
 			learnedRankPath := filepath.Join(stateDir, "launcher-learned-ranks")
 			launcherLearnedRank := learnedrank.Load(learnedRankPath)
 
+			// AI runs store: load from state dir.
+			aiRunsPath := filepath.Join(stateDir, ai.StateFileName)
+			aiRunsStore := ai.LoadStore(aiRunsPath)
+
 			// Scripts provider: merge built-ins with user config, filter for platform.
 			userScripts := make([]scripts.Script, 0, len(cfg.Launcher.Scripts))
 			for _, sc := range cfg.Launcher.Scripts {
@@ -155,6 +159,8 @@ func newLauncherCmd(d deps) *cobra.Command {
 				HistoryPath:      historyPath,
 				LearnedRank:      launcherLearnedRank,
 				LearnedRankPath:  learnedRankPath,
+				AIRunsStore:      aiRunsStore,
+				AIRunsStorePath:  aiRunsPath,
 				LaunchApp: func(appPath string) error {
 					launchArgs := apps.LaunchArgs(apps.App{Path: appPath})
 					_, err := d.runCommand(launchArgs[0], launchArgs[1:]...)

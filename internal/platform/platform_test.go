@@ -74,3 +74,27 @@ func TestShowNotification_escapesAppleScriptQuotes(t *testing.T) {
 		t.Errorf("script = %q, want %q", gotScript, want)
 	}
 }
+
+func TestShowNotification_multilineBody(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("mac-only test")
+	}
+
+	origRunCommand := runCommand
+	defer func() { runCommand = origRunCommand }()
+
+	var gotScript string
+	runCommand = func(name string, args ...string) error {
+		gotScript = args[1]
+		return nil
+	}
+
+	if err := ShowNotification("Title", "line one\nline two"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "display notification \"line one\nline two\" with title \"Title\""
+	if gotScript != want {
+		t.Errorf("script = %q, want %q", gotScript, want)
+	}
+}
