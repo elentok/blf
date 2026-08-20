@@ -50,8 +50,19 @@ A user-authored (or built-in) bash/osascript snippet, fuzzy-matched by name and 
 _Contrast_: **command**, which runs in-process.
 
 **command**:
-A built-in, hardcoded **launcher source** entry (e.g. reload, cleanurl) that runs in-process — calling a Go function directly rather than spawning an external process. Not user-configurable, unlike **script**.
-_Avoid_: confusing with a **script** — both are fuzzy-matched, name-triggered actions, but a command never shells out.
+A built-in, hardcoded **launcher source** entry (e.g. reload, cleanurl, `ai`, `improve`) that runs in-process — calling a Go function directly rather than spawning an external process. Not user-configurable, unlike **script**.
+_Avoid_: confusing with a **script** — both are fuzzy-matched, name-triggered actions, but a command never shells out. `ai` and `improve` are commands, not scripts: they run in-process and never shell out to a user-authored snippet (the `claude -p` invocation they perform is an implementation detail of the command, not a user script).
+
+**ai run**:
+One request made through the `ai` or `improve` **command**: a kind (`ai` or `improve`), the resolved input (typed input, else a clipboard snapshot), the response, and a status (including a distinct timeout status, separate from a generic failure). Persisted to the **runs store**.
+_Contrast_: picking the `ai`/`improve` command itself (entering **ai prompt mode**) records an ordinary **launcher history** entry for the command — that is not an ai run. An ai run only exists once a prompt is actually dispatched and a response (or failure) comes back.
+
+**runs store**:
+The JSON-lines file of **ai run** records (`$XDG_STATE_HOME/blf/ai-runs.jsonl`), rewritten whole on every write and capped at 200, most-recent-first. Both the durable log of every ai run and the source the ai provider reads to surface AI rows in recent items.
+_Avoid_: confusing with **launcher history** — ai runs are deliberately excluded from history (see **launcher history**); the runs store is a separate, dedicated log.
+
+**ai prompt mode**:
+The transient input mode the launcher enters when the `ai` or `improve` **command** is picked: the input line's prompt names the kind, the footer shows the mode's key legend, navigation keys are suppressed, and results are not recomputed while in mode. Esc exits back to the normal launcher, leaving the terminal visible. Entered explicitly by picking the command and exited explicitly with Esc — a deliberate exception to **launcher source**'s note that sources are not mutually-exclusive modes: the sources themselves remain non-modal, but ai prompt mode is a transient input mode layered above them.
 
 **learned rank**:
 A per-(exact query text, result target) counter that overrides the default ranking tiers, letting the launcher remember that the user has repeatedly picked a non-top result for a specific query. Any Enter/pick on a result that wasn't first in the list increments the counter for (trimmed query text, Action.Type+Action.Target); the next time that exact query is typed, results with a nonzero counter sort above exact/prefix/source-weight/fuzzy-score matches, highest counter first. Applies to every action type (launch, run, open, copy), not just app launches. Persists permanently (no decay, no in-TUI clear) in a plain, human-editable state file alongside **launcher history**.
@@ -82,7 +93,7 @@ _Contrast_: a **name-like query** (letters that don't resolve to a unit/function
 
 **launcher history**:
 The persisted list of things you did via the launcher. For **launch**, **run**, and **open** actions, an entry is the picked result's label and action (e.g. "Kitty" → launch `/Applications/kitty.app`) — not the query text that found it, so different queries resolving to the same item coalesce into one entry. For copy actions (calc/unit/currency), an entry is still the raw query text (explicitly saved via Ctrl+S, since a copy result has no independent identity beyond its query). Shown as the default list when the input is empty (see ADR 0006).
-_Avoid_: recording every keystroke-query (only executed/saved entries are history); assuming every entry stores a query — launch/run/open entries store the picked item, not the query.
+_Avoid_: recording every keystroke-query (only executed/saved entries are history); assuming every entry stores a query — launch/run/open entries store the picked item, not the query. **ai runs** are deliberately not recorded here — only picking the `ai`/`improve` command itself is (an ordinary command entry); the run's input/response/status live in the **runs store** instead, since history's cap-and-dedup-by-target design would let heavy helper use evict every app, script and calculation row.
 
 **history direct-fire**:
 Pressing Enter on a **launcher history** row for a launch/run/open entry immediately performs its stored action (e.g. picking "Kitty" launches Kitty) rather than populating the input and recomputing. This is the one place the launcher re-fires an action without the user re-confirming via search (ADR 0006).
