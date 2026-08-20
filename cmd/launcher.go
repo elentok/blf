@@ -138,6 +138,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				},
 				ConfigErr:        cfgErr,
 				CopyText:         d.copyText,
+				ReadClipboard:    d.readClipboard,
 				CurrencyCache:    currencyCache,
 				AppsProvider:     appsProvider,
 				AppsCachePath:    appsCachePath,

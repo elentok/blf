@@ -22,6 +22,7 @@ type deps struct {
 	lookupEnv               func(string) (string, bool)
 	openURL                 func(string) error
 	copyText                func(string) error
+	readClipboard           func() (string, error)
 	runTmuxLinks            func(string) error
 	runTargets              func(popup bool, target string) error
 	lookPath                func(string) (string, error)
@@ -42,15 +43,16 @@ type deps struct {
 
 func defaultDeps() deps {
 	return deps{
-		stdout:       os.Stdout,
-		stderr:       os.Stderr,
-		stdin:        os.Stdin,
-		lookupEnv:    os.LookupEnv,
-		openURL:      platform.OpenURL,
-		copyText:     platform.CopyText,
-		runTmuxLinks: tmuxlinks.RunMenu,
-		runTargets:   tmuxtargets.Execute,
-		lookPath:     exec.LookPath,
+		stdout:        os.Stdout,
+		stderr:        os.Stderr,
+		stdin:         os.Stdin,
+		lookupEnv:     os.LookupEnv,
+		openURL:       platform.OpenURL,
+		copyText:      platform.CopyText,
+		readClipboard: platform.ReadClipboardText,
+		runTmuxLinks:  tmuxlinks.RunMenu,
+		runTargets:    tmuxtargets.Execute,
+		lookPath:      exec.LookPath,
 		runCommand: func(name string, args ...string) ([]byte, error) {
 			return exec.Command(name, args...).Output()
 		},

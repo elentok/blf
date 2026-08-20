@@ -22,6 +22,7 @@ type ModelConfig struct {
 	Providers        []Provider
 	ConfigErr        error
 	CopyText         func(string) error
+	ReadClipboard    func() (string, error) // optional; nil disables clipboard reads
 	HideTerminal     func() error
 	LaunchApp        func(string) error // optional; launches an app by path
 	OpenTarget       func(string) error // optional; opens a file/URL via `open` (no -a)

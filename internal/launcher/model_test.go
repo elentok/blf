@@ -630,3 +630,19 @@ func TestEnterOnCleanURLCommand_failure_showsStatusAndStaysOpen(t *testing.T) {
 		t.Error("expected launcher to stay open after a cleanurl error")
 	}
 }
+
+func TestModelConfigUsesInjectedReadClipboard(t *testing.T) {
+	m := NewModel(ModelConfig{
+		Providers:     []Provider{CalcProvider{}},
+		ReadClipboard: func() (string, error) { return "fake clipboard text", nil },
+		HideDelay:     0,
+	})
+
+	text, err := m.cfg.ReadClipboard()
+	if err != nil {
+		t.Fatalf("ReadClipboard() error = %v", err)
+	}
+	if text != "fake clipboard text" {
+		t.Errorf("ReadClipboard() = %q, want %q", text, "fake clipboard text")
+	}
+}
