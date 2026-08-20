@@ -1364,11 +1364,8 @@ func TestAIRunDone_failureAppendsNotifiesAndLeavesClipboard(t *testing.T) {
 	if copyCalled {
 		t.Error("expected the clipboard left untouched on failure")
 	}
-	if !strings.Contains(notifyTitle, "improve") {
-		t.Errorf("notifyTitle = %q, want it to name the kind", notifyTitle)
-	}
-	if notifyTitle == "improve" {
-		t.Errorf("notifyTitle = %q, want a failure marker distinct from the success title", notifyTitle)
+	if notifyTitle != "✗ improve" {
+		t.Errorf("notifyTitle = %q, want %q", notifyTitle, "✗ improve")
 	}
 	if notifyMessage != "boom" {
 		t.Errorf("notifyMessage = %q, want the error", notifyMessage)

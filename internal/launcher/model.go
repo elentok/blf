@@ -761,7 +761,7 @@ func (m *Model) handleAIRunDone(msg AIRunDoneMsg) {
 			_ = m.cfg.CopyText(msg.Result.Response)
 		}
 	} else {
-		title = string(msg.Kind) + " failed"
+		title = "✗ " + string(msg.Kind)
 		if msg.Result.Err != nil {
 			body = msg.Result.Err.Error()
 		}
