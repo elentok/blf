@@ -21,6 +21,12 @@ Output only the corrected text, with no preamble, explanation or quoting.`
 // blf's contract, not user-configurable.
 const disallowedTools = "Bash Read Write Edit Glob Grep Task WebFetch WebSearch TodoWrite NotebookEdit Agent Skill"
 
+// appendSystemPrompt keeps ai runs answering as a general-purpose quick
+// helper. Without it, claude inherits the launcher's project CLAUDE.md/cwd
+// context and tacks on unsolicited project-relevance commentary even for
+// unrelated questions.
+const appendSystemPrompt = "You are answering a one-off quick question, not working in this project. Answer only the question asked. Do not comment on whether it relates to the project, and do not offer project-related help."
+
 // BuildPrompt turns input into the prompt sent to the model. KindAI passes
 // input through unchanged, matching the reference haiku script. KindImprove
 // wraps it in the fixed instruction with the input delimited in <text> tags.
@@ -67,6 +73,7 @@ func Invoke(ctx context.Context, execFn ExecFunc, model string, kind Kind, input
 		"--strict-mcp-config",
 		"--mcp-config", `{"mcpServers":{}}`,
 		"--disallowed-tools", disallowedTools,
+		"--append-system-prompt", appendSystemPrompt,
 		"--settings", "{}",
 	}
 
