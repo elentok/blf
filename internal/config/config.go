@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -82,6 +83,22 @@ type LauncherConfig struct {
 	Directories []DirectoryConfig `toml:"directory"`
 	// SnippetsWeight is the source weight for snippets (default 1.0).
 	SnippetsWeight float64 `toml:"snippets_weight"`
+	// AI is the [launcher.ai] section configuring the AI helpers.
+	AI AIConfig `toml:"ai"`
+}
+
+// AIConfig is the [launcher.ai] section of ~/.config/blf/config.toml. It
+// exposes only what a user could reasonably want to tune; the claude flag
+// list itself is blf's contract, not a config knob.
+type AIConfig struct {
+	// Model is the claude model alias to invoke (default "haiku").
+	Model string `toml:"model"`
+	// Timeout is a duration string, e.g. "120s" (default "120s"). It's a
+	// string rather than a duration field because the TOML decoder in use
+	// can't decode into a duration type, and an integer would be read as
+	// raw nanoseconds. Parsed with time.ParseDuration; an unparseable
+	// value falls back to the default via LoadConfig's validation.
+	Timeout string `toml:"timeout"`
 }
 
 // DirectoryConfig is a named filesystem location in the config file.
@@ -139,6 +156,10 @@ func DefaultConfig() Config {
 			DirectoryWeight: 1.0,
 			SnippetsWeight:  1.0,
 			Currencies:      defaultCurrencies,
+			AI: AIConfig{
+				Model:   "haiku",
+				Timeout: "120s",
+			},
 		},
 	}
 }
@@ -161,6 +182,13 @@ func LoadConfig(readFile func(string) ([]byte, error), homeDir string) (Config, 
 	if _, err := toml.Decode(string(data), &cfg); err != nil {
 		return DefaultConfig(), fmt.Errorf("malformed config %s: %w", path, err)
 	}
+
+	if _, err := time.ParseDuration(cfg.Launcher.AI.Timeout); err != nil {
+		badTimeout := cfg.Launcher.AI.Timeout
+		cfg.Launcher.AI.Timeout = DefaultConfig().Launcher.AI.Timeout
+		return cfg, fmt.Errorf("invalid launcher.ai timeout %q in %s: %w", badTimeout, path, err)
+	}
+
 	return cfg, nil
 }
 

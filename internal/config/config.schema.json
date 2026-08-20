@@ -98,6 +98,20 @@
               "path": { "type": "string", "description": "May start with \"~\"." }
             }
           }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "type": "string",
+              "description": "Claude model alias to invoke (default \"haiku\")."
+            },
+            "timeout": {
+              "type": "string",
+              "description": "Per-run timeout duration string, e.g. \"120s\" (default \"120s\")."
+            }
+          }
         }
       }
     }
