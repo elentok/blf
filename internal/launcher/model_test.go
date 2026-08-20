@@ -1,11 +1,16 @@
 package launcher
 
 import (
+	"context"
 	"errors"
+	"io"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/elentok/blf/internal/launcher/ai"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/commands"
 	"github.com/elentok/blf/internal/launcher/history"
@@ -939,4 +944,260 @@ func TestAIPromptMode_noPreviewLineCanBeSelected(t *testing.T) {
 	if m.widget.Selected() != 0 {
 		t.Errorf("expected selection to stay pinned at 0 while previewing, got %d", m.widget.Selected())
 	}
+}
+
+// runBatch executes cmd, recursively flattening a tea.BatchMsg, and returns
+// the resulting messages in the order the runtime would deliver them.
+func runBatch(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, c := range batch {
+			out = append(out, runBatch(c)...)
+		}
+		return out
+	}
+	return []tea.Msg{msg}
+}
+
+// findAIRunDoneMsg returns the first AIRunDoneMsg among msgs.
+func findAIRunDoneMsg(t *testing.T, msgs []tea.Msg) AIRunDoneMsg {
+	t.Helper()
+	for _, msg := range msgs {
+		if done, ok := msg.(AIRunDoneMsg); ok {
+			return done
+		}
+	}
+	t.Fatalf("expected an AIRunDoneMsg among %d messages", len(msgs))
+	return AIRunDoneMsg{}
+}
+
+func TestAIPromptMode_enterDispatchesTypedInput(t *testing.T) {
+	hidden := false
+	var gotModel string
+	var gotInput string
+	fakeExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		gotModel = args[argAfter(args, "--model")]
+		b, _ := io.ReadAll(stdin)
+		gotInput = string(b)
+		return []byte("response"), nil, nil
+	}
+
+	m := enterAIMode(t, ModelConfig{
+		HideTerminal: func() error { hidden = true; return nil },
+		HideDelay:    0,
+		AIExec:       fakeExec,
+		AIModel:      "haiku",
+		AITimeout:    time.Second,
+	})
+
+	m = typeText(t, m, "hello there")
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	if m.aiPromptKind != "" {
+		t.Errorf("expected ai prompt mode to be exited after dispatch, got %q", m.aiPromptKind)
+	}
+	if m.input.Value() != "" {
+		t.Errorf("expected input reset after dispatch, got %q", m.input.Value())
+	}
+
+	msgs := runBatch(cmd)
+	if !hidden {
+		t.Error("expected dispatch to take the reset-and-hide path")
+	}
+
+	done := findAIRunDoneMsg(t, msgs)
+	if done.Kind != AIPromptKindAI {
+		t.Errorf("Kind = %q, want %q", done.Kind, AIPromptKindAI)
+	}
+	if done.Input != "hello there" {
+		t.Errorf("Input = %q, want %q", done.Input, "hello there")
+	}
+	if done.Result.Status != ai.StatusSuccess || done.Result.Response != "response" {
+		t.Errorf("Result = %+v, want success/\"response\"", done.Result)
+	}
+	if gotInput != "hello there" {
+		t.Errorf("exec stdin = %q, want %q", gotInput, "hello there")
+	}
+	if gotModel != "haiku" {
+		t.Errorf("exec --model = %q, want %q", gotModel, "haiku")
+	}
+}
+
+// argAfter returns the index of the arg following name in args, for reading
+// a "--flag value" pair out of an argv slice.
+func argAfter(args []string, name string) int {
+	for i, a := range args {
+		if a == name && i+1 < len(args) {
+			return i + 1
+		}
+	}
+	return -1
+}
+
+func TestAIPromptMode_enterWithEmptyInputDispatchesClipboardSnapshot(t *testing.T) {
+	var gotInput string
+	fakeExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		b, _ := io.ReadAll(stdin)
+		gotInput = string(b)
+		return []byte("ok"), nil, nil
+	}
+
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) { return "clipboard text", nil },
+		HideDelay:     0,
+		AIExec:        fakeExec,
+	})
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	msgs := runBatch(cmd)
+
+	done := findAIRunDoneMsg(t, msgs)
+	if done.Input != "clipboard text" {
+		t.Errorf("Input = %q, want %q", done.Input, "clipboard text")
+	}
+	if gotInput != "clipboard text" {
+		t.Errorf("exec stdin = %q, want %q", gotInput, "clipboard text")
+	}
+}
+
+func TestAIPromptMode_clipboardChangeAfterEntryDoesNotAffectDispatch(t *testing.T) {
+	clip := "original clipboard"
+	var gotInput string
+	fakeExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		b, _ := io.ReadAll(stdin)
+		gotInput = string(b)
+		return []byte("ok"), nil, nil
+	}
+
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) { return clip, nil },
+		HideDelay:     0,
+		AIExec:        fakeExec,
+	})
+
+	clip = "changed after entry"
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	msgs := runBatch(cmd)
+
+	done := findAIRunDoneMsg(t, msgs)
+	if done.Input != "original clipboard" {
+		t.Errorf("Input = %q, want the snapshot taken at mode entry %q", done.Input, "original clipboard")
+	}
+	if gotInput != "original clipboard" {
+		t.Errorf("exec stdin = %q, want %q", gotInput, "original clipboard")
+	}
+}
+
+func TestAIPromptMode_enterWithNothingToSendShowsInlineErrorAndStays(t *testing.T) {
+	execCalled := false
+	fakeExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		execCalled = true
+		return []byte("ok"), nil, nil
+	}
+
+	m := enterAIMode(t, ModelConfig{
+		HideDelay: 0,
+		AIExec:    fakeExec,
+	})
+
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+
+	if cmd != nil {
+		msgs := runBatch(cmd)
+		for _, msg := range msgs {
+			if _, ok := msg.(AIRunDoneMsg); ok {
+				t.Fatalf("expected no ai run dispatched with nothing to send")
+			}
+		}
+	}
+	if execCalled {
+		t.Error("expected exec not to be called with nothing to send")
+	}
+	if m.aiPromptKind == "" {
+		t.Error("expected to stay in ai prompt mode")
+	}
+	if m.input.Value() != "" {
+		t.Errorf("expected the cursor/input left intact, got %q", m.input.Value())
+	}
+	if m.aiPromptError == "" {
+		t.Error("expected an inline error to be set")
+	}
+	if !strings.Contains(m.widget.View(), m.aiPromptError) {
+		t.Errorf("expected the inline error in the view, got:\n%s", m.widget.View())
+	}
+}
+
+func TestAIPromptMode_inlineErrorClearsOnNextKeystroke(t *testing.T) {
+	m := enterAIMode(t, ModelConfig{HideDelay: 0})
+
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	if m.aiPromptError == "" {
+		t.Fatal("expected an inline error to be set before typing")
+	}
+
+	m = typeText(t, m, "x")
+
+	if m.aiPromptError != "" {
+		t.Errorf("expected the inline error cleared after the next keystroke, got %q", m.aiPromptError)
+	}
+	if strings.Contains(m.widget.View(), "nothing to send") {
+		t.Errorf("expected the error no longer shown in the view, got:\n%s", m.widget.View())
+	}
+	if !strings.Contains(m.widget.View(), aiPromptModeLegend) {
+		t.Errorf("expected the footer to show the legend again, got:\n%s", m.widget.View())
+	}
+}
+
+func TestAIPromptMode_concurrentRunsAreIndependent(t *testing.T) {
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+
+	slowExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		<-release
+		return []byte("slow"), nil, nil
+	}
+	fastExec := func(ctx context.Context, name string, args []string, stdin io.Reader) ([]byte, []byte, error) {
+		return []byte("fast"), nil, nil
+	}
+
+	slowModel := enterAIMode(t, ModelConfig{HideDelay: 0, AIExec: slowExec})
+	slowModel = typeText(t, slowModel, "slow one")
+	_, slowCmd := slowModel.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	fastModel := enterAIMode(t, ModelConfig{HideDelay: 0, AIExec: fastExec})
+	fastModel = typeText(t, fastModel, "fast one")
+	_, fastCmd := fastModel.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	wg.Go(func() {
+		runBatch(slowCmd)
+	})
+
+	fastMsgs := make(chan []tea.Msg, 1)
+	wg.Go(func() {
+		fastMsgs <- runBatch(fastCmd)
+	})
+
+	select {
+	case msgs := <-fastMsgs:
+		done := findAIRunDoneMsg(t, msgs)
+		if done.Result.Response != "fast" {
+			t.Errorf("Response = %q, want %q", done.Result.Response, "fast")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the fast run to complete without waiting for the slow run")
+	}
+
+	close(release)
+	wg.Wait()
 }

@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/elentok/blf/internal/fuzzyfinder"
+	"github.com/elentok/blf/internal/launcher/ai"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/history"
 	"github.com/elentok/blf/internal/launcher/learnedrank"
@@ -41,6 +43,9 @@ type ModelConfig struct {
 	HideDelay        time.Duration                     // delay before hiding the terminal (see resetAndHide); 0 = immediate
 	ShowNotification func(title, message string) error // optional; nil disables completion notifications
 	NoBorder         bool                              // disable the outer border frame
+	AIExec           ai.ExecFunc                       // optional; nil disables ai run dispatch
+	AIModel          string                            // claude model alias passed to ai.Invoke
+	AITimeout        time.Duration                     // per-run deadline passed to ai.Invoke; 0 disables it
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -77,7 +82,18 @@ type Model struct {
 	historyIdx        int          // -1 = not navigating; >=0 = index into history entries
 	aiPromptKind      AIPromptKind // "" = not in ai prompt mode; else the kind that entered it
 	clipboardSnapshot string       // clipboard contents read once at ai prompt mode entry
+	aiPromptError     string       // inline error shown in the footer in ai prompt mode; cleared on the next keystroke
 	previewRef        *[]string    // pointer for the RenderRow closure; non-empty = preview lines replace m.results
+}
+
+// AIRunDoneMsg carries the outcome of one ai run dispatched from ai prompt
+// mode's Enter handler. Handling completion — appending to the runs store,
+// copying to the clipboard, notifying — is a later ticket; dispatch only
+// needs the message shape to fire the background command.
+type AIRunDoneMsg struct {
+	Kind   AIPromptKind
+	Input  string
+	Result ai.InvokeResult
 }
 
 // aiPromptModeLegend is the footer key legend shown while in ai prompt mode.
@@ -180,12 +196,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.aiPromptKind != "" {
+			// Any keystroke clears a stale inline error before it is
+			// re-evaluated below, so the error never outlives the
+			// keypress after the one that raised it.
+			if m.aiPromptError != "" {
+				m.aiPromptError = ""
+				m.updateFooter()
+			}
 			switch key {
 			case "ctrl+c":
 				return m, tea.Quit
 			case "esc":
 				m.exitAIPromptMode()
 				return m, nil
+			case "enter":
+				return m, m.dispatchAIRun()
 			case "up", "down", "ctrl+k", "ctrl+j", "ctrl+p", "ctrl+n":
 				// Navigation is swallowed: results are not recomputed
 				// while in mode, so there is nothing to navigate.
@@ -583,7 +608,11 @@ func (m *Model) clipboardPreviewLines() []string {
 // shows the mode's key legend, never the status message.
 func (m *Model) updateFooter() {
 	if m.aiPromptKind != "" {
-		m.widget.SetFooter(aiPromptModeLegend)
+		if m.aiPromptError != "" {
+			m.widget.SetFooter(m.aiPromptError)
+		} else {
+			m.widget.SetFooter(aiPromptModeLegend)
+		}
 	} else if m.status != "" {
 		m.widget.SetFooter(m.status)
 	} else if m.cfg.ConfigErr != nil {
@@ -620,9 +649,49 @@ func (m *Model) enterAIPromptMode(kind AIPromptKind) {
 func (m *Model) exitAIPromptMode() {
 	m.aiPromptKind = ""
 	m.status = ""
+	m.aiPromptError = ""
 	m.widget.SetPrompt("")
 	m.syncWidget()
 	m.updateFooter()
+}
+
+// dispatchAIRun resolves Enter's input in ai prompt mode — typed text if
+// there is any, otherwise the clipboard snapshot taken at mode entry — and
+// fires an ai run in the background with the configured model and timeout,
+// then exits the mode and takes the reset-and-hide path so the launcher is
+// out of the way while the model is still thinking.
+//
+// With nothing to send (both the typed input and the snapshot are empty) it
+// sets an inline error instead and returns nil, leaving the launcher in the
+// mode with the cursor intact.
+func (m *Model) dispatchAIRun() tea.Cmd {
+	input := m.input.Value()
+	if input == "" {
+		input = m.clipboardSnapshot
+	}
+	if input == "" {
+		m.aiPromptError = "nothing to send"
+		m.updateFooter()
+		return nil
+	}
+
+	kind := m.aiPromptKind
+	execFn := m.cfg.AIExec
+	model := m.cfg.AIModel
+	timeout := m.cfg.AITimeout
+	runCmd := func() tea.Msg {
+		ctx := context.Background()
+		if timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
+		result := ai.Invoke(ctx, execFn, model, ai.Kind(kind), input)
+		return AIRunDoneMsg{Kind: kind, Input: input, Result: result}
+	}
+
+	m.exitAIPromptMode()
+	return tea.Batch(runCmd, m.resetAndHide())
 }
 
 func (m *Model) act(r Result) (tea.Cmd, error) {

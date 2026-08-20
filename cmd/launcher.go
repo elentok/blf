@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/elentok/blf/internal/config"
 	"github.com/elentok/blf/internal/launcher"
+	"github.com/elentok/blf/internal/launcher/ai"
 	"github.com/elentok/blf/internal/launcher/apps"
 	"github.com/elentok/blf/internal/launcher/currency"
 	"github.com/elentok/blf/internal/launcher/directories"
@@ -38,6 +39,10 @@ func newLauncherCmd(d deps) *cobra.Command {
 			}
 
 			cfg, cfgErr := config.LoadConfig(d.readFile, homeDir)
+
+			// LoadConfig validates AI.Timeout and falls back to the default
+			// on a parse error, so this is never expected to fail here.
+			aiTimeout, _ := time.ParseDuration(cfg.Launcher.AI.Timeout)
 
 			// Currency cache
 			cacheDir := config.XDGCacheDir(homeDir)
@@ -159,6 +164,9 @@ func newLauncherCmd(d deps) *cobra.Command {
 					return platform.OpenURL(target)
 				},
 				ShowNotification: platform.ShowNotification,
+				AIExec:           ai.Exec,
+				AIModel:          cfg.Launcher.AI.Model,
+				AITimeout:        aiTimeout,
 				HideTerminal:     launcherHideTerminal(d),
 				// Defer the hide by one render tick so the cleared frame is flushed
 				// before Kitty saves the buffer (see Model.resetAndHide).
