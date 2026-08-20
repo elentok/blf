@@ -826,3 +826,117 @@ func TestAIPromptMode_backgroundMessageLeavesFooterLegendIntact(t *testing.T) {
 		t.Errorf("expected the background message's status not to reach the footer while in mode, view:\n%s", view)
 	}
 }
+
+// enterAIMode drives m into ai prompt mode via the "ai" command, as the
+// picking tests above do, and returns the updated model.
+func enterAIMode(t *testing.T, cfg ModelConfig) Model {
+	t.Helper()
+	aiCmd := commandEnteringAIPromptMode("ai", AIPromptKindAI)
+	commandsProvider := NewCommandsProvider([]commands.Command{aiCmd}, 1.0)
+	cfg.Providers = append([]Provider{commandsProvider}, cfg.Providers...)
+	cfg.CommandsProvider = commandsProvider
+
+	m := NewModel(cfg)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = next.(Model)
+
+	m = typeText(t, m, "ai")
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(runCmd(cmd))
+	return next.(Model)
+}
+
+func TestAIPromptMode_entryReadsClipboardOnceAndShowsPreview(t *testing.T) {
+	reads := 0
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) {
+			reads++
+			return "line one\nline two", nil
+		},
+		HideDelay: 0,
+	})
+
+	if reads != 1 {
+		t.Fatalf("expected clipboard read exactly once at mode entry, got %d reads", reads)
+	}
+
+	view := m.widget.View()
+	if !strings.Contains(view, clipboardPreviewHeader) {
+		t.Errorf("expected preview header in view, got:\n%s", view)
+	}
+	if !strings.Contains(view, "line one") || !strings.Contains(view, "line two") {
+		t.Errorf("expected clipboard contents in view, got:\n%s", view)
+	}
+
+	// Pressing keys that don't change the query must not re-read the clipboard.
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(Model)
+	if reads != 1 {
+		t.Errorf("expected clipboard still read exactly once, got %d reads", reads)
+	}
+}
+
+func TestAIPromptMode_firstTypedCharRemovesPreview(t *testing.T) {
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) { return "clip text", nil },
+		HideDelay:     0,
+	})
+
+	if !strings.Contains(m.widget.View(), clipboardPreviewHeader) {
+		t.Fatalf("expected preview before typing, view:\n%s", m.widget.View())
+	}
+
+	m = typeText(t, m, "x")
+
+	view := m.widget.View()
+	if strings.Contains(view, clipboardPreviewHeader) {
+		t.Errorf("expected preview removed after first typed char, view:\n%s", view)
+	}
+	if strings.Contains(view, "clip text") {
+		t.Errorf("expected clipboard contents removed after first typed char, view:\n%s", view)
+	}
+}
+
+func TestAIPromptMode_readsClipboardExactlyOnceAcrossManyKeystrokes(t *testing.T) {
+	reads := 0
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) {
+			reads++
+			return "clip text", nil
+		},
+		HideDelay: 0,
+	})
+
+	m = typeText(t, m, "hello world")
+	for range 5 {
+		next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		m = next.(Model)
+	}
+
+	if reads != 1 {
+		t.Errorf("expected clipboard read exactly once regardless of keystrokes, got %d reads", reads)
+	}
+}
+
+func TestAIPromptMode_noPreviewLineCanBeSelected(t *testing.T) {
+	m := enterAIMode(t, ModelConfig{
+		ReadClipboard: func() (string, error) { return "a\nb\nc", nil },
+		HideDelay:     0,
+	})
+
+	for _, key := range []tea.KeyMsg{
+		tea.KeyPressMsg{Code: tea.KeyUp},
+		tea.KeyPressMsg{Code: tea.KeyDown},
+		tea.KeyPressMsg{Code: tea.KeyDown},
+	} {
+		next, _ := m.Update(key)
+		m = next.(Model)
+	}
+
+	if m.widget.Selected() != 0 {
+		t.Errorf("expected selection to stay pinned at 0 while previewing, got %d", m.widget.Selected())
+	}
+}

@@ -76,27 +76,41 @@ type Model struct {
 	scriptOutput      []Result     // non-nil after a "show" script; overrides provider results
 	historyIdx        int          // -1 = not navigating; >=0 = index into history entries
 	aiPromptKind      AIPromptKind // "" = not in ai prompt mode; else the kind that entered it
+	clipboardSnapshot string       // clipboard contents read once at ai prompt mode entry
+	previewRef        *[]string    // pointer for the RenderRow closure; non-empty = preview lines replace m.results
 }
 
 // aiPromptModeLegend is the footer key legend shown while in ai prompt mode.
 const aiPromptModeLegend = "esc: cancel"
+
+// clipboardPreviewHeader is the first line of the clipboard preview shown
+// with an empty input in ai prompt mode.
+const clipboardPreviewHeader = "Press enter to use the clipboard:"
 
 // NewModel creates a launcher Model ready to run.
 func NewModel(cfg ModelConfig) Model {
 	queryRef := new(string)
 	resultsRef := new([]Result)
 	widthRef := new(int)
+	previewRef := new([]string)
 
 	m := Model{
 		cfg:        cfg,
 		historyIdx: -1,
 		resultsRef: resultsRef,
 		widthRef:   widthRef,
+		previewRef: previewRef,
 	}
 
 	useNerdFont := cfg.UseNerdFont
 	m.widget = fuzzyfinder.New(fuzzyfinder.Config{
 		RenderRow: func(i int, selected bool) string {
+			if preview := *previewRef; len(preview) > 0 {
+				if i >= len(preview) {
+					return ""
+				}
+				return preview[i]
+			}
 			results := *resultsRef
 			if i >= len(results) {
 				return ""
@@ -179,6 +193,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				var cmd tea.Cmd
 				m.widget, cmd = m.widget.Update(msg)
+				*m.input.queryRef = m.widget.Query()
+				// Results are not recomputed while in mode (no provider
+				// query), but the clipboard preview is a pure function of
+				// (mode, input=="") and must react to every keystroke: it
+				// disappears on the first typed character and reappears if
+				// backspaced back to empty.
+				m.syncWidget()
 				return m, cmd
 			}
 		}
@@ -526,11 +547,33 @@ func (m *Model) recomputeResults() {
 	m.syncWidget()
 }
 
-// syncWidget keeps the fuzzyfinder widget in sync with m.results and m.selected.
+// syncWidget keeps the fuzzyfinder widget in sync with m.results and
+// m.selected, or — while in ai prompt mode with an empty input — with the
+// clipboard preview lines instead. The preview replaces the whole viewport,
+// so it is pinned to item 0 rather than tracking m.selected: navigation is
+// already swallowed in mode (see Update), so there is no selection to track.
 func (m *Model) syncWidget() {
 	*m.resultsRef = m.results
+	if m.aiPromptKind != "" && m.input.Value() == "" {
+		*m.previewRef = m.clipboardPreviewLines()
+		m.widget.SetItemCount(len(*m.previewRef))
+		m.widget.SetSelected(0)
+		return
+	}
+	*m.previewRef = nil
 	m.widget.SetItemCount(max(len(m.results), 1))
 	m.widget.SetSelected(m.selected)
+}
+
+// clipboardPreviewLines returns the lines that fill the result viewport in
+// ai prompt mode with an empty input: a fixed header line followed by the
+// clipboard snapshot's own lines.
+func (m *Model) clipboardPreviewLines() []string {
+	lines := []string{clipboardPreviewHeader}
+	if m.clipboardSnapshot != "" {
+		lines = append(lines, strings.Split(m.clipboardSnapshot, "\n")...)
+	}
+	return lines
 }
 
 // updateFooter updates the widget footer to reflect the current mode/status/
@@ -554,9 +597,21 @@ func (m *Model) updateFooter() {
 // input prompt names the kind and the footer switches to the mode's key
 // legend. Called from Update on EnterAIPromptModeMsg, since a command's Run
 // returns a tea.Cmd and cannot mutate the model directly.
+//
+// The clipboard is read once here, into m.clipboardSnapshot, rather than per
+// keystroke — ReadClipboard shells out to a subprocess on macOS, and a later
+// ticket sends this same snapshot so the preview can never lie about what
+// was dispatched.
 func (m *Model) enterAIPromptMode(kind AIPromptKind) {
 	m.aiPromptKind = kind
 	m.widget.SetPrompt(string(kind) + " ")
+	m.clipboardSnapshot = ""
+	if m.cfg.ReadClipboard != nil {
+		if text, err := m.cfg.ReadClipboard(); err == nil {
+			m.clipboardSnapshot = text
+		}
+	}
+	m.syncWidget()
 	m.updateFooter()
 }
 
@@ -566,6 +621,7 @@ func (m *Model) exitAIPromptMode() {
 	m.aiPromptKind = ""
 	m.status = ""
 	m.widget.SetPrompt("")
+	m.syncWidget()
 	m.updateFooter()
 }
 
