@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.1] - 2026-08-20
+
+- **`blf launcher` AI helpers** - `ai` runs now append a system prompt instructing Claude to answer
+  as a one-off quick question rather than inheriting the launcher's project `CLAUDE.md`/cwd context,
+  so it stops tacking on unsolicited project-relevance commentary for unrelated questions.
+
 ## [v0.7.0] - 2026-08-20
 
 - **`blf power`** - new command group for tracking where battery goes on macOS:
