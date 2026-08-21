@@ -14,6 +14,9 @@ type Unit struct {
 	Symbols []string // lowercase lookup symbols
 	Factor  float64
 	Offset  float64
+	// ExtraFormat, when set, renders an additional parenthetical for a converted
+	// value in this unit (e.g. the inch unit's fraction/range readout).
+	ExtraFormat func(value float64) string
 }
 
 // Group is a named collection of mutually convertible units.

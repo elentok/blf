@@ -93,6 +93,43 @@ func TestUnitsProviderNonUnit(t *testing.T) {
 	}
 }
 
+func TestUnitsProviderExtraFormat_Hook(t *testing.T) {
+	r := units.NewRegistry()
+	from := &units.Unit{Name: "widget", Symbols: []string{"wg"}, Factor: 1}
+	hooked := &units.Unit{Name: "gizmo", Symbols: []string{"gz"}, Factor: 1, ExtraFormat: func(v float64) string {
+		return "hooked"
+	}}
+	r.AddGroup(&units.Group{Name: "test", Units: []*units.Unit{from, hooked}})
+
+	p := launcher.NewUnitsProvider(r, nil, nil)
+	results := p.Query("5wg")
+	found := false
+	for _, res := range results {
+		if res.Title == "5 gizmo (hooked)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected '5 gizmo (hooked)' in results, got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderExtraFormat_NilHookNoParenthetical(t *testing.T) {
+	r := units.NewRegistry()
+	from := &units.Unit{Name: "widget", Symbols: []string{"wg"}, Factor: 1}
+	plain := &units.Unit{Name: "sprocket", Symbols: []string{"sp"}, Factor: 1}
+	r.AddGroup(&units.Group{Name: "test", Units: []*units.Unit{from, plain}})
+
+	p := launcher.NewUnitsProvider(r, nil, nil)
+	results := p.Query("5wg")
+	for _, res := range results {
+		if res.Title == "5 sprocket" {
+			return
+		}
+	}
+	t.Errorf("expected '5 sprocket' with no parenthetical, got: %v", titlesOf(results))
+}
+
 func TestUnitsProviderInchFraction_NearMarkApprox(t *testing.T) {
 	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
 	// 1.6mm = 0.062992... inch, within 1/64" of 1/16 (0.0625)

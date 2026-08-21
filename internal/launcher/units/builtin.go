@@ -26,7 +26,7 @@ func lengthGroup() *Group {
 			{Name: "millimeter", Symbols: []string{"mm", "millimeter", "millimeters"}, Factor: 0.001},
 			{Name: "micrometer", Symbols: []string{"μm", "um", "micrometer", "micron"}, Factor: 1e-6},
 			{Name: "nanometer", Symbols: []string{"nm", "nanometer"}, Factor: 1e-9},
-			{Name: "inch", Symbols: []string{"in", "inch", "inches"}, Factor: 0.0254},
+			{Name: "inch", Symbols: []string{"in", "inch", "inches"}, Factor: 0.0254, ExtraFormat: formatInchFraction},
 			{Name: "foot", Symbols: []string{"ft", "foot", "feet"}, Factor: 0.3048},
 			{Name: "yard", Symbols: []string{"yd", "yard", "yards"}, Factor: 0.9144},
 			{Name: "mile", Symbols: []string{"mi", "mile", "miles"}, Factor: 1609.344},
