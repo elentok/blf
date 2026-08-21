@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.2] - 2026-08-21
+
+- **`blf launcher`** - the help page title now shows the app version (e.g. "blf launcher 0.7.1 —
+  help").
+- **`blf launcher`** - fixed AI/Improve recent-item icons and a bug where multi-line AI run titles
+  spilled onto multiple lines in the recent items list instead of showing just the first line.
+
 ## [v0.7.1] - 2026-08-20
 
 - **`blf launcher` AI helpers** - `ai` runs now append a system prompt instructing Claude to answer
