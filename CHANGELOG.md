@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.4] - 2026-08-22
+
+- **`blf launcher`** - new `--standalone` flag disables quick-terminal hide/toggle behavior, for
+  running the launcher in a regular terminal window (outside a Kitty/Ghostty quick terminal) so
+  `esc` and other reset paths (a successful `cleanurl`, an AI run completing, etc.) just reset the
+  launcher's state instead of firing a hide/toggle command against an unrelated window.
+
 ## [v0.7.3] - 2026-08-21
 
 - Added support for fractional and mixed-number inch input (e.g. `3 1/2"`) in unit conversions, and
