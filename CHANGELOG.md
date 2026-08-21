@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.3] - 2026-08-21
+
+- Added support for fractional and mixed-number inch input (e.g. `3 1/2"`) in unit conversions, and
+  inch results now show a fractional readout (nearest 1/16" or enclosing range) alongside the
+  decimal value.
+
 ## [v0.7.2] - 2026-08-21
 
 - **`blf launcher`** - the help page title now shows the app version (e.g. "blf launcher 0.7.1 —
