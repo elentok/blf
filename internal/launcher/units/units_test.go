@@ -145,6 +145,7 @@ func TestParseInput(t *testing.T) {
 		{"3/4 inches", 0.75, "inches", true},
 		{"1/4in", 0.25, "in", true},      // no space before unit
 		{"1   1/4 in", 1.25, "in", true}, // extra whitespace in mixed number
+		{"1\t1/4 in", 1.25, "in", true},  // tab whitespace in mixed number
 		{"-3/8 in", -0.375, "in", true},
 		{"3/8", 0, "", false},      // no unit attached
 		{"3/ in", 0, "", false},    // missing denominator

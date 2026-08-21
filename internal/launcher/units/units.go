@@ -166,7 +166,7 @@ func ScanQuantity(s string) (value float64, end int, ok bool) {
 	default:
 		// mixed number: <ws>+ <digits> '/' <digits>
 		wsEnd := i
-		for wsEnd < len(s) && s[wsEnd] == ' ' {
+		for wsEnd < len(s) && (s[wsEnd] == ' ' || s[wsEnd] == '\t') {
 			wsEnd++
 		}
 		fracStart := wsEnd
