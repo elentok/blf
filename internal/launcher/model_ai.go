@@ -57,7 +57,7 @@ func (m *Model) syncWidget() {
 // ai prompt mode with an empty input: a fixed header line followed by the
 // clipboard snapshot's own lines.
 func (m *Model) clipboardPreviewLines() []string {
-	lines := []string{clipboardPreviewHeader}
+	lines := []string{clipboardPreviewHeaderStyle.Render(clipboardPreviewHeader), ""}
 	if m.clipboardSnapshot != "" {
 		lines = append(lines, strings.Split(m.clipboardSnapshot, "\n")...)
 	}

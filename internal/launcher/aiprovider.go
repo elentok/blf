@@ -58,7 +58,7 @@ func aiResultFromRun(r ai.Run) Result {
 		icon = IconRoleImprove
 	}
 	return Result{
-		Title:    ansi.Truncate(r.Input, aiTitleMaxLen, "…"),
+		Title:    ansi.Truncate(firstLine(r.Input), aiTitleMaxLen, "…"),
 		Subtitle: firstLine(r.Response),
 		Icon:     icon,
 		Action:   Action{Type: ActionAIRun, Target: r.ID},

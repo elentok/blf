@@ -76,6 +76,23 @@ func TestAIProvider_TitleTruncatedAndSubtitleFirstLine(t *testing.T) {
 	}
 }
 
+func TestAIProvider_TitleUsesFirstLineOfInput(t *testing.T) {
+	store := ai.NewStore()
+	store.Append(runN("a", ai.KindImprove, ai.StatusSuccess, "a few questions:\n\n1. what does it mean?\n2. …", "response"))
+	provider := NewAIProvider(store)
+
+	results := provider.Query("")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if strings.Contains(results[0].Title, "\n") {
+		t.Errorf("expected title to contain no newlines, got %q", results[0].Title)
+	}
+	if results[0].Title != "a few questions:" {
+		t.Errorf("expected title to be the input's first line, got %q", results[0].Title)
+	}
+}
+
 func TestAIProvider_IconsDifferByKind(t *testing.T) {
 	store := ai.NewStore()
 	store.Append(runN("ai", ai.KindAI, ai.StatusSuccess, "input", "response"))

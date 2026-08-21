@@ -49,4 +49,7 @@ var (
 
 	// Error notice (non-blocking config error)
 	errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed))
+
+	// Clipboard preview header (ai prompt mode, empty input)
+	clipboardPreviewHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorLavender))
 )

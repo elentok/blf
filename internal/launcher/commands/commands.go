@@ -23,7 +23,7 @@ func NewBuiltins(reload, cleanURL, ai, improve func() tea.Cmd) []Command {
 	return []Command{
 		{Name: "reload", Run: reload},
 		{Name: "cleanurl", Run: cleanURL},
-		{Name: "ai", Run: ai},
-		{Name: "improve", Run: improve},
+		{Name: "ai", Icon: "󱜸", Run: ai},
+		{Name: "improve", Icon: "", Run: improve},
 	}
 }
