@@ -28,6 +28,7 @@ const (
 
 func newLauncherCmd(d deps) *cobra.Command {
 	var noBorder bool
+	var standalone bool
 
 	cmd := &cobra.Command{
 		Use:   "launcher",
@@ -175,7 +176,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				AIExec:           ai.Exec,
 				AIModel:          cfg.Launcher.AI.Model,
 				AITimeout:        aiTimeout,
-				HideTerminal:     launcherHideTerminal(d),
+				HideTerminal:     launcherHideTerminalFor(d, standalone),
 				// Defer the hide by one render tick so the cleared frame is flushed
 				// before Kitty saves the buffer (see Model.resetAndHide).
 				HideDelay:   50 * time.Millisecond,
@@ -191,6 +192,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&noBorder, "no-border", false, "don't render the outer frame/border")
+	cmd.Flags().BoolVar(&standalone, "standalone", false, "disable quick-terminal hide/toggle behavior (for running outside a Kitty/Ghostty quick terminal)")
 	cmd.AddCommand(newLauncherReindexCmd(d))
 	return cmd
 }
@@ -210,6 +212,16 @@ func launcherHideTerminal(d deps) func() error {
 		_, err := d.runCommand("kitten", "quick-access-terminal", "--instance-group", "quick")
 		return err
 	}
+}
+
+// launcherHideTerminalFor returns launcherHideTerminal(d), or nil when
+// standalone is true so resetAndHide no-ops instead of hiding/toggling a
+// quick terminal.
+func launcherHideTerminalFor(d deps, standalone bool) func() error {
+	if standalone {
+		return nil
+	}
+	return launcherHideTerminal(d)
 }
 
 func newLauncherReindexCmd(d deps) *cobra.Command {
