@@ -16,7 +16,7 @@ func loadedCache(t *testing.T, rates map[string]float64) *currency.Cache {
 	body, _ := json.Marshal(map[string]any{
 		"result":                "success",
 		"rates":                 rates,
-		"time_next_update_unix": int64(1<<40), // far future, never stale
+		"time_next_update_unix": int64(1 << 40), // far future, never stale
 	})
 	fetcher := func(string) ([]byte, error) { return body, nil }
 	c := currency.NewCache("", fetcher, nil)
@@ -35,6 +35,27 @@ func TestCalcProviderHint(t *testing.T) {
 	for _, q := range []string{"1000000", "1Password", "10cm", "1$", ""} {
 		if got := p.Hint(q); got != "" {
 			t.Errorf("Hint(%q) = %q, want \"\"", q, got)
+		}
+	}
+}
+
+// TestCalcProviderQuery_FractionUnit checks that CalcProvider suppresses its
+// "Invalid math expression" row for valid fraction/mixed-number unit input
+// (that's UnitsProvider's job), but still shows it for fraction input that's
+// malformed as both math and a unit.
+func TestCalcProviderQuery_FractionUnit(t *testing.T) {
+	p := launcher.CalcProvider{}
+
+	for _, q := range []string{"3/8 in", "1 1/4 in"} {
+		if got := p.Query(q); got != nil {
+			t.Errorf("Query(%q) = %v, want nil (suppressed for UnitsProvider)", q, got)
+		}
+	}
+
+	for _, q := range []string{"3/ in", "/8 in", "3/0 in"} {
+		got := p.Query(q)
+		if len(got) != 1 || got[0].Title != "Invalid math expression" {
+			t.Errorf("Query(%q) = %v, want a single \"Invalid math expression\" row", q, got)
 		}
 	}
 }

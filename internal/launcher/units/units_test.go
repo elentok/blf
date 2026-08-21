@@ -139,6 +139,19 @@ func TestParseInput(t *testing.T) {
 		{"10", 0, "", false},
 		{"", 0, "", false},
 		{"10KM", 10, "km", true}, // symbols are lowercased
+		{"3/8 in", 0.375, "in", true},
+		{"1 1/4 in", 1.25, "in", true},
+		{"3/4 inch", 0.75, "inch", true},
+		{"3/4 inches", 0.75, "inches", true},
+		{"1/4in", 0.25, "in", true},      // no space before unit
+		{"1   1/4 in", 1.25, "in", true}, // extra whitespace in mixed number
+		{"-3/8 in", -0.375, "in", true},
+		{"3/8", 0, "", false},      // no unit attached
+		{"3/ in", 0, "", false},    // missing denominator
+		{"/8 in", 0, "", false},    // missing numerator
+		{"3/0 in", 0, "", false},   // zero denominator
+		{"3/4/5 in", 0, "", false}, // second slash
+		{"3/xyz", 0, "", false},    // denominator isn't digits
 	}
 
 	for _, tc := range tests {

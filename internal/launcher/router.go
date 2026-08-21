@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/elentok/blf/internal/launcher/units"
 )
 
 // QueryType classifies a launcher input string.
@@ -195,30 +197,12 @@ func digitCount(s string) int {
 }
 
 // matchesNumberUnit reports whether s looks like a number followed by a unit
-// token (letters or known currency/degree symbols), e.g. "10cm", "123$", "5kg".
+// token (letters or known currency/degree symbols), e.g. "10cm", "123$",
+// "5kg", "3/8 in", "1 1/4 in". Uses units.ScanQuantity so this agrees with
+// units.ParseInput on what counts as unit-shaped input.
 func matchesNumberUnit(s string) bool {
-	i := 0
-	if i < len(s) && s[i] == '-' {
-		i++
-	}
-	if i >= len(s) || !(s[i] >= '0' && s[i] <= '9') {
-		return false
-	}
-	hasDigit := false
-	hasDot := false
-	for i < len(s) {
-		c := s[i]
-		if c >= '0' && c <= '9' {
-			hasDigit = true
-			i++
-		} else if c == '.' && !hasDot {
-			hasDot = true
-			i++
-		} else {
-			break
-		}
-	}
-	if !hasDigit {
+	_, i, ok := units.ScanQuantity(s)
+	if !ok {
 		return false
 	}
 	// skip optional whitespace

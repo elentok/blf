@@ -89,42 +89,18 @@ func (r *Registry) Convert(value float64, from *Unit, group *Group) []Conversion
 }
 
 // ParseInput extracts a float64 value and a unit symbol from strings like
-// "10kg", "5 km", "50$". Returns ok=false if the input does not match.
+// "10kg", "5 km", "50$", "3/8 in", "1 1/4 in". Returns ok=false if the input
+// does not match.
 func ParseInput(input string) (value float64, symbol string, ok bool) {
 	s := strings.TrimSpace(input)
 	if s == "" {
 		return 0, "", false
 	}
 
-	i := 0
-	if i < len(s) && s[i] == '-' {
-		i++
-	}
-	if i >= len(s) {
+	value, j, matched := ScanQuantity(s)
+	if !matched {
 		return 0, "", false
 	}
-
-	numStart := 0
-	hasDot := false
-	hasDigit := false
-	j := i
-	for j < len(s) {
-		c := s[j]
-		if c >= '0' && c <= '9' {
-			hasDigit = true
-			j++
-		} else if c == '.' && !hasDot {
-			hasDot = true
-			j++
-		} else {
-			break
-		}
-	}
-	if !hasDigit {
-		return 0, "", false
-	}
-
-	numStr := s[numStart:j]
 
 	// skip optional whitespace between number and unit
 	for j < len(s) && s[j] == ' ' {
@@ -144,11 +120,96 @@ func ParseInput(input string) (value float64, symbol string, ok bool) {
 		return 0, "", false
 	}
 
-	f, err := strconv.ParseFloat(numStr, 64)
-	if err != nil {
-		return 0, "", false
+	return value, sym, true
+}
+
+// ScanQuantity parses a decimal, fraction (3/8), or mixed-number (1 1/4)
+// quantity at the start of s, optionally prefixed with '-'. It returns the
+// parsed value and the index immediately following it. ok is false if s
+// does not start with a well-formed quantity (e.g. missing numerator or
+// denominator, denominator of zero, or a stray second '/').
+//
+// Shared between ParseInput and router.matchesNumberUnit so the two
+// functions agree on what counts as unit-shaped input.
+func ScanQuantity(s string) (value float64, end int, ok bool) {
+	neg := false
+	i := 0
+	if i < len(s) && s[i] == '-' {
+		neg = true
+		i++
 	}
-	return f, sym, true
+	if i >= len(s) || s[i] < '0' || s[i] > '9' {
+		return 0, 0, false
+	}
+
+	digitsStart := i
+	i = scanDigits(s, i)
+	intPart := s[digitsStart:i]
+
+	var val float64
+	switch {
+	case i < len(s) && s[i] == '/':
+		// bare fraction: intPart/denominator
+		i++
+		denStart := i
+		i = scanDigits(s, i)
+		if i == denStart || (i < len(s) && s[i] == '/') {
+			return 0, 0, false
+		}
+		num, _ := strconv.ParseFloat(intPart, 64)
+		den, _ := strconv.ParseFloat(s[denStart:i], 64)
+		if den == 0 {
+			return 0, 0, false
+		}
+		val = num / den
+
+	default:
+		// mixed number: <ws>+ <digits> '/' <digits>
+		wsEnd := i
+		for wsEnd < len(s) && s[wsEnd] == ' ' {
+			wsEnd++
+		}
+		fracStart := wsEnd
+		fracEnd := scanDigits(s, fracStart)
+		if wsEnd > i && fracEnd > fracStart && fracEnd < len(s) && s[fracEnd] == '/' {
+			denStart := fracEnd + 1
+			denEnd := scanDigits(s, denStart)
+			if denEnd == denStart || (denEnd < len(s) && s[denEnd] == '/') {
+				return 0, 0, false
+			}
+			whole, _ := strconv.ParseFloat(intPart, 64)
+			num, _ := strconv.ParseFloat(s[fracStart:fracEnd], 64)
+			den, _ := strconv.ParseFloat(s[denStart:denEnd], 64)
+			if den == 0 {
+				return 0, 0, false
+			}
+			val = whole + num/den
+			i = denEnd
+		} else {
+			// plain decimal, possibly with a fractional part
+			if i < len(s) && s[i] == '.' {
+				i++
+				i = scanDigits(s, i)
+			}
+			f, err := strconv.ParseFloat(s[digitsStart:i], 64)
+			if err != nil {
+				return 0, 0, false
+			}
+			val = f
+		}
+	}
+
+	if neg {
+		val = -val
+	}
+	return val, i, true
+}
+
+func scanDigits(s string, i int) int {
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return i
 }
 
 func isSymbolChar(c rune) bool {

@@ -2,6 +2,8 @@ package launcher
 
 import (
 	"testing"
+
+	"github.com/elentok/blf/internal/launcher/units"
 )
 
 func TestClassify(t *testing.T) {
@@ -35,7 +37,7 @@ func TestClassify(t *testing.T) {
 		{"2^8", Computational},
 		{"10%", Computational},
 		{"200+10%", Computational},
-		{"-1+2", Computational},  // unary minus then binary plus
+		{"-1+2", Computational}, // unary minus then binary plus
 
 		// <number><unit> → Computational
 		{"10cm", Computational},
@@ -43,6 +45,10 @@ func TestClassify(t *testing.T) {
 		{"5.5kg", Computational},
 		{"100m", Computational},
 		{"72°F", Computational},
+		{"3/8 in", Computational},
+		{"1 1/4 in", Computational},
+		{"3/ in", Computational},  // malformed fraction; still routed here via the bare '/' operator
+		{"3/0 in", Computational}, // zero denominator; same as above
 
 		// function call → Computational
 		{"sqrt(2)", Computational},
@@ -61,6 +67,27 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+// TestMatchesNumberUnitAgreesWithParseInput asserts matchesNumberUnit and
+// units.ParseInput agree on which fraction/mixed-number shapes are
+// unit-shaped, since a mismatch reproduces the double-row bug this grammar
+// exists to prevent.
+func TestMatchesNumberUnitAgreesWithParseInput(t *testing.T) {
+	inputs := []string{
+		"10cm", "123$", "-5c", "3.5kg",
+		"3/8 in", "1 1/4 in", "3/4 inch", "1/4in", "1   1/4 in", "-3/8 in",
+		"3/8", "3/ in", "/8 in", "3/0 in", "3/4/5 in", "3/xyz",
+	}
+	for _, in := range inputs {
+		t.Run(in, func(t *testing.T) {
+			_, _, parseOk := units.ParseInput(in)
+			matchOk := matchesNumberUnit(in)
+			if parseOk != matchOk {
+				t.Errorf("matchesNumberUnit(%q) = %v, but ParseInput ok = %v", in, matchOk, parseOk)
+			}
+		})
+	}
+}
+
 func TestRankOrdering(t *testing.T) {
 	exact := Result{Title: "test", IsExactMatch: true, Weight: 1.0, FuzzyScore: 50}
 	prefix := Result{Title: "testing", IsPrefixMatch: true, Weight: 1.0, FuzzyScore: 80}
@@ -70,8 +97,8 @@ func TestRankOrdering(t *testing.T) {
 	lowFuzzy := Result{Title: "fuzzy-low", Weight: 1.0, FuzzyScore: 10}
 
 	tests := []struct {
-		name     string
-		input    []Result
+		name       string
+		input      []Result
 		wantTitles []string
 	}{
 		{
