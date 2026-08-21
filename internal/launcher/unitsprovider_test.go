@@ -1,6 +1,7 @@
 package launcher_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/elentok/blf/internal/launcher"
@@ -89,6 +90,131 @@ func TestUnitsProviderNonUnit(t *testing.T) {
 	results := p.Query("1+2")
 	if len(results) != 0 {
 		t.Errorf("'1+2' should return no results from UnitsProvider, got: %v", len(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_NearMarkApprox(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	// 1.6mm = 0.062992... inch, within 1/64" of 1/16 (0.0625)
+	results := p.Query("1.6mm")
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && strings.HasPrefix(r.Title, "0.062992") && strings.Contains(r.Title, "(~1/16 inch)") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected an inch result with '(~1/16 inch)' suffix, got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_ExactMark(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("9.525mm") // = 0.375 inch exactly
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && r.Title == "0.375 inch (3/8 inch)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected '0.375 inch (3/8 inch)', got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_Range(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("10.16mm") // = 0.4 inch exactly, between 3/8 and 7/16
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && r.Title == "0.4 inch (between 3/8 and 7/16 inch)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected '0.4 inch (between 3/8 and 7/16 inch)', got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_Negative(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("-10.16mm")
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && r.Title == "-0.4 inch (between -7/16 and -3/8 inch)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected '-0.4 inch (between -7/16 and -3/8 inch)', got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_MixedNumber(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("31.75mm") // = 1.25 inch exactly => 1 1/4
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && r.Title == "1.25 inch (1 1/4 inch)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected '1.25 inch (1 1/4 inch)', got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_Zero(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("0mm")
+	found := false
+	for _, r := range results {
+		if r.Source == "units" && r.Title == "0 inch (0 inch)" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected '0 inch (0 inch)', got: %v", titlesOf(results))
+	}
+}
+
+func TestUnitsProviderInchFraction_AreaAndVolumeUnaffected(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+
+	results := p.Query("1sqm")
+	for _, r := range results {
+		if strings.Contains(r.Title, "in²") && strings.Contains(r.Title, "(") {
+			t.Errorf("expected no fractional suffix on in² result, got: %v", r.Title)
+		}
+	}
+
+	results = p.Query("1cbm")
+	for _, r := range results {
+		if strings.Contains(r.Title, "in³") && strings.Contains(r.Title, "(") {
+			t.Errorf("expected no fractional suffix on in³ result, got: %v", r.Title)
+		}
+	}
+}
+
+func TestUnitsProviderInchFraction_OtherLengthUnitsUnaffected(t *testing.T) {
+	p := launcher.NewUnitsProvider(units.NewBuiltinRegistry(), nil, nil)
+	results := p.Query("10.16mm")
+	for _, r := range results {
+		if r.Source != "units" {
+			continue
+		}
+		if strings.HasSuffix(r.Title, " millimeter") || strings.Contains(r.Title, " meter") ||
+			strings.Contains(r.Title, " centimeter") || strings.Contains(r.Title, " foot") {
+			if strings.Contains(r.Title, "(") {
+				t.Errorf("expected no fractional suffix on non-inch result, got: %v", r.Title)
+			}
+		}
 	}
 }
 
