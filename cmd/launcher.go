@@ -181,6 +181,7 @@ func newLauncherCmd(d deps) *cobra.Command {
 				HideDelay:   50 * time.Millisecond,
 				UseNerdFont: true,
 				NoBorder:    noBorder,
+				Version:     getVersion(),
 			})
 
 			p := tea.NewProgram(m)

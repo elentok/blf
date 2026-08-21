@@ -48,6 +48,7 @@ type ModelConfig struct {
 	AIRunsStore      *ai.Store                         // optional; nil disables the ai runs store
 	AIRunsStorePath  string                            // path to persist ai runs; empty skips persistence
 	AIProvider       *AIProvider                       // optional; nil disables ai rows in recent items
+	Version          string                            // shown in the help page title; empty renders no version
 }
 
 // inputProxy mirrors the widget query via a shared *string pointer so tests
@@ -900,8 +901,13 @@ func (m Model) renderHelp() string {
 		}
 	}
 
+	title := "blf launcher — help"
+	if m.cfg.Version != "" {
+		title = "blf launcher " + m.cfg.Version + " — help"
+	}
+
 	var sb strings.Builder
-	sb.WriteString(helpTitleStyle.Render("blf launcher — help") + "\n\n")
+	sb.WriteString(helpTitleStyle.Render(title) + "\n\n")
 	for _, b := range bindings {
 		pad := strings.Repeat(" ", maxKeyWidth-lipgloss.Width(b.key))
 		key := helpKeyStyle.Render(b.key) + pad
