@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [v0.7.5] - 2026-08-23
+
+- Removed the deprecated `blf claude statusline`/`blf claude history` commands (superseded by
+  `gx claude statusline`)
+- Fixed calendar week numbering to align correctly across month boundaries
+
 ## [v0.7.4] - 2026-08-22
 
 - **`blf launcher`** - new `--standalone` flag disables quick-terminal hide/toggle behavior, for
