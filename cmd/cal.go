@@ -75,8 +75,8 @@ func addCalMonths(month calMonth, delta int) calMonth {
 }
 
 func buildCalWeeks(start time.Time) []calWeek {
-	week := calWeek{number: usWeekNumber(start.AddDate(0, 0, 2))}
 	date := startOfCalWeek(start)
+	week := calWeek{number: usWeekNumber(date)}
 	weeks := make([]calWeek, 0, 6)
 
 	for date.Before(start) {
