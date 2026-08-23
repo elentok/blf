@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -384,54 +383,3 @@ func TestExecuteRoutesNPMScripts(t *testing.T) {
 	}
 }
 
-func TestExecuteRoutesClaudeStatusLine(t *testing.T) {
-	out := &strings.Builder{}
-	d := deps{
-		openURL:      func(string) error { return nil },
-		copyText:     func(string) error { return nil },
-		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func(bool, string) error { return nil },
-		fileExists:   func(string) (bool, error) { return false, nil },
-		readFile:     func(string) ([]byte, error) { return nil, nil },
-		stdout:       out,
-		stderr:       &strings.Builder{},
-		stdin:        strings.NewReader(`{"context_window":{"total_input_tokens":42,"used_percentage":20},"rate_limits":{"five_hour":{"used_percentage":5},"seven_day":{"used_percentage":10}},"model":{"display_name":"Claude"}}`),
-	}
-
-	err := execute([]string{"claude", "statusline"}, d)
-	if err != nil {
-		t.Fatalf("execute returned error: %v", err)
-	}
-	if !strings.Contains(out.String(), "42") {
-		t.Fatalf("claude-statusline output = %q", out.String())
-	}
-}
-
-func TestExecuteRoutesClaudeStatusLineInstall(t *testing.T) {
-	out := &strings.Builder{}
-	var wrotePath string
-	d := deps{
-		openURL:      func(string) error { return nil },
-		copyText:     func(string) error { return nil },
-		runTmuxLinks: func(string) error { return nil },
-		runTargets:   func(bool, string) error { return nil },
-		fileExists:   func(string) (bool, error) { return false, nil },
-		readFile:     func(string) ([]byte, error) { return nil, os.ErrNotExist },
-		writeFile: func(path string, data []byte, _ os.FileMode) error {
-			wrotePath = path
-			return nil
-		},
-		mkdirAll:    func(string, os.FileMode) error { return nil },
-		userHomeDir: func() (string, error) { return "/home/me", nil },
-		stdout:      out,
-		stderr:      &strings.Builder{},
-	}
-
-	err := execute([]string{"claude", "statusline", "--install"}, d)
-	if err != nil {
-		t.Fatalf("execute returned error: %v", err)
-	}
-	if wrotePath != "/home/me/.claude/settings.json" {
-		t.Fatalf("wrote to %q, want /home/me/.claude/settings.json", wrotePath)
-	}
-}

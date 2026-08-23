@@ -70,8 +70,6 @@ Start a new shell for completions to take effect.
 - `blf kitty sessions`: list session files from `~/.local/share/kitty/sessions/`, preview their tab/window structure, and switch to the selected session.
 - `blf kitty delete-session`: open a Kitty overlay, pick a session file, and delete it.
 - `blf kitty doctor`: print Kitty session-debugging info including environment, session directory contents, and session match counts.
-- `blf claude statusline [--silent] [--demo]`: render Claude status JSON from stdin as a compact status line. `--install` writes the command into `~/.claude/settings.json`'s `statusLine` entry.
-- `blf claude history`: TUI for browsing Claude Code conversation history — list projects, drill into a project's conversations, grep across transcripts, export to markdown, and resume a session.
 - `blf beads`: TUI for browsing and triaging Beads issues in the current project.
 - `blf power start`: start a background daemon that samples CPU/GPU/combined power, thermal pressure, top-10 per-process energy impact (`powermetrics`) and battery state (`ioreg`) every 30 seconds, writing one JSONL line per tick to `<XDG_STATE_HOME>/blf/power/samples-YYYY-MM-DD.jsonl` (14-day rolling retention). Requires a one-time sudoers setup (see below). Errors if already running.
 - `blf power stop`: stop the daemon (SIGTERM, escalating to SIGKILL after 5s). Prints `blf power: not running` (exit 0) if it isn't running.
@@ -149,13 +147,6 @@ bind-key t run 'blf tmux targets'
 map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 ```
 
-`claude history` behavior:
-
-- Opens on a fuzzy-filterable list of Claude Code projects (`~/.claude/projects`); type to filter, ↑/↓ to move, Enter to drill into a project's conversations, `ctrl+f` to jump straight to grep, Esc to quit.
-- The conversations page lists each project's sessions by title (falling back to the session ID) with relative and absolute last-accessed times; Enter exports the conversation to markdown and opens it in `$EDITOR` (falling back to `nvim`/`vi`), `ctrl+r` resumes it with `claude --resume <session-id>`, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
-- `ctrl+f` opens transcript grep search (ripgrep-backed) with a live preview pane showing the matched conversation's title and session ID; `ctrl+g` toggles between project and global scope, Enter opens the matched conversation at that line, `ctrl+r` resumes its session, `ctrl+y` copies the session ID to the clipboard, Esc goes back.
-- Filtering and search use the shared `fuzzyfinder` widget, including multi-word AND matching (e.g. `one two` matches rows containing both words in any order) and match highlighting.
-
 `blf beads` behavior:
 
 - Opens a project-contextual TUI over the local `.beads` database via the `bd` CLI; run it from a repo with Beads initialized, or pass `-C/--dir` to target another project.
@@ -179,16 +170,6 @@ map kitty_mod+e>a launch --type=tab --cwd=current fish -c "blf kitty goto-agent"
 
 - Runs `kitty @ ls` and renders a readable tree grouped by OS window, tab, and window.
 - Highlights active/last-focused state and includes per-window command line and foreground process when available.
-
-`claude statusline` behavior:
-
-- Reads JSON from stdin and renders model, tokens, context usage, and 5h/weekly usage in a single line.
-- Context usage is shown as a progress bar with thresholds: `0-20%` green, `21-40%` orange, `41%+` red.
-- Token counts over `1000` are compacted using `k` notation (`1234 -> 1.2k`).
-- Missing/invalid fields render as `"<field> missing/invalid"` (or include raw invalid value), and malformed JSON prints an error and exits non-zero.
-- `--silent` suppresses missing/invalid field segments.
-- `--demo` ignores stdin and prints three sample lines (`10%`, `30%`, `60%`) for quick theme/style previews.
-- `--install` idempotently writes `{"type": "command", "command": "blf claude statusline"}` into `~/.claude/settings.json`'s `statusLine` entry.
 
 kitty binding example:
 
