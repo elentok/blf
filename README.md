@@ -83,6 +83,12 @@ Start a new shell for completions to take effect.
 - `blf version`: print the current `blf` version.
 - `blf launcher`: Terminal launcher TUI (math, unit/currency conversion, app launch, scripts). Designed to run as a long-lived process inside Kitty's quick-access terminal; Cmd+2 toggles it into view.
 - `blf launcher reindex`: rebuild the application index (`~/.cache/blf/apps.json`) manually. Run this on first use or after installing new apps.
+- `blf tab-title [cmd]`: print the tab title for the current directory and command, for shells without a herdr setup (see `blf herdr` below for herdr's own sync).
+- `blf herdr install-plugin` / `uninstall-plugin`: write and link, or unlink and delete, blf's herdr plugin manifest.
+- `blf herdr sync-tab-title [--cmd <command>|--prompt]`: sync the herdr tab label from its active pane; `--cmd`/`--prompt` select fish mode (see the fish snippet below), no flags selects event mode.
+- `blf herdr doctor [--json]`: read-only check of blf's herdr integration (socket, plugin link, manifest, failed hooks). `--json` prints the report as JSON.
+- `blf herdr debug [on|off]`: show, or turn on/off, herdr sync debug logging.
+- `blf herdr find-workspace <label>` / `goto-workspace <label> [--create] [--cwd <path>]`: find or focus a workspace by label (case-insensitive, whole-label match); `goto-workspace --create` creates it if missing, `--cwd` sets its starting directory.
 
 `tmux links` behavior:
 
@@ -337,6 +343,35 @@ name  = "billing"
 icon  = "󰆔"
 value = "456 Other Ave"
 ```
+
+`blf herdr` behavior (for a herdr user without David's personal dotfiles):
+
+- herdr's tab labels are driven by a fish snippet, not blf alone:
+  - `fish_title` calls `blf tab-title "$argv[1]"`.
+  - When `HERDR_ENV` is set at shell start, `fish_preexec` and `fish_prompt` hooks run
+    `blf herdr sync-tab-title --cmd "$argv[1]" &; disown` and `blf herdr sync-tab-title --prompt &; disown`
+    respectively, in the background, with stderr sent to `/dev/null` (errors show up only in
+    `blf herdr debug on`'s log).
+- `blf herdr install-plugin` links blf's plugin manifest with the herdr server; run it once, and
+  again after upgrading blf. `blf herdr uninstall-plugin` reverses it.
+- `blf herdr doctor` is read-only: it reports the herdr server version, socket/plugin/manifest
+  checks, a dry-run table of every tab's label (whether `sync-tab-title` would rename it), and any
+  recently failed plugin hook runs. Add `--json` for a machine-readable report.
+- `blf herdr debug on` / `off` turns herdr sync debug logging on or off; `blf herdr debug` with no
+  argument prints the current state and the log path.
+- A `goto-workspace` key binding focuses a workspace by label, for example in herdr's config:
+  ```toml
+  [[binding]]
+  key = "prefix+n"
+  type = "shell"
+  command = "blf herdr goto-workspace notes"
+  ```
+  Use `blf herdr find-workspace <label>` to print a matching workspace's bare id instead (e.g. for
+  `herdr workspace focus (blf herdr find-workspace notes)`).
+- Required herdr setting: `prompt_new_tab_name = false`, so herdr doesn't ask for a tab name on its
+  own.
+- The herdr server must run **0.9.3 or later**. Restart the herdr server after upgrading it for the
+  new version to take effect.
 
 Data paths:
 
