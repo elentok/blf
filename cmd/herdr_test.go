@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -9,16 +10,20 @@ import (
 )
 
 type fakeHerdrClient struct {
-	layout      herdr.LayoutInfo
-	layoutErr   error
-	pane        herdr.PaneInfo
-	paneErr     error
-	tab         herdr.TabInfo
-	tabErr      error
-	renameErr   error
-	layoutCalls []string
-	paneCalls   []string
-	renamed     []struct{ tabID, label string }
+	layout        herdr.LayoutInfo
+	layoutErr     error
+	pane          herdr.PaneInfo
+	paneErr       error
+	tab           herdr.TabInfo
+	tabErr        error
+	renameErr     error
+	renameErrFor  map[string]error
+	snapshot      herdr.SnapshotResult
+	snapshotErr   error
+	layoutCalls   []string
+	paneCalls     []string
+	snapshotCalls int
+	renamed       []struct{ tabID, label string }
 
 	workspaces    []herdr.WorkspaceInfo
 	listErr       error
@@ -46,11 +51,17 @@ func (f *fakeHerdrClient) TabGet(tabID string) (herdr.TabInfo, error) { return f
 
 func (f *fakeHerdrClient) TabRename(tabID, label string) error {
 	f.renamed = append(f.renamed, struct{ tabID, label string }{tabID, label})
+	if f.renameErrFor != nil {
+		if err, ok := f.renameErrFor[tabID]; ok {
+			return err
+		}
+	}
 	return f.renameErr
 }
 
 func (f *fakeHerdrClient) SessionSnapshot() (herdr.SnapshotResult, error) {
-	return herdr.SnapshotResult{}, nil
+	f.snapshotCalls++
+	return f.snapshot, f.snapshotErr
 }
 
 func (f *fakeHerdrClient) WorkspaceList() ([]herdr.WorkspaceInfo, error) {
@@ -78,14 +89,24 @@ func (f *fakeHerdrClient) WorkspaceCreate(label, cwd string) (herdr.WorkspaceInf
 }
 
 func newHerdrSyncDeps(client *fakeHerdrClient, env map[string]string) deps {
+	return newHerdrSyncDepsWithStderr(client, env, &bytes.Buffer{})
+}
+
+func newHerdrSyncDepsWithStderr(client *fakeHerdrClient, env map[string]string, stderr *bytes.Buffer) deps {
 	return deps{
+		stderr: stderr,
 		lookupEnv: func(key string) (string, bool) {
 			v, ok := env[key]
 			return v, ok
 		},
 		userHomeDir:    func() (string, error) { return "/home/david", nil },
 		newHerdrClient: func(string) herdr.Client { return client },
-		herdrLabel:     func(herdr.PaneInfo, string) string { return "computed-label" },
+		herdrLabel: func(pane herdr.PaneInfo, _ string) string {
+			if pane.Label != "" {
+				return pane.Label
+			}
+			return "computed-label"
+		},
 	}
 }
 
@@ -185,19 +206,123 @@ func TestRunHerdrSyncTabTitleSilentOutsideHerdr(t *testing.T) {
 	}
 }
 
-func TestRunHerdrSyncTabTitleNoTabIDIsNoOp(t *testing.T) {
-	client := &fakeHerdrClient{}
-	env := map[string]string{
+func noTabIDEnv() map[string]string {
+	return map[string]string{
 		"HERDR_ENV":         "1",
 		"HERDR_SOCKET_PATH": "/tmp/herdr.sock",
 	}
-	d := newHerdrSyncDeps(client, env)
+}
+
+func TestRunHerdrSyncTabTitleNoTabIDSyncsEveryTabFromSnapshot(t *testing.T) {
+	client := &fakeHerdrClient{
+		snapshot: herdr.SnapshotResult{
+			Tabs: []herdr.TabInfo{
+				{TabID: "tab-1", Label: "old-label"},
+				{TabID: "tab-2", Label: "same-label"},
+			},
+			Panes: []herdr.PaneInfo{
+				{PaneID: "pane-1", Label: "new-label"},
+				{PaneID: "pane-2", Label: "same-label"},
+			},
+			Layouts: []herdr.LayoutInfo{
+				{TabID: "tab-1", FocusedPaneID: "pane-1"},
+				{TabID: "tab-2", FocusedPaneID: "pane-2"},
+			},
+		},
+	}
+	d := newHerdrSyncDeps(client, noTabIDEnv())
 
 	if err := runHerdrSyncTabTitle(d); err != nil {
 		t.Fatalf("runHerdrSyncTabTitle returned error: %v", err)
 	}
-	if len(client.layoutCalls) != 0 {
-		t.Errorf("layoutCalls = %v, want no herdr calls when HERDR_TAB_ID is unset", client.layoutCalls)
+
+	if client.snapshotCalls != 1 {
+		t.Errorf("snapshotCalls = %d, want 1", client.snapshotCalls)
+	}
+	if len(client.renamed) != 1 || client.renamed[0] != (struct{ tabID, label string }{"tab-1", "new-label"}) {
+		t.Errorf("renamed = %+v, want one rename of tab-1 to new-label", client.renamed)
+	}
+}
+
+func TestRunHerdrSyncTabTitleOneFailedTabDoesNotStopOthers(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	client := &fakeHerdrClient{
+		snapshot: herdr.SnapshotResult{
+			Tabs: []herdr.TabInfo{
+				{TabID: "tab-1", Label: "old-label"},
+				{TabID: "tab-2", Label: "old-label"},
+			},
+			Panes: []herdr.PaneInfo{
+				{PaneID: "pane-1", Label: "new-label"},
+				{PaneID: "pane-2", Label: "new-label"},
+			},
+			Layouts: []herdr.LayoutInfo{
+				{TabID: "tab-1", FocusedPaneID: "pane-1"},
+				{TabID: "tab-2", FocusedPaneID: "pane-2"},
+			},
+		},
+		renameErrFor: map[string]error{"tab-1": errors.New("rename failed")},
+	}
+	d := newHerdrSyncDepsWithStderr(client, noTabIDEnv(), stderr)
+
+	err := runHerdrSyncTabTitle(d)
+	if err == nil {
+		t.Fatal("runHerdrSyncTabTitle returned nil error, want an error (exit 1)")
+	}
+
+	if len(client.renamed) != 2 {
+		t.Errorf("renamed = %+v, want both tab-1 and tab-2 attempted", client.renamed)
+	}
+
+	lines := strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n")
+	if len(lines) != 1 {
+		t.Errorf("stderr = %q, want exactly one line for the one failed tab", stderr.String())
+	}
+}
+
+func TestRunHerdrSyncTabTitleMissingLayoutIsOneStderrLineAndOtherTabsStillRun(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	client := &fakeHerdrClient{
+		snapshot: herdr.SnapshotResult{
+			Tabs: []herdr.TabInfo{
+				{TabID: "tab-1", Label: "old-label"},
+				{TabID: "tab-2", Label: "old-label"},
+			},
+			Panes: []herdr.PaneInfo{
+				{PaneID: "pane-2", Label: "new-label"},
+			},
+			Layouts: []herdr.LayoutInfo{
+				{TabID: "tab-2", FocusedPaneID: "pane-2"},
+			},
+		},
+	}
+	d := newHerdrSyncDepsWithStderr(client, noTabIDEnv(), stderr)
+
+	err := runHerdrSyncTabTitle(d)
+	if err == nil {
+		t.Fatal("runHerdrSyncTabTitle returned nil error, want an error (exit 1)")
+	}
+
+	if len(client.renamed) != 1 || client.renamed[0] != (struct{ tabID, label string }{"tab-2", "new-label"}) {
+		t.Errorf("renamed = %+v, want tab-2 still renamed despite tab-1 missing a layout", client.renamed)
+	}
+
+	lines := strings.Split(strings.TrimRight(stderr.String(), "\n"), "\n")
+	if len(lines) != 1 {
+		t.Errorf("stderr = %q, want exactly one line for the one failed tab", stderr.String())
+	}
+}
+
+func TestRunHerdrSyncTabTitleSnapshotErrorReturnsOneLineError(t *testing.T) {
+	client := &fakeHerdrClient{snapshotErr: errors.New("connection refused")}
+	d := newHerdrSyncDeps(client, noTabIDEnv())
+
+	err := runHerdrSyncTabTitle(d)
+	if err == nil {
+		t.Fatal("runHerdrSyncTabTitle returned nil error, want an error")
+	}
+	if strings.Contains(err.Error(), "\n") {
+		t.Errorf("error %q contains a newline, want one line", err.Error())
 	}
 }
 

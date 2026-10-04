@@ -1,12 +1,18 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/elentok/blf/internal/herdr"
+	"github.com/elentok/blf/internal/herdrsync"
 	"github.com/spf13/cobra"
 )
+
+// errTabsFailed signals that runHerdrSyncAllTabs already printed one stderr
+// line per failed tab; callers should exit 1 without printing anything else.
+var errTabsFailed = errors.New("")
 
 func newHerdrCmd(d deps) *cobra.Command {
 	herdrCmd := &cobra.Command{
@@ -33,10 +39,10 @@ func newHerdrSyncTabTitleCmd(d deps) *cobra.Command {
 	}
 }
 
-// runHerdrSyncTabTitle implements event mode: run by a herdr hook with
-// HERDR_TAB_ID set, it syncs that one tab's label from its active pane.
-// A full-session sync (no HERDR_TAB_ID, e.g. pane.closed or startup) is
-// ticket 04; until that lands, a missing tab id is a silent no-op here.
+// runHerdrSyncTabTitle implements event mode. Run by a herdr hook with
+// HERDR_TAB_ID set, it syncs that one tab's label from its active pane. With
+// no HERDR_TAB_ID (pane.closed, [[startup]]), it syncs every tab in the
+// session from one session.snapshot call.
 func runHerdrSyncTabTitle(d deps) error {
 	herdrEnv, _ := d.lookupEnv("HERDR_ENV")
 	socketPath, _ := d.lookupEnv("HERDR_SOCKET_PATH")
@@ -44,14 +50,19 @@ func runHerdrSyncTabTitle(d deps) error {
 		return nil
 	}
 
+	home, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: get home dir: %w", err)
+	}
+
+	client := d.newHerdrClient(socketPath)
+
 	tabID, _ := d.lookupEnv("HERDR_TAB_ID")
 	if tabID == "" {
-		return nil
+		return runHerdrSyncAllTabs(d, client, home)
 	}
 
 	paneID, _ := d.lookupEnv("HERDR_PANE_ID")
-
-	client := d.newHerdrClient(socketPath)
 
 	layout, err := client.PaneLayout(paneID)
 	if err != nil {
@@ -61,11 +72,6 @@ func runHerdrSyncTabTitle(d deps) error {
 	activePane, err := client.PaneGet(layout.FocusedPaneID)
 	if err != nil {
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
-	}
-
-	home, err := d.userHomeDir()
-	if err != nil {
-		return fmt.Errorf("herdr sync-tab-title: get home dir: %w", err)
 	}
 
 	label := d.herdrLabel(activePane, home)
@@ -205,4 +211,39 @@ func runGotoWorkspace(label string, create bool, cwd string, d deps) error {
 	}
 
 	return client.WorkspaceFocus(ws.WorkspaceID)
+}
+
+// runHerdrSyncAllTabs syncs every tab in the session from one
+// session.snapshot call, using herdrsync.PlanTabs so the per-tab plan stays
+// the same one doctor's dry-run table (ticket 10) reuses. One failed tab
+// does not stop the others: each failure prints one stderr line, and the
+// run exits 1 if any tab failed.
+func runHerdrSyncAllTabs(d deps, client herdr.Client, home string) error {
+	snapshot, err := client.SessionSnapshot()
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: %w", err)
+	}
+
+	plans, planErrs := herdrsync.PlanTabs(snapshot, d.herdrLabel, home)
+
+	failed := false
+	for _, planErr := range planErrs {
+		fmt.Fprintln(d.stderr, "herdr sync-tab-title:", planErr)
+		failed = true
+	}
+
+	for _, plan := range plans {
+		if plan.NewLabel == "" || plan.NewLabel == plan.Label {
+			continue
+		}
+		if err := client.TabRename(plan.TabID, plan.NewLabel); err != nil {
+			fmt.Fprintf(d.stderr, "herdr sync-tab-title: tab %s: %v\n", plan.TabID, err)
+			failed = true
+		}
+	}
+
+	if failed {
+		return errTabsFailed
+	}
+	return nil
 }
