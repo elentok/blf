@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/elentok/blf/internal/herdr"
 )
@@ -107,7 +108,22 @@ func newHerdrSyncDepsWithStderr(client *fakeHerdrClient, env map[string]string, 
 			}
 			return "computed-label"
 		},
+		fileExists: func(string) (bool, error) { return false, nil },
+		now:        func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		appendFile: func(string, []byte) error { return nil },
 	}
+}
+
+// newHerdrSyncDepsWithLog is newHerdrSyncDeps with debug logging turned on:
+// fileExists reports the marker present and every append is captured in log.
+func newHerdrSyncDepsWithLog(client *fakeHerdrClient, env map[string]string, log *[]string) deps {
+	d := newHerdrSyncDeps(client, env)
+	d.fileExists = func(string) (bool, error) { return true, nil }
+	d.appendFile = func(_ string, data []byte) error {
+		*log = append(*log, string(data))
+		return nil
+	}
+	return d
 }
 
 func baseEnv() map[string]string {
@@ -336,6 +352,90 @@ func TestRunHerdrSyncTabTitleClientErrorReturnsOneLineError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "\n") {
 		t.Errorf("error %q contains a newline, want one line", err.Error())
+	}
+}
+
+func TestRunHerdrSyncTabTitleLogsRenameWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-active"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	var log []string
+	d := newHerdrSyncDepsWithLog(client, baseEnv(), &log)
+
+	if err := runHerdrSyncTabTitle(d); err != nil {
+		t.Fatalf("runHerdrSyncTabTitle returned error: %v", err)
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if len(fields) != 6 {
+		t.Fatalf("fields = %v, want 6 tab-separated fields", fields)
+	}
+	if fields[1] != "event" || fields[2] != "tab-1" || fields[3] != "old-label" || fields[4] != "computed-label" || fields[5] != "" {
+		t.Errorf("fields = %v, want [ts event tab-1 old-label computed-label \"\"]", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleLogsSkipWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-active"},
+		tab:    herdr.TabInfo{Label: "computed-label"},
+	}
+	var log []string
+	d := newHerdrSyncDepsWithLog(client, baseEnv(), &log)
+
+	if err := runHerdrSyncTabTitle(d); err != nil {
+		t.Fatalf("runHerdrSyncTabTitle returned error: %v", err)
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if fields[2] != "tab-1" || fields[3] != "computed-label" || fields[4] != "computed-label" || fields[5] == "" {
+		t.Errorf("fields = %v, want tab-1/computed-label/computed-label with a skip reason", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleLogsErrorWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{layoutErr: errors.New("connection refused")}
+	var log []string
+	d := newHerdrSyncDepsWithLog(client, baseEnv(), &log)
+
+	if err := runHerdrSyncTabTitle(d); err == nil {
+		t.Fatal("runHerdrSyncTabTitle returned nil error, want an error")
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if fields[2] != "tab-1" || fields[5] != "connection refused" {
+		t.Errorf("fields = %v, want tab-1 with the connection error as the last field", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleNoLogWhenDebugOff(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-active"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	var log []string
+	d := newHerdrSyncDeps(client, baseEnv())
+	d.appendFile = func(_ string, data []byte) error {
+		log = append(log, string(data))
+		return nil
+	}
+
+	if err := runHerdrSyncTabTitle(d); err != nil {
+		t.Fatalf("runHerdrSyncTabTitle returned error: %v", err)
+	}
+
+	if len(log) != 0 {
+		t.Errorf("log = %v, want no lines written when debug is off", log)
 	}
 }
 

@@ -25,6 +25,7 @@ func newHerdrCmd(d deps) *cobra.Command {
 		newHerdrSyncTabTitleCmd(d),
 		newFindWorkspaceCmd(d),
 		newGotoWorkspaceCmd(d),
+		newHerdrDebugCmd(d),
 	)
 
 	return herdrCmd
@@ -83,31 +84,39 @@ func runHerdrSyncTabTitle(d deps) error {
 
 	layout, err := client.PaneLayout(paneID)
 	if err != nil {
+		logHerdrSync(d, "event", tabID, "", "", err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
 
 	activePane, err := client.PaneGet(layout.FocusedPaneID)
 	if err != nil {
+		logHerdrSync(d, "event", tabID, "", "", err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
 
 	label := d.herdrLabel(activePane, home)
 	if label == "" {
+		logHerdrSync(d, "event", tabID, "", "", "empty label")
 		return nil
 	}
 
 	tab, err := client.TabGet(tabID)
 	if err != nil {
+		logHerdrSync(d, "event", tabID, "", label, err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
 
 	if tab.Label == label {
+		logHerdrSync(d, "event", tabID, tab.Label, label, "unchanged")
 		return nil
 	}
 
 	if err := client.TabRename(tabID, label); err != nil {
+		logHerdrSync(d, "event", tabID, tab.Label, label, err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
+
+	logHerdrSync(d, "event", tabID, tab.Label, label, "")
 
 	return nil
 }

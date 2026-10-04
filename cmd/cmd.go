@@ -35,6 +35,7 @@ type deps struct {
 	readFile                func(string) ([]byte, error)
 	readDir                 func(string) ([]os.DirEntry, error)
 	writeFile               func(string, []byte, os.FileMode) error
+	appendFile              func(string, []byte) error
 	mkdirAll                func(string, os.FileMode) error
 	executablePath          func() (string, error)
 	getwd                   func() (string, error)
@@ -78,6 +79,7 @@ func defaultDeps() deps {
 		readFile:       os.ReadFile,
 		readDir:        os.ReadDir,
 		writeFile:      os.WriteFile,
+		appendFile:     appendFile,
 		mkdirAll:       os.MkdirAll,
 		executablePath: os.Executable,
 		getwd:          os.Getwd,
@@ -248,6 +250,17 @@ func newVersionCmd(d deps) *cobra.Command {
 			return runVersion(d.stdout)
 		},
 	}
+}
+
+// appendFile appends data to path, creating it if needed.
+func appendFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
 }
 
 func fileExists(path string) (bool, error) {
