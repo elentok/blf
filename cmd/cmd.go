@@ -48,6 +48,7 @@ type deps struct {
 	newHerdrClient          func(socketPath string) herdr.Client
 	herdrLabel              func(pane herdr.PaneInfo, home string) string
 	dirExists               func(string) (bool, error)
+	isExecutable            func(string) bool
 }
 
 func defaultDeps() deps {
@@ -96,6 +97,7 @@ func defaultDeps() deps {
 		newHerdrClient: herdr.New,
 		herdrLabel:     herdrsync.Label,
 		dirExists:      dirExists,
+		isExecutable:   isExecutable,
 	}
 }
 
@@ -288,4 +290,12 @@ func dirExists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&0o111 != 0
 }

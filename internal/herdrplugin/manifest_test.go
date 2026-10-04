@@ -76,6 +76,58 @@ func TestResolveBlfPathNoBlfOnPath(t *testing.T) {
 	}
 }
 
+func TestExtractBlfPath(t *testing.T) {
+	manifest := GenerateManifest("/opt/homebrew/bin/blf")
+
+	got, err := ExtractBlfPath(manifest)
+	if err != nil {
+		t.Fatalf("ExtractBlfPath() returned error: %v", err)
+	}
+	if got != "/opt/homebrew/bin/blf" {
+		t.Errorf("ExtractBlfPath() = %q, want %q", got, "/opt/homebrew/bin/blf")
+	}
+}
+
+func TestExtractBlfPathUnescapes(t *testing.T) {
+	manifest := GenerateManifest(`C:\Program Files\blf"2".exe`)
+
+	got, err := ExtractBlfPath(manifest)
+	if err != nil {
+		t.Fatalf("ExtractBlfPath() returned error: %v", err)
+	}
+	want := `C:\Program Files\blf"2".exe`
+	if got != want {
+		t.Errorf("ExtractBlfPath() = %q, want %q", got, want)
+	}
+}
+
+func TestExtractBlfPathNoCommandArray(t *testing.T) {
+	if _, err := ExtractBlfPath("not a manifest"); err == nil {
+		t.Fatal("ExtractBlfPath() = nil error, want an error")
+	}
+}
+
+func TestVersionAtLeast(t *testing.T) {
+	tests := []struct {
+		v, min string
+		want   bool
+	}{
+		{"0.9.3", "0.9.3", true},
+		{"0.9.4", "0.9.3", true},
+		{"0.10.0", "0.9.3", true},
+		{"1.0.0", "0.9.3", true},
+		{"0.9.2", "0.9.3", false},
+		{"0.8.9", "0.9.3", false},
+		{"0.9", "0.9.3", false},
+		{"0.9.3", "0.9", true},
+	}
+	for _, tt := range tests {
+		if got := VersionAtLeast(tt.v, tt.min); got != tt.want {
+			t.Errorf("VersionAtLeast(%q, %q) = %v, want %v", tt.v, tt.min, got, tt.want)
+		}
+	}
+}
+
 func TestDirAndManifestPath(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "")
 	home := "/home/david"

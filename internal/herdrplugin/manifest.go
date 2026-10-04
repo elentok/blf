@@ -6,6 +6,8 @@ package herdrplugin
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/elentok/blf/internal/config"
@@ -99,4 +101,50 @@ func tomlString(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	return `"` + s + `"`
+}
+
+// commandPathPattern matches the first quoted element of a `command = [...]`
+// array, allowing escaped characters inside the string.
+var commandPathPattern = regexp.MustCompile(`command = \["((?:[^"\\]|\\.)*)"`)
+
+// ExtractBlfPath extracts the <blf> path embedded in an on-disk manifest's
+// `command = [...]` array (its first element), reversing tomlString's
+// escaping. Doctor's manifest check uses this to regenerate the "expected"
+// manifest with the same path already on disk, so a path-only difference
+// (e.g. a dev build against a Homebrew-installed manifest) doesn't fail the
+// check.
+func ExtractBlfPath(manifest string) (string, error) {
+	m := commandPathPattern.FindStringSubmatch(manifest)
+	if m == nil {
+		return "", fmt.Errorf("no command array found in manifest")
+	}
+	// Reverse tomlString's escaping order: unescape \" before \\.
+	path := strings.ReplaceAll(m[1], `\"`, `"`)
+	path = strings.ReplaceAll(path, `\\`, `\`)
+	return path, nil
+}
+
+// VersionAtLeast reports whether dotted-numeric version v is at least min,
+// comparing component by component (missing trailing components read as 0).
+// Kept simple on purpose: herdr versions don't need full semver (pre-release
+// tags, build metadata).
+func VersionAtLeast(v, min string) bool {
+	vParts := strings.Split(v, ".")
+	minParts := strings.Split(min, ".")
+	for i := 0; i < len(vParts) || i < len(minParts); i++ {
+		vn := versionPart(vParts, i)
+		minN := versionPart(minParts, i)
+		if vn != minN {
+			return vn > minN
+		}
+	}
+	return true
+}
+
+func versionPart(parts []string, i int) int {
+	if i >= len(parts) {
+		return 0
+	}
+	n, _ := strconv.Atoi(parts[i])
+	return n
 }
