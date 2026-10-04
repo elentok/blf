@@ -87,6 +87,12 @@ type SnapshotResult struct {
 	Layouts    []LayoutInfo
 }
 
+// PluginInfo is one plugin.list entry.
+type PluginInfo struct {
+	PluginID   string
+	PluginRoot string
+}
+
 // Client talks to a herdr server over its socket. Commands take it behind
 // their deps struct so tests can inject a fake instead of a real socket.
 type Client interface {
@@ -110,6 +116,9 @@ type Client interface {
 	// WorkspaceCreate creates a workspace with label and an optional starting
 	// directory (cwd == "" lets herdr pick its default), and focuses it.
 	WorkspaceCreate(label, cwd string) (WorkspaceInfo, error)
+	// PluginList lists plugins registered under pluginID. An empty result
+	// means the plugin isn't linked.
+	PluginList(pluginID string) ([]PluginInfo, error)
 }
 
 // New returns a Client that talks to the herdr server listening on

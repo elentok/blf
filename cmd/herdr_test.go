@@ -34,9 +34,21 @@ type fakeHerdrClient struct {
 	createCwd     string
 	createErr     error
 	createdResult herdr.WorkspaceInfo
+
+	ping          herdr.PingResult
+	pingErr       error
+	plugins       []herdr.PluginInfo
+	pluginListErr error
 }
 
-func (f *fakeHerdrClient) Ping() (herdr.PingResult, error) { return herdr.PingResult{}, nil }
+func (f *fakeHerdrClient) Ping() (herdr.PingResult, error) { return f.ping, f.pingErr }
+
+func (f *fakeHerdrClient) PluginList(pluginID string) ([]herdr.PluginInfo, error) {
+	if f.pluginListErr != nil {
+		return nil, f.pluginListErr
+	}
+	return f.plugins, nil
+}
 
 func (f *fakeHerdrClient) PaneLayout(paneID string) (herdr.LayoutInfo, error) {
 	f.layoutCalls = append(f.layoutCalls, paneID)

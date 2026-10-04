@@ -55,6 +55,10 @@ type workspaceCreateParams struct {
 	Focus bool   `json:"focus"`
 }
 
+type pluginIDParams struct {
+	PluginID string `json:"plugin_id"`
+}
+
 // notUnderstood is the exact error strict decoding returns for a reply
 // missing a field herdr always sends.
 func notUnderstood() error {
@@ -381,6 +385,21 @@ func decodeWorkspaceListEntry(m map[string]json.RawMessage) (WorkspaceInfo, erro
 	}, nil
 }
 
+// decodePluginInfo decodes one plugin.list entry. plugin_id is read
+// optionally since the spec only confirms plugin_root; plugin_root is the
+// field doctor's "plugin linked" check actually relies on.
+func decodePluginInfo(m map[string]json.RawMessage) (PluginInfo, error) {
+	pluginRoot, err := reqString(m, "plugin_root")
+	if err != nil {
+		return PluginInfo{}, err
+	}
+	pluginID, err := optString(m, "plugin_id")
+	if err != nil {
+		return PluginInfo{}, err
+	}
+	return PluginInfo{PluginID: pluginID, PluginRoot: pluginRoot}, nil
+}
+
 func decodeSnapshotResult(m map[string]json.RawMessage) (SnapshotResult, error) {
 	version, err := reqString(m, "version")
 	if err != nil {
@@ -577,4 +596,28 @@ func (c *socketClient) WorkspaceCreate(label, cwd string) (WorkspaceInfo, error)
 		return WorkspaceInfo{}, err
 	}
 	return decodeWorkspaceListEntry(obj)
+}
+
+func (c *socketClient) PluginList(pluginID string) ([]PluginInfo, error) {
+	m, err := c.do("plugin.list", pluginIDParams{PluginID: pluginID})
+	if err != nil {
+		return nil, err
+	}
+	raw, err := reqArray(m, "plugins")
+	if err != nil {
+		return nil, err
+	}
+	plugins := make([]PluginInfo, 0, len(raw))
+	for _, r := range raw {
+		obj, err := asObject(r)
+		if err != nil {
+			return nil, err
+		}
+		p, err := decodePluginInfo(obj)
+		if err != nil {
+			return nil, err
+		}
+		plugins = append(plugins, p)
+	}
+	return plugins, nil
 }
