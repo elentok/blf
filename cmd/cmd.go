@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -37,6 +38,8 @@ type deps struct {
 	writeFile               func(string, []byte, os.FileMode) error
 	appendFile              func(string, []byte) error
 	mkdirAll                func(string, os.FileMode) error
+	removeAll               func(string) error
+	evalSymlinks            func(string) (string, error)
 	executablePath          func() (string, error)
 	getwd                   func() (string, error)
 	userHomeDir             func() (string, error)
@@ -81,6 +84,8 @@ func defaultDeps() deps {
 		writeFile:      os.WriteFile,
 		appendFile:     appendFile,
 		mkdirAll:       os.MkdirAll,
+		removeAll:      os.RemoveAll,
+		evalSymlinks:   filepath.EvalSymlinks,
 		executablePath: os.Executable,
 		getwd:          os.Getwd,
 		userHomeDir:    os.UserHomeDir,

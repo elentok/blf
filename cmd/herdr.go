@@ -3,9 +3,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/elentok/blf/internal/herdr"
+	"github.com/elentok/blf/internal/herdrplugin"
 	"github.com/elentok/blf/internal/herdrsync"
 	"github.com/elentok/blf/internal/tabtitle"
 	"github.com/spf13/cobra"
@@ -23,6 +25,8 @@ func newHerdrCmd(d deps) *cobra.Command {
 
 	herdrCmd.AddCommand(
 		newHerdrSyncTabTitleCmd(d),
+		newInstallPluginCmd(d),
+		newUninstallPluginCmd(d),
 		newFindWorkspaceCmd(d),
 		newGotoWorkspaceCmd(d),
 		newHerdrDebugCmd(d),
@@ -119,6 +123,128 @@ func runHerdrSyncTabTitle(d deps) error {
 	logHerdrSync(d, "event", tabID, tab.Label, label, "")
 
 	return nil
+}
+
+func newInstallPluginCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "install-plugin",
+		Short: "Write and link blf's herdr plugin manifest",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInstallPlugin(d)
+		},
+	}
+}
+
+func newUninstallPluginCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "uninstall-plugin",
+		Short: "Unlink and delete blf's herdr plugin manifest",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUninstallPlugin(d)
+		},
+	}
+}
+
+// runInstallPlugin writes the generated manifest and links it with herdr,
+// always relinking (a re-run is the upgrade path). After linking, it runs
+// one full-session sync inside herdr, because [[startup]] doesn't fire on
+// link; outside herdr it skips that sync silently. (T04, R F04, F21)
+func runInstallPlugin(d deps) error {
+	if _, err := d.lookPath("herdr"); err != nil {
+		return fmt.Errorf("install-plugin: herdr not found on PATH")
+	}
+
+	blfPath, err := resolveBlfPath(d)
+	if err != nil {
+		return fmt.Errorf("install-plugin: %w", err)
+	}
+
+	home, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("install-plugin: get home dir: %w", err)
+	}
+
+	if err := d.mkdirAll(herdrplugin.Dir(home), 0o755); err != nil {
+		return fmt.Errorf("install-plugin: create plugin dir: %w", err)
+	}
+
+	manifest := herdrplugin.GenerateManifest(blfPath)
+	if err := d.writeFile(herdrplugin.ManifestPath(home), []byte(manifest), 0o644); err != nil {
+		return fmt.Errorf("install-plugin: write manifest: %w", err)
+	}
+
+	if _, err := d.runCommand("herdr", "plugin", "link", herdrplugin.Dir(home)); err != nil {
+		fmt.Fprintln(d.stderr, commandStderr(err))
+		return fmt.Errorf("install-plugin: link plugin")
+	}
+
+	socketPath, _ := d.lookupEnv("HERDR_SOCKET_PATH")
+	if socketPath == "" {
+		return nil
+	}
+
+	client := d.newHerdrClient(socketPath)
+	return runHerdrSyncAllTabs(d, client, home)
+}
+
+// runUninstallPlugin unlinks plugin blf and deletes the plugin folder.
+// `herdr plugin unlink` already succeeds when the plugin isn't linked, and
+// removing an already-absent folder is a no-op, so no special-casing is
+// needed for "already uninstalled". (T04, R F27)
+func runUninstallPlugin(d deps) error {
+	if _, err := d.lookPath("herdr"); err != nil {
+		return fmt.Errorf("uninstall-plugin: herdr not found on PATH")
+	}
+
+	if _, err := d.runCommand("herdr", "plugin", "unlink", herdrplugin.ID); err != nil {
+		fmt.Fprintln(d.stderr, commandStderr(err))
+		return fmt.Errorf("uninstall-plugin: unlink plugin")
+	}
+
+	home, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("uninstall-plugin: get home dir: %w", err)
+	}
+
+	if err := d.removeAll(herdrplugin.Dir(home)); err != nil {
+		return fmt.Errorf("uninstall-plugin: remove plugin dir: %w", err)
+	}
+
+	return nil
+}
+
+// resolveBlfPath implements the <blf> path rule: the PATH entry when its
+// resolved target matches the running binary (written unresolved), else the
+// running binary itself. (T06, R F16)
+func resolveBlfPath(d deps) (string, error) {
+	runningBinary, err := d.executablePath()
+	if err != nil {
+		return "", fmt.Errorf("get running binary path: %w", err)
+	}
+
+	pathEntry, err := d.lookPath("blf")
+	if err != nil {
+		return herdrplugin.ResolveBlfPath("", "", runningBinary), nil
+	}
+
+	resolved, err := d.evalSymlinks(pathEntry)
+	if err != nil {
+		return "", fmt.Errorf("resolve symlinks for %q: %w", pathEntry, err)
+	}
+
+	return herdrplugin.ResolveBlfPath(pathEntry, resolved, runningBinary), nil
+}
+
+// commandStderr returns the real stderr text from a failed deps.runCommand
+// call when it's available (populated by exec.Command.Output on an
+// *exec.ExitError), falling back to the error's own message otherwise, e.g.
+// a fake runner in tests.
+func commandStderr(err error) string {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+		return string(exitErr.Stderr)
+	}
+	return err.Error()
 }
 
 func newFindWorkspaceCmd(d deps) *cobra.Command {

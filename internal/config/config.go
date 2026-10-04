@@ -245,3 +245,11 @@ func XDGStateDir(homeDir string) string {
 	}
 	return filepath.Join(homeDir, ".local", "state", "blf")
 }
+
+// XDGDataDir returns the blf data directory (~/.local/share/blf or $XDG_DATA_HOME/blf).
+func XDGDataDir(homeDir string) string {
+	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
+		return filepath.Join(d, "blf")
+	}
+	return filepath.Join(homeDir, ".local", "share", "blf")
+}
