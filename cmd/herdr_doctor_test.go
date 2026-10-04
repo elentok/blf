@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/elentok/blf/internal/herdr"
 	"github.com/elentok/blf/internal/herdrplugin"
+	"github.com/elentok/blf/internal/herdrsync"
 )
 
 // doctorTestDeps returns a deps set up with real filesystem operations
@@ -25,10 +28,12 @@ func doctorTestDeps(t *testing.T, home string, client herdr.Client, env map[stri
 			return v, ok
 		},
 		lookPath:       func(string) (string, error) { return "", errors.New("blf not on PATH") },
+		runCommand:     func(string, ...string) ([]byte, error) { return nil, errors.New("herdr not on PATH") },
 		evalSymlinks:   func(path string) (string, error) { return path, nil },
 		executablePath: func() (string, error) { return filepath.Join(home, "blf"), nil },
 		userHomeDir:    func() (string, error) { return home, nil },
 		newHerdrClient: func(string) herdr.Client { return client },
+		herdrLabel:     herdrsync.Label,
 		readFile:       os.ReadFile,
 		writeFile:      os.WriteFile,
 		mkdirAll:       os.MkdirAll,
@@ -74,7 +79,7 @@ func TestRunHerdrDoctorAllPassExitsNil(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	if err := runHerdrDoctor(d); err != nil {
+	if err := runHerdrDoctor(d, false); err != nil {
 		t.Fatalf("runHerdrDoctor() = %v, want nil; output:\n%s", err, out)
 	}
 	if strings.Contains(out.String(), "[FAIL]") {
@@ -91,7 +96,7 @@ func TestRunHerdrDoctorVersionTooOldFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -110,7 +115,7 @@ func TestRunHerdrDoctorMissingSnapshotFieldFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -129,7 +134,7 @@ func TestRunHerdrDoctorMissingWorkspaceFieldFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -147,7 +152,7 @@ func TestRunHerdrDoctorPluginNotLinkedFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -171,7 +176,7 @@ func TestRunHerdrDoctorManifestMismatchFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -204,7 +209,7 @@ func TestRunHerdrDoctorManifestDifferingOnlyInBlfPathPasses(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	if err := runHerdrDoctor(d); err != nil {
+	if err := runHerdrDoctor(d, false); err != nil {
 		t.Fatalf("runHerdrDoctor() = %v, want nil (blf path excluded from manifest comparison); output:\n%s", err, out)
 	}
 }
@@ -230,7 +235,7 @@ func TestRunHerdrDoctorBlfPathNotExecutableFails(t *testing.T) {
 	}
 	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -245,7 +250,7 @@ func TestRunHerdrDoctorOutsideHerdrSkipsSocketChecksButRunsFilesystemChecks(t *t
 	client := &fakeHerdrClient{pingErr: errors.New("should not be called")}
 	d, out := doctorTestDeps(t, home, client, nil)
 
-	err := runHerdrDoctor(d)
+	err := runHerdrDoctor(d, false)
 	if err == nil {
 		t.Fatal("runHerdrDoctor() = nil, want error (exit 1)")
 	}
@@ -270,5 +275,145 @@ func TestRunHerdrDoctorOutsideHerdrSkipsSocketChecksButRunsFilesystemChecks(t *t
 	}
 	if !strings.Contains(out.String(), "[PASS] blf path") {
 		t.Errorf("output = %q, want the filesystem-only blf path check to still run and pass", out.String())
+	}
+}
+
+// snapshotWithTabs builds a SessionSnapshot with one tab that needs renaming
+// (its label differs from what herdrLabel computes) and one that doesn't.
+func snapshotWithTabs() herdr.SnapshotResult {
+	return herdr.SnapshotResult{
+		Tabs: []herdr.TabInfo{
+			{TabID: "tab1", Label: "old-label"},
+			{TabID: "tab2", Label: "proj"},
+		},
+		Panes: []herdr.PaneInfo{
+			{PaneID: "pane1", Agent: "claude", TerminalTitle: "claude running"},
+			{PaneID: "pane2", Cwd: "/home/user/proj"},
+		},
+		Layouts: []herdr.LayoutInfo{
+			{TabID: "tab1", FocusedPaneID: "pane1"},
+			{TabID: "tab2", FocusedPaneID: "pane2"},
+		},
+	}
+}
+
+func TestRunHerdrDoctorDryRunTableShowsOkAndWouldRename(t *testing.T) {
+	home := t.TempDir()
+	setupValidPlugin(t, home)
+	client := &fakeHerdrClient{
+		ping:     herdr.PingResult{Version: "0.9.3"},
+		plugins:  []herdr.PluginInfo{{PluginID: "blf", PluginRoot: herdrplugin.Dir(home)}},
+		snapshot: snapshotWithTabs(),
+	}
+	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
+
+	if err := runHerdrDoctor(d, false); err != nil {
+		t.Fatalf("runHerdrDoctor() = %v, want nil (a would-rename row must not fail the report); output:\n%s", err, out)
+	}
+	var tab1Line, tab2Line string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "tab1") {
+			tab1Line = line
+		}
+		if strings.HasPrefix(line, "tab2") {
+			tab2Line = line
+		}
+	}
+	if !strings.HasSuffix(tab1Line, "would rename") {
+		t.Errorf("tab1 row = %q, want it to end in would rename", tab1Line)
+	}
+	if !strings.HasSuffix(tab2Line, "ok") {
+		t.Errorf("tab2 row = %q, want it to end in ok", tab2Line)
+	}
+}
+
+// pluginLogListJSON builds a fake `herdr plugin log list` reply with n
+// entries, alternating "succeeded" and "failed" status, oldest first.
+func pluginLogListJSON(n int) []byte {
+	var logs []string
+	for i := 0; i < n; i++ {
+		status := "succeeded"
+		if i%2 == 1 {
+			status = "failed"
+		}
+		logs = append(logs, fmt.Sprintf(
+			`{"event":"pre-create-%d","status":%q,"started_unix_ms":%d,"error":"boom-%d"}`,
+			i, status, 1000+i, i))
+	}
+	return []byte(fmt.Sprintf(`{"id":"cli:plugin","result":{"logs":[%s],"type":"plugin_log_list"}}`, strings.Join(logs, ",")))
+}
+
+func TestRunHerdrDoctorFailedHooksOnlyFromLastTen(t *testing.T) {
+	home := t.TempDir()
+	setupValidPlugin(t, home)
+	client := &fakeHerdrClient{
+		ping:    herdr.PingResult{Version: "0.9.3"},
+		plugins: []herdr.PluginInfo{{PluginID: "blf", PluginRoot: herdrplugin.Dir(home)}},
+	}
+	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
+	d.runCommand = func(name string, args ...string) ([]byte, error) {
+		return pluginLogListJSON(14), nil
+	}
+
+	if err := runHerdrDoctor(d, false); err != nil {
+		t.Fatalf("runHerdrDoctor() = %v, want nil (failed hooks are informational only); output:\n%s", err, out)
+	}
+
+	// Entries 0-3 are among the first 14 but outside the last 10 (indices
+	// 4-13); only failed ones among the last 10 (5,7,9,11,13) should appear.
+	if strings.Contains(out.String(), "boom-1\n") || strings.Contains(out.String(), "boom-3") {
+		t.Errorf("output = %q, want entries outside the last 10 excluded", out.String())
+	}
+	if !strings.Contains(out.String(), "boom-13") {
+		t.Errorf("output = %q, want the last failed entry reported", out.String())
+	}
+}
+
+func TestRunHerdrDoctorJSONMatchesTextChecks(t *testing.T) {
+	home := t.TempDir()
+	setupValidPlugin(t, home)
+	client := &fakeHerdrClient{
+		ping:     herdr.PingResult{Version: "0.9.3"},
+		plugins:  []herdr.PluginInfo{{PluginID: "blf", PluginRoot: herdrplugin.Dir(home)}},
+		snapshot: snapshotWithTabs(),
+	}
+	d, out := doctorTestDeps(t, home, client, insideHerdrEnv())
+	d.runCommand = func(name string, args ...string) ([]byte, error) {
+		return pluginLogListJSON(2), nil
+	}
+
+	if err := runHerdrDoctor(d, true); err != nil {
+		t.Fatalf("runHerdrDoctor() = %v, want nil; output:\n%s", err, out)
+	}
+
+	var decoded struct {
+		OK     bool `json:"ok"`
+		Checks []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"checks"`
+		Tabs []struct {
+			TabID  string `json:"tab_id"`
+			Action string `json:"action"`
+		} `json:"tabs"`
+		FailedHooks []struct {
+			Event string `json:"event"`
+		} `json:"failed_hooks"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal(%q) = %v, want valid JSON report", out.String(), err)
+	}
+
+	if !decoded.OK {
+		t.Errorf("decoded.OK = false, want true (no failing checks)")
+	}
+	if len(decoded.Checks) == 0 {
+		t.Error("decoded.Checks is empty, want the same checks as the text report")
+	}
+	if len(decoded.Tabs) != 2 {
+		t.Errorf("len(decoded.Tabs) = %d, want 2", len(decoded.Tabs))
+	}
+	if len(decoded.FailedHooks) != 1 {
+		t.Errorf("len(decoded.FailedHooks) = %d, want 1 (one failed entry out of 2)", len(decoded.FailedHooks))
 	}
 }
