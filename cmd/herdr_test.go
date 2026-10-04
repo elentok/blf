@@ -467,6 +467,93 @@ func TestRunHerdrSyncTabTitleEmptyComputedLabelSendsNoRename(t *testing.T) {
 	}
 }
 
+func TestRunHerdrSyncAllTabsLogsEachOutcomeWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{
+		snapshot: herdr.SnapshotResult{
+			Tabs: []herdr.TabInfo{
+				{TabID: "tab-rename", Label: "old-label"},
+				{TabID: "tab-unchanged", Label: "same-label"},
+				{TabID: "tab-empty", Label: "old-label"},
+				{TabID: "tab-error", Label: "old-label"},
+			},
+			Panes: []herdr.PaneInfo{
+				{PaneID: "pane-rename", Label: "new-label"},
+				{PaneID: "pane-unchanged", Label: "same-label"},
+				{PaneID: "pane-empty", Label: ""},
+				{PaneID: "pane-error", Label: "new-label"},
+			},
+			Layouts: []herdr.LayoutInfo{
+				{TabID: "tab-rename", FocusedPaneID: "pane-rename"},
+				{TabID: "tab-unchanged", FocusedPaneID: "pane-unchanged"},
+				{TabID: "tab-empty", FocusedPaneID: "pane-empty"},
+				{TabID: "tab-error", FocusedPaneID: "pane-error"},
+			},
+		},
+		renameErrFor: map[string]error{"tab-error": errors.New("rename failed")},
+	}
+	var log []string
+	d := newHerdrSyncDepsWithLog(client, noTabIDEnv(), &log)
+	d.herdrLabel = func(pane herdr.PaneInfo, _ string) string { return pane.Label }
+
+	err := runHerdrSyncAllTabs(d, client, "/home/david")
+	if err == nil {
+		t.Fatal("runHerdrSyncAllTabs returned nil error, want an error (tab-error failed)")
+	}
+
+	if len(log) != 4 {
+		t.Fatalf("log = %v, want exactly 4 lines", log)
+	}
+
+	byTab := make(map[string][]string, len(log))
+	for _, line := range log {
+		fields := strings.Split(strings.TrimRight(line, "\n"), "\t")
+		if len(fields) != 6 {
+			t.Fatalf("fields = %v, want 6 tab-separated fields", fields)
+		}
+		if fields[1] != "full" {
+			t.Errorf("mode = %q, want %q", fields[1], "full")
+		}
+		byTab[fields[2]] = fields
+	}
+
+	if fields := byTab["tab-rename"]; fields[3] != "old-label" || fields[4] != "new-label" || fields[5] != "" {
+		t.Errorf("tab-rename fields = %v, want old-label/new-label/\"\"", fields)
+	}
+	if fields := byTab["tab-unchanged"]; fields[5] != "unchanged" {
+		t.Errorf("tab-unchanged fields = %v, want skip reason \"unchanged\"", fields)
+	}
+	if fields := byTab["tab-empty"]; fields[5] != "empty label" {
+		t.Errorf("tab-empty fields = %v, want skip reason \"empty label\"", fields)
+	}
+	if fields := byTab["tab-error"]; fields[5] != "rename failed" {
+		t.Errorf("tab-error fields = %v, want error \"rename failed\"", fields)
+	}
+}
+
+func TestRunHerdrSyncAllTabsNoLogWhenDebugOff(t *testing.T) {
+	client := &fakeHerdrClient{
+		snapshot: herdr.SnapshotResult{
+			Tabs:    []herdr.TabInfo{{TabID: "tab-1", Label: "old-label"}},
+			Panes:   []herdr.PaneInfo{{PaneID: "pane-1", Label: "new-label"}},
+			Layouts: []herdr.LayoutInfo{{TabID: "tab-1", FocusedPaneID: "pane-1"}},
+		},
+	}
+	var log []string
+	d := newHerdrSyncDeps(client, noTabIDEnv())
+	d.appendFile = func(_ string, data []byte) error {
+		log = append(log, string(data))
+		return nil
+	}
+
+	if err := runHerdrSyncAllTabs(d, client, "/home/david"); err != nil {
+		t.Fatalf("runHerdrSyncAllTabs returned error: %v", err)
+	}
+
+	if len(log) != 0 {
+		t.Errorf("log = %v, want no lines written when debug is off", log)
+	}
+}
+
 func newHerdrTestDeps(out *strings.Builder, socketPath string, client *fakeHerdrClient, dirs map[string]bool) deps {
 	return deps{
 		stdout: out,
@@ -839,6 +926,96 @@ func TestRunHerdrSyncTabTitleFishEmptyCmdBehavesLikePrompt(t *testing.T) {
 
 	if len(client.renamed) != 0 {
 		t.Errorf("renamed = %+v, want no rename when the label already matches the directory form", client.renamed)
+	}
+}
+
+func newHerdrFishSyncDepsWithLog(client *fakeHerdrClient, env map[string]string, log *[]string) deps {
+	d := newHerdrSyncDepsWithLog(client, env, log)
+	d.getwd = func() (string, error) { return "/home/david/proj", nil }
+	return d
+}
+
+func TestRunHerdrSyncTabTitleFishLogsRenameWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	var log []string
+	d := newHerdrFishSyncDepsWithLog(client, fishBaseEnv(), &log)
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if len(fields) != 6 {
+		t.Fatalf("fields = %v, want 6 tab-separated fields", fields)
+	}
+	if fields[1] != "fish" || fields[2] != "tab-1" || fields[3] != "old-label" || fields[5] != "" {
+		t.Errorf("fields = %v, want [ts fish tab-1 old-label <computed> \"\"]", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishLogsUnchangedSkipWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "proj"},
+	}
+	var log []string
+	d := newHerdrFishSyncDepsWithLog(client, fishBaseEnv(), &log)
+
+	if err := runHerdrSyncTabTitleFish(d, ""); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if fields[1] != "fish" || fields[2] != "tab-1" || fields[5] != "unchanged" {
+		t.Errorf("fields = %v, want mode fish, tab-1, skip reason \"unchanged\"", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishLogsErrorWhenDebugOn(t *testing.T) {
+	client := &fakeHerdrClient{layoutErr: errors.New("connection refused")}
+	var log []string
+	d := newHerdrFishSyncDepsWithLog(client, fishBaseEnv(), &log)
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err == nil {
+		t.Fatal("runHerdrSyncTabTitleFish returned nil error, want an error")
+	}
+
+	if len(log) != 1 {
+		t.Fatalf("log = %v, want exactly one line", log)
+	}
+	fields := strings.Split(strings.TrimRight(log[0], "\n"), "\t")
+	if fields[1] != "fish" || fields[2] != "tab-1" || fields[5] != "connection refused" {
+		t.Errorf("fields = %v, want mode fish, tab-1, error \"connection refused\"", fields)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishNoLogWhenDebugOff(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	var log []string
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+	d.appendFile = func(_ string, data []byte) error {
+		log = append(log, string(data))
+		return nil
+	}
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(log) != 0 {
+		t.Errorf("log = %v, want no lines written when debug is off", log)
 	}
 }
 

@@ -386,13 +386,21 @@ func runHerdrSyncAllTabs(d deps, client herdr.Client, home string) error {
 	}
 
 	for _, plan := range plans {
-		if plan.NewLabel == "" || plan.NewLabel == plan.Label {
+		if plan.NewLabel == "" {
+			logHerdrSync(d, "full", plan.TabID, plan.Label, plan.NewLabel, "empty label")
+			continue
+		}
+		if plan.NewLabel == plan.Label {
+			logHerdrSync(d, "full", plan.TabID, plan.Label, plan.NewLabel, "unchanged")
 			continue
 		}
 		if err := client.TabRename(plan.TabID, plan.NewLabel); err != nil {
 			fmt.Fprintf(d.stderr, "herdr sync-tab-title: tab %s: %v\n", plan.TabID, err)
+			logHerdrSync(d, "full", plan.TabID, plan.Label, plan.NewLabel, err.Error())
 			failed = true
+			continue
 		}
+		logHerdrSync(d, "full", plan.TabID, plan.Label, plan.NewLabel, "")
 	}
 
 	if failed {
@@ -426,6 +434,7 @@ func runHerdrSyncTabTitleFish(d deps, cmdArg string) error {
 
 	layout, err := client.PaneLayout(paneID)
 	if err != nil {
+		logHerdrSync(d, "fish", tabID, "", "", err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
 
@@ -445,21 +454,27 @@ func runHerdrSyncTabTitleFish(d deps, cmdArg string) error {
 
 	label := tabtitle.Title(cmdArg, pwd, home)
 	if label == "" {
+		logHerdrSync(d, "fish", tabID, "", "", "empty label")
 		return nil
 	}
 
 	tab, err := client.TabGet(tabID)
 	if err != nil {
+		logHerdrSync(d, "fish", tabID, "", label, err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
 
 	if tab.Label == label {
+		logHerdrSync(d, "fish", tabID, tab.Label, label, "unchanged")
 		return nil
 	}
 
 	if err := client.TabRename(tabID, label); err != nil {
+		logHerdrSync(d, "fish", tabID, tab.Label, label, err.Error())
 		return fmt.Errorf("herdr sync-tab-title: %w", err)
 	}
+
+	logHerdrSync(d, "fish", tabID, tab.Label, label, "")
 
 	return nil
 }

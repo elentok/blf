@@ -99,7 +99,7 @@ func runHerdrDebugStatus(d deps) error {
 }
 
 // logHerdrSync appends one tab-separated debug line when herdr debug logging
-// is on, and is a no-op otherwise. mode is "event", "full-session" or "fish".
+// is on, and is a no-op otherwise. mode is "event", "full" or "fish".
 // note carries a skip reason or error message; pass "" for a plain rename.
 func logHerdrSync(d deps, mode, tab, oldLabel, newLabel, note string) {
 	homeDir, err := d.userHomeDir()
