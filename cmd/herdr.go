@@ -30,6 +30,7 @@ func newHerdrCmd(d deps) *cobra.Command {
 		newFindWorkspaceCmd(d),
 		newGotoWorkspaceCmd(d),
 		newHerdrDebugCmd(d),
+		newHerdrDoctorCmd(d),
 	)
 
 	return herdrCmd

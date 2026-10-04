@@ -359,6 +359,43 @@ func TestWorkspaceCreateOmitsCwdWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestPluginList(t *testing.T) {
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		reply(t, conn, req, map[string]any{
+			"type": "plugin_list",
+			"plugins": []map[string]any{
+				{"plugin_id": "blf", "plugin_root": "/home/david/.local/share/blf/herdr-plugin"},
+			},
+		})
+	})
+
+	plugins, err := New(socketPath).PluginList("blf")
+	if err != nil {
+		t.Fatalf("PluginList: %v", err)
+	}
+	want := []PluginInfo{{PluginID: "blf", PluginRoot: "/home/david/.local/share/blf/herdr-plugin"}}
+	if len(plugins) != 1 || plugins[0] != want[0] {
+		t.Errorf("PluginList() = %+v, want %+v", plugins, want)
+	}
+}
+
+func TestPluginListEmptyMeansNotLinked(t *testing.T) {
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		reply(t, conn, req, map[string]any{
+			"type":    "plugin_list",
+			"plugins": []map[string]any{},
+		})
+	})
+
+	plugins, err := New(socketPath).PluginList("blf")
+	if err != nil {
+		t.Fatalf("PluginList: %v", err)
+	}
+	if len(plugins) != 0 {
+		t.Errorf("PluginList() = %+v, want empty", plugins)
+	}
+}
+
 func TestMissingRequiredFieldIsNotUnderstood(t *testing.T) {
 	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
 		// agent_status is required on pane_info but omitted here.
