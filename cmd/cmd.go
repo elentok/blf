@@ -110,6 +110,7 @@ func execute(args []string, d deps) error {
 		newSumCmd(d),
 		newKittyCmd(d),
 		newDimPathCmd(d),
+		newTabTitleCmd(d),
 		newCleanURLCmd(d),
 		newLauncherCmd(d),
 		newBeadsCmd(d),
