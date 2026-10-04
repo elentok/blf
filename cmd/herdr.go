@@ -2,18 +2,22 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/elentok/blf/internal/herdr"
 	"github.com/spf13/cobra"
 )
 
 func newHerdrCmd(d deps) *cobra.Command {
 	herdrCmd := &cobra.Command{
 		Use:   "herdr",
-		Short: "Herdr terminal multiplexer integration",
+		Short: "Herdr terminal multiplexer utilities",
 	}
 
 	herdrCmd.AddCommand(
 		newHerdrSyncTabTitleCmd(d),
+		newFindWorkspaceCmd(d),
+		newGotoWorkspaceCmd(d),
 	)
 
 	return herdrCmd
@@ -83,4 +87,122 @@ func runHerdrSyncTabTitle(d deps) error {
 	}
 
 	return nil
+}
+
+func newFindWorkspaceCmd(d deps) *cobra.Command {
+	return &cobra.Command{
+		Use:   "find-workspace <label>",
+		Short: "Print the id of the workspace whose label matches (read-only)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runFindWorkspace(args[0], d)
+		},
+	}
+}
+
+func newGotoWorkspaceCmd(d deps) *cobra.Command {
+	var create bool
+	var cwd string
+
+	cmd := &cobra.Command{
+		Use:   "goto-workspace <label>",
+		Short: "Focus the workspace whose label matches, optionally creating it",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runGotoWorkspace(args[0], create, cwd, d)
+		},
+	}
+	cmd.Flags().BoolVar(&create, "create", false, "Create the workspace when none matches")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Starting directory for a created workspace (requires --create)")
+	return cmd
+}
+
+// herdrClientFromDeps checks HERDR_SOCKET_PATH (never HERDR_ENV: a key-bound
+// `type = "shell"` command doesn't get it) and builds a client over it.
+func herdrClientFromDeps(d deps) (herdr.Client, error) {
+	socketPath, ok := d.lookupEnv("HERDR_SOCKET_PATH")
+	if !ok || socketPath == "" {
+		return nil, fmt.Errorf("not running inside herdr")
+	}
+	return d.newHerdrClient(socketPath), nil
+}
+
+// findWorkspaceByLabel matches the whole label, ignoring case, against
+// workspace.list's UI order; the first match wins. found == false with a nil
+// error means no match, distinct from a transport/decoding error.
+func findWorkspaceByLabel(client herdr.Client, label string) (herdr.WorkspaceInfo, bool, error) {
+	workspaces, err := client.WorkspaceList()
+	if err != nil {
+		return herdr.WorkspaceInfo{}, false, err
+	}
+	for _, ws := range workspaces {
+		if strings.EqualFold(ws.Label, label) {
+			return ws, true, nil
+		}
+	}
+	return herdr.WorkspaceInfo{}, false, nil
+}
+
+func runFindWorkspace(label string, d deps) error {
+	if label == "" {
+		return fmt.Errorf("find-workspace: label is required")
+	}
+
+	client, err := herdrClientFromDeps(d)
+	if err != nil {
+		return err
+	}
+
+	ws, found, err := findWorkspaceByLabel(client, label)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no workspace labelled %q", label)
+	}
+
+	fmt.Fprintln(d.stdout, ws.WorkspaceID)
+	return nil
+}
+
+func runGotoWorkspace(label string, create bool, cwd string, d deps) error {
+	if label == "" {
+		return fmt.Errorf("goto-workspace: label is required")
+	}
+	if cwd != "" && !create {
+		return fmt.Errorf("goto-workspace: --cwd requires --create")
+	}
+
+	client, err := herdrClientFromDeps(d)
+	if err != nil {
+		return err
+	}
+
+	ws, found, err := findWorkspaceByLabel(client, label)
+	if err != nil {
+		return err
+	}
+
+	if !found {
+		if !create {
+			return fmt.Errorf("no workspace labelled %q", label)
+		}
+
+		// herdr silently opens $HOME for a cwd that doesn't exist; check first
+		// so a typo fails loudly instead of creating the wrong workspace.
+		if cwd != "" {
+			exists, err := d.dirExists(cwd)
+			if err != nil {
+				return fmt.Errorf("goto-workspace: check cwd %q: %w", cwd, err)
+			}
+			if !exists {
+				return fmt.Errorf("goto-workspace: cwd %q is not an existing directory", cwd)
+			}
+		}
+
+		_, err := client.WorkspaceCreate(label, cwd)
+		return err
+	}
+
+	return client.WorkspaceFocus(ws.WorkspaceID)
 }

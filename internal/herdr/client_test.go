@@ -270,6 +270,95 @@ func TestSessionSnapshot(t *testing.T) {
 	}
 }
 
+func TestWorkspaceList(t *testing.T) {
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		reply(t, conn, req, map[string]any{
+			"type": "workspace_list",
+			"workspaces": []map[string]any{
+				{"workspace_id": "w1", "number": 1, "label": "work", "focused": true, "active_tab_id": "w1:t1"},
+				{"workspace_id": "w2", "number": 2, "label": "notes", "focused": false, "active_tab_id": "w2:t1"},
+			},
+		})
+	})
+
+	workspaces, err := New(socketPath).WorkspaceList()
+	if err != nil {
+		t.Fatalf("WorkspaceList: %v", err)
+	}
+	want := []WorkspaceInfo{
+		{WorkspaceID: "w1", Number: 1, Label: "work", Focused: true, ActiveTabID: "w1:t1"},
+		{WorkspaceID: "w2", Number: 2, Label: "notes", Focused: false, ActiveTabID: "w2:t1"},
+	}
+	if len(workspaces) != len(want) || workspaces[0] != want[0] || workspaces[1] != want[1] {
+		t.Errorf("WorkspaceList() = %+v, want %+v", workspaces, want)
+	}
+}
+
+func TestWorkspaceFocusSendsWorkspaceID(t *testing.T) {
+	var gotMethod string
+	var gotParams map[string]any
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		gotMethod = req["method"].(string)
+		gotParams = req["params"].(map[string]any)
+		reply(t, conn, req, map[string]any{"type": "ok"})
+	})
+
+	if err := New(socketPath).WorkspaceFocus("w1"); err != nil {
+		t.Fatalf("WorkspaceFocus: %v", err)
+	}
+	if gotMethod != "workspace.focus" {
+		t.Errorf("method = %q, want workspace.focus", gotMethod)
+	}
+	if gotParams["workspace_id"] != "w1" {
+		t.Errorf("params.workspace_id = %v, want w1", gotParams["workspace_id"])
+	}
+}
+
+func TestWorkspaceCreateSendsFocusTrue(t *testing.T) {
+	var gotParams map[string]any
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		gotParams = req["params"].(map[string]any)
+		reply(t, conn, req, map[string]any{
+			"type": "workspace_info",
+			"workspace": map[string]any{
+				"workspace_id": "w3", "number": 3, "label": "scratch", "focused": true, "active_tab_id": "w3:t1",
+			},
+		})
+	})
+
+	ws, err := New(socketPath).WorkspaceCreate("scratch", "/tmp/scratch")
+	if err != nil {
+		t.Fatalf("WorkspaceCreate: %v", err)
+	}
+	if gotParams["label"] != "scratch" || gotParams["cwd"] != "/tmp/scratch" || gotParams["focus"] != true {
+		t.Errorf("params = %v", gotParams)
+	}
+	want := WorkspaceInfo{WorkspaceID: "w3", Number: 3, Label: "scratch", Focused: true, ActiveTabID: "w3:t1"}
+	if ws != want {
+		t.Errorf("WorkspaceCreate() = %+v, want %+v", ws, want)
+	}
+}
+
+func TestWorkspaceCreateOmitsCwdWhenEmpty(t *testing.T) {
+	var gotParams map[string]any
+	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
+		gotParams = req["params"].(map[string]any)
+		reply(t, conn, req, map[string]any{
+			"type": "workspace_info",
+			"workspace": map[string]any{
+				"workspace_id": "w4", "number": 4, "label": "scratch2", "focused": true, "active_tab_id": "w4:t1",
+			},
+		})
+	})
+
+	if _, err := New(socketPath).WorkspaceCreate("scratch2", ""); err != nil {
+		t.Fatalf("WorkspaceCreate: %v", err)
+	}
+	if _, ok := gotParams["cwd"]; ok {
+		t.Errorf("params = %v, want no cwd key", gotParams)
+	}
+}
+
 func TestMissingRequiredFieldIsNotUnderstood(t *testing.T) {
 	socketPath := startFakeServer(t, func(conn net.Conn, req map[string]any) {
 		// agent_status is required on pane_info but omitted here.

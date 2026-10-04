@@ -19,6 +19,15 @@ type fakeHerdrClient struct {
 	layoutCalls []string
 	paneCalls   []string
 	renamed     []struct{ tabID, label string }
+
+	workspaces    []herdr.WorkspaceInfo
+	listErr       error
+	focusedID     string
+	focusErr      error
+	createLabel   string
+	createCwd     string
+	createErr     error
+	createdResult herdr.WorkspaceInfo
 }
 
 func (f *fakeHerdrClient) Ping() (herdr.PingResult, error) { return herdr.PingResult{}, nil }
@@ -42,6 +51,30 @@ func (f *fakeHerdrClient) TabRename(tabID, label string) error {
 
 func (f *fakeHerdrClient) SessionSnapshot() (herdr.SnapshotResult, error) {
 	return herdr.SnapshotResult{}, nil
+}
+
+func (f *fakeHerdrClient) WorkspaceList() ([]herdr.WorkspaceInfo, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return f.workspaces, nil
+}
+
+func (f *fakeHerdrClient) WorkspaceFocus(workspaceID string) error {
+	if f.focusErr != nil {
+		return f.focusErr
+	}
+	f.focusedID = workspaceID
+	return nil
+}
+
+func (f *fakeHerdrClient) WorkspaceCreate(label, cwd string) (herdr.WorkspaceInfo, error) {
+	if f.createErr != nil {
+		return herdr.WorkspaceInfo{}, f.createErr
+	}
+	f.createLabel = label
+	f.createCwd = cwd
+	return f.createdResult, nil
 }
 
 func newHerdrSyncDeps(client *fakeHerdrClient, env map[string]string) deps {
@@ -194,5 +227,220 @@ func TestRunHerdrSyncTabTitleEmptyComputedLabelSendsNoRename(t *testing.T) {
 	}
 	if len(client.renamed) != 0 {
 		t.Errorf("renamed = %+v, want no rename when the computed label is empty", client.renamed)
+	}
+}
+
+func newHerdrTestDeps(out *strings.Builder, socketPath string, client *fakeHerdrClient, dirs map[string]bool) deps {
+	return deps{
+		stdout: out,
+		stderr: &strings.Builder{},
+		lookupEnv: func(key string) (string, bool) {
+			if key == "HERDR_SOCKET_PATH" {
+				if socketPath == "" {
+					return "", false
+				}
+				return socketPath, true
+			}
+			return "", false
+		},
+		newHerdrClient: func(string) herdr.Client { return client },
+		dirExists: func(path string) (bool, error) {
+			return dirs[path], nil
+		},
+	}
+}
+
+func TestRunFindWorkspaceMatchesIgnoringCase(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{workspaces: []herdr.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "Notes"},
+	}}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runFindWorkspace("notes", d); err != nil {
+		t.Fatalf("runFindWorkspace: %v", err)
+	}
+	if out.String() != "w1\n" {
+		t.Errorf("stdout = %q, want %q", out.String(), "w1\n")
+	}
+}
+
+func TestRunFindWorkspaceFirstDuplicateWins(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{workspaces: []herdr.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "notes"},
+		{WorkspaceID: "w2", Label: "notes"},
+	}}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runFindWorkspace("notes", d); err != nil {
+		t.Fatalf("runFindWorkspace: %v", err)
+	}
+	if out.String() != "w1\n" {
+		t.Errorf("stdout = %q, want %q", out.String(), "w1\n")
+	}
+}
+
+func TestRunFindWorkspaceNotFound(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	err := runFindWorkspace("notes", d)
+	wantErr := `no workspace labelled "notes"`
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("err = %v, want %q", err, wantErr)
+	}
+	if out.String() != "" {
+		t.Errorf("stdout = %q, want empty", out.String())
+	}
+}
+
+func TestRunFindWorkspaceEmptyLabelIsUsageError(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", &fakeHerdrClient{}, nil)
+
+	if err := runFindWorkspace("", d); err == nil {
+		t.Fatal("expected usage error, got nil")
+	}
+}
+
+func TestRunFindWorkspaceOutsideHerdr(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "", &fakeHerdrClient{}, nil)
+
+	err := runFindWorkspace("notes", d)
+	wantErr := "not running inside herdr"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("err = %v, want %q", err, wantErr)
+	}
+}
+
+func TestRunGotoWorkspaceFocusesExisting(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{workspaces: []herdr.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "notes"},
+	}}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runGotoWorkspace("Notes", false, "", d); err != nil {
+		t.Fatalf("runGotoWorkspace: %v", err)
+	}
+	if client.focusedID != "w1" {
+		t.Errorf("focusedID = %q, want w1", client.focusedID)
+	}
+	if out.String() != "" {
+		t.Errorf("stdout = %q, want empty", out.String())
+	}
+}
+
+func TestRunGotoWorkspaceNotFoundWithoutCreate(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", &fakeHerdrClient{}, nil)
+
+	err := runGotoWorkspace("notes", false, "", d)
+	wantErr := `no workspace labelled "notes"`
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("err = %v, want %q", err, wantErr)
+	}
+}
+
+func TestRunGotoWorkspaceCreatesWhenMissing(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runGotoWorkspace("scratch", true, "", d); err != nil {
+		t.Fatalf("runGotoWorkspace: %v", err)
+	}
+	if client.createLabel != "scratch" || client.createCwd != "" {
+		t.Errorf("createLabel/Cwd = %q/%q, want scratch/empty", client.createLabel, client.createCwd)
+	}
+}
+
+func TestRunGotoWorkspaceCreateHonoursCwd(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{}
+	dirs := map[string]bool{"/tmp/proj": true}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, dirs)
+
+	if err := runGotoWorkspace("scratch", true, "/tmp/proj", d); err != nil {
+		t.Fatalf("runGotoWorkspace: %v", err)
+	}
+	if client.createCwd != "/tmp/proj" {
+		t.Errorf("createCwd = %q, want /tmp/proj", client.createCwd)
+	}
+}
+
+func TestRunGotoWorkspaceCreateRejectsNonExistentCwd(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	err := runGotoWorkspace("scratch", true, "/no/such/dir", d)
+	if err == nil {
+		t.Fatal("expected error for non-existent cwd, got nil")
+	}
+	if client.createLabel != "" {
+		t.Errorf("WorkspaceCreate should not have been called, got label %q", client.createLabel)
+	}
+}
+
+func TestRunGotoWorkspaceCwdIgnoredWhenWorkspaceExists(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{workspaces: []herdr.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "notes"},
+	}}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runGotoWorkspace("notes", true, "/no/such/dir", d); err != nil {
+		t.Fatalf("runGotoWorkspace: %v", err)
+	}
+	if client.focusedID != "w1" {
+		t.Errorf("focusedID = %q, want w1", client.focusedID)
+	}
+}
+
+func TestRunGotoWorkspaceCwdWithoutCreateIsUsageError(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", &fakeHerdrClient{}, nil)
+
+	if err := runGotoWorkspace("notes", false, "/tmp/proj", d); err == nil {
+		t.Fatal("expected usage error, got nil")
+	}
+}
+
+func TestRunGotoWorkspaceEmptyLabelIsUsageError(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", &fakeHerdrClient{}, nil)
+
+	if err := runGotoWorkspace("", false, "", d); err == nil {
+		t.Fatal("expected usage error, got nil")
+	}
+}
+
+func TestRunGotoWorkspaceOutsideHerdr(t *testing.T) {
+	out := &strings.Builder{}
+	d := newHerdrTestDeps(out, "", &fakeHerdrClient{}, nil)
+
+	err := runGotoWorkspace("notes", false, "", d)
+	wantErr := "not running inside herdr"
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("err = %v, want %q", err, wantErr)
+	}
+}
+
+func TestRunGotoWorkspaceAlreadyFocusedIsNoop(t *testing.T) {
+	out := &strings.Builder{}
+	client := &fakeHerdrClient{workspaces: []herdr.WorkspaceInfo{
+		{WorkspaceID: "w1", Label: "notes", Focused: true},
+	}}
+	d := newHerdrTestDeps(out, "/tmp/herdr.sock", client, nil)
+
+	if err := runGotoWorkspace("notes", false, "", d); err != nil {
+		t.Fatalf("runGotoWorkspace: %v", err)
+	}
+	if client.focusedID != "w1" {
+		t.Errorf("focusedID = %q, want w1", client.focusedID)
 	}
 }

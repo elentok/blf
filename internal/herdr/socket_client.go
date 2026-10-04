@@ -45,6 +45,16 @@ type tabRenameParams struct {
 	Label string `json:"label"`
 }
 
+type workspaceIDParams struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+type workspaceCreateParams struct {
+	Label string `json:"label"`
+	Cwd   string `json:"cwd,omitempty"`
+	Focus bool   `json:"focus"`
+}
+
 // notUnderstood is the exact error strict decoding returns for a reply
 // missing a field herdr always sends.
 func notUnderstood() error {
@@ -337,6 +347,40 @@ func decodeWorkspaceInfo(m map[string]json.RawMessage) (WorkspaceInfo, error) {
 	}, nil
 }
 
+// decodeWorkspaceListEntry decodes a workspace.list/workspace.create entry,
+// which carries only the five fields herdr sends for those methods (unlike
+// session.snapshot's workspaces, decodeWorkspaceInfo leaves PaneCount,
+// TabCount and AgentStatus at their zero value here).
+func decodeWorkspaceListEntry(m map[string]json.RawMessage) (WorkspaceInfo, error) {
+	workspaceID, err := reqString(m, "workspace_id")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	number, err := reqInt(m, "number")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	label, err := reqString(m, "label")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	focused, err := reqBool(m, "focused")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	activeTabID, err := reqString(m, "active_tab_id")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	return WorkspaceInfo{
+		WorkspaceID: workspaceID,
+		Number:      number,
+		Label:       label,
+		Focused:     focused,
+		ActiveTabID: activeTabID,
+	}, nil
+}
+
 func decodeSnapshotResult(m map[string]json.RawMessage) (SnapshotResult, error) {
 	version, err := reqString(m, "version")
 	if err != nil {
@@ -492,4 +536,45 @@ func (c *socketClient) SessionSnapshot() (SnapshotResult, error) {
 		return SnapshotResult{}, err
 	}
 	return decodeSnapshotResult(obj)
+}
+
+func (c *socketClient) WorkspaceList() ([]WorkspaceInfo, error) {
+	m, err := c.do("workspace.list", struct{}{})
+	if err != nil {
+		return nil, err
+	}
+	raw, err := reqArray(m, "workspaces")
+	if err != nil {
+		return nil, err
+	}
+	workspaces := make([]WorkspaceInfo, 0, len(raw))
+	for _, r := range raw {
+		obj, err := asObject(r)
+		if err != nil {
+			return nil, err
+		}
+		ws, err := decodeWorkspaceListEntry(obj)
+		if err != nil {
+			return nil, err
+		}
+		workspaces = append(workspaces, ws)
+	}
+	return workspaces, nil
+}
+
+func (c *socketClient) WorkspaceFocus(workspaceID string) error {
+	_, err := c.do("workspace.focus", workspaceIDParams{WorkspaceID: workspaceID})
+	return err
+}
+
+func (c *socketClient) WorkspaceCreate(label, cwd string) (WorkspaceInfo, error) {
+	m, err := c.do("workspace.create", workspaceCreateParams{Label: label, Cwd: cwd, Focus: true})
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	obj, err := child(m, "workspace")
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+	return decodeWorkspaceListEntry(obj)
 }

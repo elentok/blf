@@ -43,6 +43,7 @@ type deps struct {
 	signalProcess           func(pid int, sig syscall.Signal) error
 	newHerdrClient          func(socketPath string) herdr.Client
 	herdrLabel              func(pane herdr.PaneInfo, home string) string
+	dirExists               func(string) (bool, error)
 }
 
 func defaultDeps() deps {
@@ -87,6 +88,7 @@ func defaultDeps() deps {
 		},
 		newHerdrClient: herdr.New,
 		herdrLabel:     herdrsync.Label,
+		dirExists:      dirExists,
 	}
 }
 
@@ -252,6 +254,17 @@ func fileExists(path string) (bool, error) {
 	info, err := os.Stat(path)
 	if err == nil {
 		return !info.IsDir(), nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func dirExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return info.IsDir(), nil
 	}
 	if os.IsNotExist(err) {
 		return false, nil

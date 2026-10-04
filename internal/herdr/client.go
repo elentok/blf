@@ -103,6 +103,13 @@ type Client interface {
 	TabRename(tabID, label string) error
 	// SessionSnapshot reads the whole session in one call.
 	SessionSnapshot() (SnapshotResult, error)
+	// WorkspaceList lists every workspace, in herdr's UI order.
+	WorkspaceList() ([]WorkspaceInfo, error)
+	// WorkspaceFocus focuses a workspace. A no-op success when already focused.
+	WorkspaceFocus(workspaceID string) error
+	// WorkspaceCreate creates a workspace with label and an optional starting
+	// directory (cwd == "" lets herdr pick its default), and focuses it.
+	WorkspaceCreate(label, cwd string) (WorkspaceInfo, error)
 }
 
 // New returns a Client that talks to the herdr server listening on
