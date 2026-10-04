@@ -7,6 +7,7 @@ import (
 
 	"github.com/elentok/blf/internal/herdr"
 	"github.com/elentok/blf/internal/herdrsync"
+	"github.com/elentok/blf/internal/tabtitle"
 	"github.com/spf13/cobra"
 )
 
@@ -30,13 +31,29 @@ func newHerdrCmd(d deps) *cobra.Command {
 }
 
 func newHerdrSyncTabTitleCmd(d deps) *cobra.Command {
-	return &cobra.Command{
+	var cmdFlag string
+	var promptFlag bool
+
+	syncTabTitleCmd := &cobra.Command{
 		Use:   "sync-tab-title",
 		Short: "Sync the herdr tab label from its active pane",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmdChanged := cmd.Flags().Changed("cmd")
+			promptChanged := cmd.Flags().Changed("prompt")
+			if cmdChanged && promptChanged {
+				return fmt.Errorf("herdr sync-tab-title: --cmd and --prompt are mutually exclusive")
+			}
+			if cmdChanged || promptChanged {
+				return runHerdrSyncTabTitleFish(d, cmdFlag)
+			}
 			return runHerdrSyncTabTitle(d)
 		},
 	}
+
+	syncTabTitleCmd.Flags().StringVar(&cmdFlag, "cmd", "", "fish mode: the command about to run (preexec)")
+	syncTabTitleCmd.Flags().BoolVar(&promptFlag, "prompt", false, "fish mode: the prompt returned")
+
+	return syncTabTitleCmd
 }
 
 // runHerdrSyncTabTitle implements event mode. Run by a herdr hook with
@@ -245,5 +262,68 @@ func runHerdrSyncAllTabs(d deps, client herdr.Client, home string) error {
 	if failed {
 		return errTabsFailed
 	}
+	return nil
+}
+
+// runHerdrSyncTabTitleFish implements fish mode: fired as a backgrounded
+// fish hook on preexec (--cmd) or prompt (--prompt, cmdArg ""), it computes
+// the tab title in-process instead of waiting for herdr's own (lagging)
+// terminal title.
+func runHerdrSyncTabTitleFish(d deps, cmdArg string) error {
+	herdrEnv, _ := d.lookupEnv("HERDR_ENV")
+	socketPath, _ := d.lookupEnv("HERDR_SOCKET_PATH")
+	if herdrEnv == "" || socketPath == "" {
+		return nil
+	}
+
+	tabID, _ := d.lookupEnv("HERDR_TAB_ID")
+	paneID, _ := d.lookupEnv("HERDR_PANE_ID")
+	if tabID == "" || paneID == "" {
+		return nil
+	}
+
+	if vimruntime, _ := d.lookupEnv("VIMRUNTIME"); vimruntime != "" {
+		return nil
+	}
+
+	client := d.newHerdrClient(socketPath)
+
+	layout, err := client.PaneLayout(paneID)
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: %w", err)
+	}
+
+	if layout.FocusedPaneID != paneID {
+		return nil
+	}
+
+	pwd, err := d.getwd()
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: get cwd: %w", err)
+	}
+
+	home, err := d.userHomeDir()
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: get home dir: %w", err)
+	}
+
+	label := tabtitle.Title(cmdArg, pwd, home)
+	if label == "" {
+		return nil
+	}
+
+	tab, err := client.TabGet(tabID)
+	if err != nil {
+		return fmt.Errorf("herdr sync-tab-title: %w", err)
+	}
+
+	if tab.Label == label {
+		return nil
+	}
+
+	if err := client.TabRename(tabID, label); err != nil {
+		return fmt.Errorf("herdr sync-tab-title: %w", err)
+	}
+
 	return nil
 }

@@ -569,3 +569,201 @@ func TestRunGotoWorkspaceAlreadyFocusedIsNoop(t *testing.T) {
 		t.Errorf("focusedID = %q, want w1", client.focusedID)
 	}
 }
+
+func newHerdrFishSyncDeps(client *fakeHerdrClient, env map[string]string) deps {
+	d := newHerdrSyncDeps(client, env)
+	d.getwd = func() (string, error) { return "/home/david/proj", nil }
+	return d
+}
+
+func fishBaseEnv() map[string]string {
+	return map[string]string{
+		"HERDR_ENV":         "1",
+		"HERDR_SOCKET_PATH": "/tmp/herdr.sock",
+		"HERDR_TAB_ID":      "tab-1",
+		"HERDR_PANE_ID":     "pane-1",
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishCmdRenamesToComputedTitle(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(client.renamed) != 1 || client.renamed[0].tabID != "tab-1" {
+		t.Fatalf("renamed = %+v, want one rename of tab-1", client.renamed)
+	}
+	if client.renamed[0].label == "" || client.renamed[0].label == "old-label" {
+		t.Errorf("renamed label = %q, want the computed title", client.renamed[0].label)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishPromptRenamesToDirectoryForm(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+
+	if err := runHerdrSyncTabTitleFish(d, ""); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(client.renamed) != 1 {
+		t.Fatalf("renamed = %+v, want one rename", client.renamed)
+	}
+	if client.renamed[0].label != "proj" {
+		t.Errorf("renamed label = %q, want the directory form %q", client.renamed[0].label, "proj")
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishNonActivePaneSendsNoRename(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-other"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(client.renamed) != 0 {
+		t.Errorf("renamed = %+v, want no rename when the event pane is not the tab's active pane", client.renamed)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishVimruntimeSendsNothing(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	env := fishBaseEnv()
+	env["VIMRUNTIME"] = "/usr/share/nvim/runtime"
+	d := newHerdrFishSyncDeps(client, env)
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(client.layoutCalls) != 0 {
+		t.Errorf("layoutCalls = %v, want no herdr calls when $VIMRUNTIME is set", client.layoutCalls)
+	}
+	if len(client.renamed) != 0 {
+		t.Errorf("renamed = %+v, want no rename when $VIMRUNTIME is set", client.renamed)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishMissingIdsExitsSilently(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+	}{
+		{
+			name: "HERDR_TAB_ID unset",
+			env: map[string]string{
+				"HERDR_ENV":         "1",
+				"HERDR_SOCKET_PATH": "/tmp/herdr.sock",
+				"HERDR_PANE_ID":     "pane-1",
+			},
+		},
+		{
+			name: "HERDR_PANE_ID unset",
+			env: map[string]string{
+				"HERDR_ENV":         "1",
+				"HERDR_SOCKET_PATH": "/tmp/herdr.sock",
+				"HERDR_TAB_ID":      "tab-1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeHerdrClient{}
+			d := newHerdrFishSyncDeps(client, tt.env)
+
+			if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+				t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+			}
+			if len(client.layoutCalls) != 0 {
+				t.Errorf("layoutCalls = %v, want no herdr calls when an id is missing", client.layoutCalls)
+			}
+		})
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishOutsideHerdrIsSilent(t *testing.T) {
+	client := &fakeHerdrClient{}
+	env := map[string]string{
+		"HERDR_TAB_ID":  "tab-1",
+		"HERDR_PANE_ID": "pane-1",
+	}
+	d := newHerdrFishSyncDeps(client, env)
+
+	if err := runHerdrSyncTabTitleFish(d, "nvim foo.go"); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+	if len(client.layoutCalls) != 0 {
+		t.Errorf("layoutCalls = %v, want no herdr calls outside herdr", client.layoutCalls)
+	}
+}
+
+func TestRunHerdrSyncTabTitleFishEmptyCmdBehavesLikePrompt(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-1"},
+		tab:    herdr.TabInfo{Label: "proj"},
+	}
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+
+	if err := runHerdrSyncTabTitleFish(d, ""); err != nil {
+		t.Fatalf("runHerdrSyncTabTitleFish returned error: %v", err)
+	}
+
+	if len(client.renamed) != 0 {
+		t.Errorf("renamed = %+v, want no rename when the label already matches the directory form", client.renamed)
+	}
+}
+
+func TestNewHerdrSyncTabTitleCmdRejectsCmdAndPromptTogether(t *testing.T) {
+	client := &fakeHerdrClient{}
+	d := newHerdrFishSyncDeps(client, fishBaseEnv())
+
+	cmd := newHerdrSyncTabTitleCmd(d)
+	cmd.SetArgs([]string{"--cmd", "nvim foo.go", "--prompt"})
+	cmd.SetOut(new(strings.Builder))
+	cmd.SetErr(new(strings.Builder))
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("Execute returned nil error, want a usage error for --cmd with --prompt")
+	}
+	if len(client.layoutCalls) != 0 {
+		t.Errorf("layoutCalls = %v, want no herdr calls on a usage error", client.layoutCalls)
+	}
+}
+
+func TestNewHerdrSyncTabTitleCmdDispatchesToEventModeByDefault(t *testing.T) {
+	client := &fakeHerdrClient{
+		layout: herdr.LayoutInfo{FocusedPaneID: "pane-active"},
+		tab:    herdr.TabInfo{Label: "old-label"},
+	}
+	d := newHerdrSyncDeps(client, baseEnv())
+
+	cmd := newHerdrSyncTabTitleCmd(d)
+	cmd.SetArgs([]string{})
+	cmd.SetOut(new(strings.Builder))
+	cmd.SetErr(new(strings.Builder))
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if len(client.renamed) != 1 || client.renamed[0].label != "computed-label" {
+		t.Errorf("renamed = %+v, want the event-mode label from d.herdrLabel", client.renamed)
+	}
+}
