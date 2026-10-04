@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/elentok/blf/internal/herdr"
+	"github.com/elentok/blf/internal/herdrsync"
 	"github.com/elentok/blf/internal/platform"
 	"github.com/elentok/blf/internal/tmuxlinks"
 	"github.com/elentok/blf/internal/tmuxtargets"
@@ -39,6 +41,8 @@ type deps struct {
 	userHomeDir             func() (string, error)
 	now                     func() time.Time
 	signalProcess           func(pid int, sig syscall.Signal) error
+	newHerdrClient          func(socketPath string) herdr.Client
+	herdrLabel              func(pane herdr.PaneInfo, home string) string
 }
 
 func defaultDeps() deps {
@@ -81,6 +85,8 @@ func defaultDeps() deps {
 		signalProcess: func(pid int, sig syscall.Signal) error {
 			return syscall.Kill(pid, sig)
 		},
+		newHerdrClient: herdr.New,
+		herdrLabel:     herdrsync.Label,
 	}
 }
 
@@ -111,6 +117,7 @@ func execute(args []string, d deps) error {
 		newKittyCmd(d),
 		newDimPathCmd(d),
 		newTabTitleCmd(d),
+		newHerdrCmd(d),
 		newCleanURLCmd(d),
 		newLauncherCmd(d),
 		newBeadsCmd(d),
