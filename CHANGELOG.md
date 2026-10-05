@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+- **`blf herdr`** - new herdr integration (talks to the herdr server socket):
+  - `sync-tab-title` keeps herdr tab labels in sync (one tab, the full session, or fish
+    preexec/prompt hooks)
+  - `install-plugin` / `uninstall-plugin` link or unlink blf's herdr plugin manifest
+  - `doctor [--json]` runs a read-only check of the integration (plugin, hooks, dry-run tab table)
+  - `debug [on|off]` toggles sync debug logging
+  - `find-workspace` / `goto-workspace [--create]` find or focus a workspace by label
+- **`blf tab-title`** - new command that prints the tab title for the current directory and command
+
 ## [v0.7.5] - 2026-08-23
 
 - Removed the deprecated `blf claude statusline`/`blf claude history` commands (superseded by
