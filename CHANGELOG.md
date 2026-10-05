@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## [v0.7.6] - 2026-10-05
 
 - **`blf herdr`** - new herdr integration (talks to the herdr server socket):
   - `sync-tab-title` keeps herdr tab labels in sync (one tab, the full session, or fish
