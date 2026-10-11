@@ -36,7 +36,7 @@ directly without an import cycle (`cmd` already imports `internal/launcher/*`).
 ## Consequences
 
 - Two similar-looking mechanisms now coexist (scripts vs. commands), distinguished by execution
-  model, not by how they're triggered or displayed — see `CONTEXT.md`'s **script**/**command**
+  model, not by how they're triggered or displayed — see `GLOSSARY.md`'s **script**/**command**
   glossary entries.
 - New built-ins default to being commands when their logic is already Go code in this repo;
   scripts stay reserved for actual external processes / user-authored snippets.

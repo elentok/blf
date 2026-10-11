@@ -6,7 +6,7 @@
 
 **Launcher history** recorded the raw query text you executed (e.g. `"kit"`), not what it
 resolved to. Recalling a row populated the input with that text and recomputed results —
-deliberately never re-firing the original action, per ADR-era design in `CONTEXT.md`.
+deliberately never re-firing the original action, per ADR-era design in `GLOSSARY.md`.
 
 In practice this made history rows low-value for `ActionLaunch`/`ActionRun`/`ActionOpen`:
 seeing `"kit"` in the history list doesn't tell you it launched Kitty, and two different
