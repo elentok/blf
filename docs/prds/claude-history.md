@@ -210,7 +210,7 @@ All modules are tested:
 - `claude history` deliberately reuses the same `internal/fuzzyfinder` widget as the launcher and
   goto-agent picker so the three feel identical; the novelty is running several instances behind a
   page state machine and, for grep, feeding it rg-ranked items instead of the widget's fuzzy ranking.
-- The cwd-from-transcript decision is recorded in `CONTEXT.md` rather than an ADR (it is surprising
+- The cwd-from-transcript decision is recorded in `GLOSSARY.md` rather than an ADR (it is surprising
   and a real trade-off, but cheaply reversible, so it does not meet the ADR bar).
 - Glossary terms (`claude history`, `project`, `conversation`, `live grep`, `conversation export`)
-  are defined in `CONTEXT.md`; use that vocabulary in code and commits.
+  are defined in `GLOSSARY.md`; use that vocabulary in code and commits.

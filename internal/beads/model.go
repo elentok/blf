@@ -663,7 +663,7 @@ func (m *Model) applyLayout() {
 
 // recomputeFilter re-derives the displayed issue tree from allItems and the
 // widget's current query. An empty query builds the full **issue tree**
-// (see CONTEXT.md) undimmed; a non-empty query fuzzy-matches (via
+// (see GLOSSARY.md) undimmed; a non-empty query fuzzy-matches (via
 // fuzzyfinder.Find, AND-semantics multi-word match) and keeps only matches
 // plus their non-matching ancestors, which render dimmed for tree context.
 func (m *Model) recomputeFilter() {
@@ -876,7 +876,7 @@ func (m Model) renderPreview() string {
 
 // renderSubtasksSection renders the "Subtasks (x/y done)" header plus the
 // nested child lines, kept as a section distinct from renderBlockedBySection
-// per CONTEXT.md's issue preview: hierarchy and dependency edges must never
+// per GLOSSARY.md's issue preview: hierarchy and dependency edges must never
 // be merged into one tree.
 func renderSubtasksSection(root SubtaskNode) (header string, bodyLines []string) {
 	closed, total := root.CompletionCount()

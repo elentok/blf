@@ -19,7 +19,7 @@ independent of their query, so they keep recording query text and keep the popul
 behavior on recall.
 
 This was scoped via a `/grill` session and recorded as ADR 0006
-(`docs/adr/0006-launcher-history-item-based-direct-refire.md`); `CONTEXT.md`'s **launcher history**,
+(`docs/adr/0006-launcher-history-item-based-direct-refire.md`); `GLOSSARY.md`'s **launcher history**,
 **history direct-fire**, and **history hint** entries were updated as part of that session and are
 the source of truth for vocabulary here.
 
@@ -51,7 +51,7 @@ the source of truth for vocabulary here.
   - `MaxEntries` (30) and the overall package shape (`New`/`Load`/`Save`/`Append`/`Remove`/`Entries`/`Len`) are otherwise unchanged.
 - **`model.go` wiring**:
   - `recordHistory` (currently `recordHistory(query string)`, called from the `ActionCopy`/`ActionLaunch`/`ActionRun`/`ActionOpen` branches of `act()`) is updated to build a `history.Entry` from the picked `Result`: for `ActionCopy` it's `{Label: query, ActionType: ActionCopy, Target: ""}` (unchanged behavior); for the other three it's `{Label: r.Title, ActionType: r.Action.Type, Target: r.Action.Target}`.
-  - The `ActionRecall` branch in `act()` (currently: `setQuery(r.Action.Target)` + `recomputeResults()`) splits on the recalled entry's action type: copy-type entries keep the existing populate-and-recompute behavior; launch/run/open-type entries instead build and immediately execute the corresponding `Action` (reusing the same launch/run/open execution paths already in `act()`) — this is the **history direct-fire** behavior from `CONTEXT.md`/ADR 0006.
+  - The `ActionRecall` branch in `act()` (currently: `setQuery(r.Action.Target)` + `recomputeResults()`) splits on the recalled entry's action type: copy-type entries keep the existing populate-and-recompute behavior; launch/run/open-type entries instead build and immediately execute the corresponding `Action` (reusing the same launch/run/open execution paths already in `act()`) — this is the **history direct-fire** behavior from `GLOSSARY.md`/ADR 0006.
   - The empty-input history list (in `recomputeResults()`, where `ActionRecall` results are synthesized from `m.cfg.History.Entries()`) uses each entry's `Label` as `Title` and only computes a `historyHint` subtitle for copy-type entries (launch/run/open entries never show a hint, since there's no query to compute one from).
   - Ctrl+R/Ctrl+F (`m.setQuery(entries[next])`) keep populating the input with the entry's `Label` — unchanged behavior, no direct-fire, regardless of entry type.
   - Ctrl+S (explicit save of current raw input) keeps saving a copy-type entry (`Label` = current input text) — unaffected by this change, since there is no "picked result" in that flow.
@@ -88,7 +88,7 @@ the source of truth for vocabulary here.
 
 ## Further Notes
 
-- This feature was scoped via a `/grill` session; ADR 0006 and the updated `CONTEXT.md` entries
+- This feature was scoped via a `/grill` session; ADR 0006 and the updated `GLOSSARY.md` entries
   (**launcher history**, **history direct-fire**, **history hint**) were written before this PRD and
   are the source of truth for vocabulary and rationale.
 - The exact JSON-lines schema (field names, whether `ActionType` is serialized as an int or a

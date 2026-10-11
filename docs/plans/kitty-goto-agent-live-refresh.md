@@ -8,7 +8,7 @@ Extract the launcher's reusable picker UI into a shared embedded widget
 (`internal/fuzzyfinder`) and migrate the launcher onto it, with the agent picker
 as the second consumer.
 
-See `CONTEXT.md` (**fuzzy finder**, **goto-agent**, **agent window**, **agent
+See `GLOSSARY.md` (**fuzzy finder**, **goto-agent**, **agent window**, **agent
 status**) and `docs/adr/0005-goto-agent-self-owned-tui.md`.
 
 ## Design decisions (locked)

@@ -15,7 +15,7 @@ without pretending it's a user script.
 
 ## Solution
 
-Introduce **commands** — a new launcher source distinct from **scripts** (see `CONTEXT.md`'s
+Introduce **commands** — a new launcher source distinct from **scripts** (see `GLOSSARY.md`'s
 **script**/**command** glossary entries and `docs/adr/0007-launcher-commands-vs-scripts.md`).
 A command is a built-in, hardcoded, fuzzy-matched launcher entry whose action calls Go code
 directly (no `exec.Cmd`), as opposed to a script, which is user-configurable and always shells
@@ -103,7 +103,7 @@ script-error handling.
 - **New `platform.ShowNotification(title, message string) error`** in `internal/platform`:
   switches on `runtime.GOOS` (same pattern `scripts.go` already uses for platform-specific
   behavior) — `osascript -e 'display notification ...'` on mac, `notify-send` on Linux.
-- **Terminology**: `CONTEXT.md` already updated with **script** and **command** glossary
+- **Terminology**: `GLOSSARY.md` already updated with **script** and **command** glossary
   entries, and the **launcher source** entry now lists "script, or command." No further
   glossary changes anticipated.
 - **ctrl+shift+r keymap**: unchanged — still calls `ReindexCmd` directly, same as today. It does
@@ -152,6 +152,6 @@ and the resulting output/state/message — not internal call sequencing.
 Full interactive design discussion (including the scripts-vs-commands trade-off, the import-cycle
 constraint that motivated extracting `internal/cleanurl`, and the notification/error-UX decisions)
 happened via `/grill` and is captured in `docs/adr/0007-launcher-commands-vs-scripts.md` and the
-**script**/**command** entries in `CONTEXT.md`. A prior, less granular implementation checklist
+**script**/**command** entries in `GLOSSARY.md`. A prior, less granular implementation checklist
 exists at `docs/plans/launcher-reload-command.md` — this PRD supersedes it as the source of truth
 for beads task breakdown.

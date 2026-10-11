@@ -4,7 +4,7 @@ import "sort"
 
 // TreeRow is one row of the rendered issue list: an issue plus its nesting
 // depth (0 = top-level) and whether it's shown only as context for a
-// matching descendant rather than being a match itself. See CONTEXT.md's
+// matching descendant rather than being a match itself. See GLOSSARY.md's
 // "issue tree" entry.
 type TreeRow struct {
 	Issue  Issue

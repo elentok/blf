@@ -147,7 +147,7 @@ user settings — minimum context, minimum latency.
 
 ### Vocabulary
 
-Three new terms, to be added to `CONTEXT.md`'s glossary alongside **command** / **script**:
+Three new terms, to be added to `GLOSSARY.md`'s glossary alongside **command** / **script**:
 
 - **ai run** — one request: a kind (`ai` or `improve`), the resolved input, the response, and a
   status.
@@ -156,7 +156,7 @@ Three new terms, to be added to `CONTEXT.md`'s glossary alongside **command** / 
 - **ai prompt mode** — the transient input mode the launcher enters when `ai` or `improve` is
   picked.
 
-`ai` and `improve` are **commands** in the CONTEXT.md sense — built-in, hardcoded, in-process, not
+`ai` and `improve` are **commands** in the GLOSSARY.md sense — built-in, hardcoded, in-process, not
 user-configurable (ADR 0007). They are not **scripts**: blf never shells out to a user-authored
 snippet, and never depends on `~/.dotfiles/extra/scripts/haiku`.
 

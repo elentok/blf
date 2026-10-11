@@ -1,6 +1,6 @@
 # PRD: goto-agent live-refresh TUI fuzzy finder
 
-See `CONTEXT.md` (**fuzzy finder**, **goto-agent**, **agent window**, **agent
+See `GLOSSARY.md` (**fuzzy finder**, **goto-agent**, **agent window**, **agent
 status**, **launcher**) and `docs/adr/0005-goto-agent-self-owned-tui.md`.
 
 ## Problem Statement

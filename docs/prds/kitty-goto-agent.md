@@ -135,7 +135,7 @@ send-to-agent feature) call instead of reimplementing detection.
 
 ## Further Notes
 
-- Glossary terms live in `CONTEXT.md`: **agent window**, **agent status**,
+- Glossary terms live in `GLOSSARY.md`: **agent window**, **agent status**,
   **goto-agent**, **list-agents**.
 - The braille-spinner working signal and the OpenCode title gap were confirmed
   against live `kitty @ ls` output during design; Claude and Codex prefix the

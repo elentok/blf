@@ -172,7 +172,7 @@ func (a *Adapter) Create(title string, opts CreateOptions) (Issue, error) {
 // StatusChoices are the workflow statuses offered by the TUI's status-pick
 // mode. bd also accepts "pinned"/"hooked", but those are operational-state
 // markers rather than workflow steps, so they're left to the bd CLI directly
-// per CONTEXT.md/the PRD's "core status only" scope.
+// per GLOSSARY.md/the PRD's "core status only" scope.
 var StatusChoices = []string{"open", "in_progress", "blocked", "deferred", "closed"}
 
 // UpdateStatus sets id's status via `bd update <id> --status <status> --json`.

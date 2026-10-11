@@ -2,7 +2,7 @@
 
 A launcher in the terminal, shown via Kitty's quick-access terminal.
 
-Related: `CONTEXT.md` (glossary), `docs/adr/0002-long-running-launcher-process.md`,
+Related: `GLOSSARY.md` (glossary), `docs/adr/0002-long-running-launcher-process.md`,
 `docs/adr/0003-currency-rate-source.md`, `docs/plans/launcher.md`.
 
 ## Problem Statement

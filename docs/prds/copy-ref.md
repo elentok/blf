@@ -68,8 +68,8 @@ otherwise-invisible clipboard write happened.
 **Command name & vocabulary.** The command is `copy-ref` (not `copy-files`, which reads like a
 filesystem copy of bytes). The canonical term for what lands on the clipboard is a **file
 reference** — distinct from `blf copy`, which copies **content** (a string). Both terms are recorded
-in `CONTEXT.md`. The informal "file ref" used in the `tmux-targets` feature (a `path:line:col`
-location token inside text) is a different concept and is flagged in `CONTEXT.md`; left unchanged.
+in `GLOSSARY.md`. The informal "file ref" used in the `tmux-targets` feature (a `path:line:col`
+location token inside text) is a different concept and is flagged in `GLOSSARY.md`; left unchanged.
 
 **Dispatch & wiring.** Add a `case "copy-ref":` to the existing flat `switch` in the command
 dispatcher, routing to a new `runCopyRef(args, deps)` orchestrator. The feature reuses the existing
@@ -190,6 +190,6 @@ The actual `exec` of `osascript`/`wl-copy` (whether a file truly lands on the cl
 - `wl-copy` accepts the clipboard payload as positional arguments and treats a single argument
   containing newlines as the literal payload, which is why the whole URI list is passed as one arg
   to preserve the `\n` separators.
-- Relevant repo conventions captured during design: `CONTEXT.md` (vocabulary), `.ai/workflow.md`
+- Relevant repo conventions captured during design: `GLOSSARY.md` (vocabulary), `.ai/workflow.md`
   (plan/verify expectations), `.ai/commit-message.md` (scoped, imperative, lowercase commit
   subjects).

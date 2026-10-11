@@ -1,6 +1,6 @@
 # PRD: `blf beads` — Beads issue browser TUI
 
-> Canonical terms live in CONTEXT.md: **blf beads**, **issue tree**, **issue preview**,
+> Canonical terms live in GLOSSARY.md: **blf beads**, **issue tree**, **issue preview**,
 > **create mode**. Design was scoped in a /grill session; implementation plan lives at
 > `docs/plans/blf-beads.md`. An earlier readiness/scope-cycle design (unblocked/blocked
 > sort, `ctrl+f` scope filter) was reversed — see ADR 0009.
@@ -85,7 +85,7 @@ truth; blf never reads the beads database directly.
   expanding the dependency direction), collapsing already-seen nodes and cycles to a
   back-reference marker. Consumes data fetched by the adapter; emits a renderable tree
   structure independent of styling. (Distinct from the **issue tree** above — see
-  CONTEXT.md's "issue tree" entry for why they're not merged.)
+  GLOSSARY.md's "issue tree" entry for why they're not merged.)
 - **TUI model** (bubbletea): embeds `internal/fuzzyfinder`, owns the **issue tree** row
   rendering (status icon, indent, epic bold+color style, dimmed-ancestor style), the
   side-by-side layout with narrow-terminal fallback, the lazy/debounced/cached preview

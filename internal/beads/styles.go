@@ -11,7 +11,7 @@ var emptyStateStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086")).
 var epicRowStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#f9e2af")) // yellow
 
 // dimRowStyle renders a non-matching ancestor row kept only for a matching
-// descendant's tree context (see CONTEXT.md's "issue tree" entry).
+// descendant's tree context (see GLOSSARY.md's "issue tree" entry).
 var dimRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6c7086"))
 
 var previewStyle = lipgloss.NewStyle().

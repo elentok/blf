@@ -143,6 +143,22 @@ _Avoid_: merging hierarchy and dependency edges into one tree (two distinct edge
 A transient state that repurposes the always-focused **fuzzy finder** input as a title field instead of a search box (prompt changes, list stops filtering); confirming creates the issue via `bd create`, cancelling restores the prior search. When entered on an **epic** row it defaults the new issue to that epic's child, toggleable to standalone. The same mode-flip mechanism backs status changes (a status-pick variant), so no separate multi-field form is built.
 _Avoid_: "create form" (there is no bespoke form — it reuses the one input line; richer fields come from the edit handoff or `bd`).
 
+**terminal title** (blf herdr):
+The title the program running in a herdr pane sets for its terminal (a shell's prompt/command title, an agent's task description). herdr reports it per pane.
+_Avoid_: "pane title" (herdr panes also carry a separate `title` of their own), "tab title" (that is blf's computed string).
+
+**tab title**:
+The string blf computes from a command and a directory: an optional short command part (icon or cut command) followed by the directory. With no command it is the directory alone. It is what a shell sets as its **terminal title**.
+_Avoid_: "tab name", using it for what herdr displays (that is the **tab label**).
+
+**tab label** (blf herdr):
+The name herdr shows for a tab. blf keeps it in step with the **terminal title** of the tab's active pane; a label set by hand is overwritten.
+_Avoid_: "tab title" (the computed string, which may or may not be the current label), "tab name".
+
+**workspace label** (blf herdr):
+The name herdr shows for a workspace. blf looks workspaces up by it, ignoring case, and never changes it.
+_Avoid_: "workspace title", "workspace name" (herdr calls the field `label`; "title" is kept for the **tab title** and **terminal title**).
+
 ## Relationships
 
 - `blf copy <text>` copies **content** (a string) to the clipboard — the content comes from the arguments, or from stdin when the sole argument is `-` (`blf copy -`).

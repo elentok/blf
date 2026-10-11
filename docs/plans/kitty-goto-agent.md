@@ -4,7 +4,7 @@ Add `blf kitty goto-agent` (interactive picker that focuses an agent window) and
 `blf kitty list-agents [--json]` (non-interactive listing, future source of truth
 for the nvim send-to-agent feature).
 
-See `CONTEXT.md` for the glossary: **agent window**, **agent status**,
+See `GLOSSARY.md` for the glossary: **agent window**, **agent status**,
 **goto-agent**, **list-agents**.
 
 ## Design decisions (locked)

@@ -2,7 +2,7 @@
 
 An interactive TUI over the `bd` (Beads) CLI: fuzzy-browse issues, preview detail
 (with subtasks + blocked-by trees), create/triage, and hand a chosen issue id to
-an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **issue tree**,
+an AI agent. See GLOSSARY.md for the canonical terms (**blf beads**, **issue tree**,
 **issue preview**, **create mode**).
 
 > **Re-scoped** after initial shipping: the readiness/scope-cycle design below (task 2,
@@ -106,7 +106,7 @@ an AI agent. See CONTEXT.md for the canonical terms (**blf beads**, **issue tree
 
 Reversed the original readiness-bucketed sort + `ctrl+f` scope cycle (actionable → ready →
 blocked → all) in favor of a direct interactive view of `bd list` / `bd list --all`. See
-ADR 0009 for the rationale and CONTEXT.md's **blf beads**/**issue tree** entries for the
+ADR 0009 for the rationale and GLOSSARY.md's **blf beads**/**issue tree** entries for the
 current terms.
 
 - [x] `internal/beads`: `Adapter.List(scope Scope)` → `Adapter.List(all bool)`; dropped

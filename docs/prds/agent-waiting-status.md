@@ -48,7 +48,7 @@ as today.
 ## Implementation Decisions
 
 Grounded in **ADR 0004** (agent status via an agent-pushed Kitty user var, not screen
-scraping) and the **CONTEXT.md** glossary (`agent status`, `agent-state user var`,
+scraping) and the **GLOSSARY.md** glossary (`agent status`, `agent-state user var`,
 `set-agent-state`, `setup-claude`).
 
 - **M1 — Status model (`internal/kitty`, modify).**

@@ -31,7 +31,7 @@ adapts purely from usage.
 
 ## Implementation Decisions
 
-- **New concept: "learned rank"** — distinct from the existing **source weight** (the static, per-provider `Weight` field on `Result`). Documented in `CONTEXT.md`. Ranking order becomes:
+- **New concept: "learned rank"** — distinct from the existing **source weight** (the static, per-provider `Weight` field on `Result`). Documented in `GLOSSARY.md`. Ranking order becomes:
   `learned rank > exact match > prefix match > source weight > fuzzy score`.
 - **New package `internal/launcher/learnedrank`** (deep module, mirrors `internal/launcher/history`'s shape and API style):
   - A `Store` holding counts keyed by `(query, resultKey)`, where `query` is the trimmed, exact query text and `resultKey` is a caller-supplied opaque string identifying the result (the launcher package will build this from `Action.Type` + `Action.Target`, i.e. the actual launch/copy/run/open target — not the display Title).
@@ -88,7 +88,7 @@ adapts purely from usage.
 ## Further Notes
 
 - This feature was scoped via a `/grill` session; the resulting terminology ("learned rank" vs.
-  "source weight") and relationship notes were already written into `CONTEXT.md` before this PRD was
+  "source weight") and relationship notes were already written into `GLOSSARY.md` before this PRD was
   drafted — implementers should treat that as the source of truth for vocabulary.
 - The `learnedrank` package's file-format choice (plain text vs. something more structured) is left
   to the implementing task as long as it stays human-editable and round-trips losslessly; no schema

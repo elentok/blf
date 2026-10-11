@@ -1,7 +1,7 @@
 # Launcher reload/commands plan
 
 Design settled via `/grill`. See `docs/adr/0007-launcher-commands-vs-scripts.md` and
-`CONTEXT.md`'s **script**/**command** entries for the reasoning.
+`GLOSSARY.md`'s **script**/**command** entries for the reasoning.
 
 ## Extract cleanurl core logic
 
@@ -48,6 +48,6 @@ Design settled via `/grill`. See `docs/adr/0007-launcher-commands-vs-scripts.md`
 
 ## Docs
 
-- [x] `CONTEXT.md`: add **script** and **command** glossary entries, extend **launcher source**
+- [x] `GLOSSARY.md`: add **script** and **command** glossary entries, extend **launcher source**
 - [x] `docs/adr/0007-launcher-commands-vs-scripts.md`
 - [ ] `CHANGELOG.md` entry once implemented
