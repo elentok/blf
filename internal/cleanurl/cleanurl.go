@@ -56,6 +56,42 @@ var trackingParams = map[string]struct{}{
 	"src":          {},
 }
 
+// Generic names like "sk" and "tt" are only tracking on specific sites, so
+// they are scoped to hosts matching the pattern.
+var hostTrackingParams = []struct {
+	matchesHost *regexp.Regexp
+	params      map[string]struct{}
+}{
+	{
+		matchesHost: regexp.MustCompile(`(^|\.)aliexpress\.[a-z.]+$`),
+		params: map[string]struct{}{
+			"tt":              {},
+			"sk":              {},
+			"terminal_id":     {},
+			"afSmartRedirect": {},
+			"pdp_npi":         {},
+		},
+	},
+}
+
+// isTrackingParam reports whether key is a tracking param for the given host.
+func isTrackingParam(host, key string) bool {
+	if _, ok := trackingParams[key]; ok {
+		return true
+	}
+	if strings.HasPrefix(key, "aff_") {
+		return true
+	}
+	for _, scoped := range hostTrackingParams {
+		if scoped.matchesHost.MatchString(host) {
+			if _, ok := scoped.params[key]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // readClipboard and copyText are injectable seams for testing RunClipboard.
 var (
 	readClipboard = platform.ReadClipboardText
@@ -128,7 +164,7 @@ func stripTrackingParams(rawURL string) string {
 		if err == nil {
 			key = decodedKey
 		}
-		if _, tracked := trackingParams[key]; tracked {
+		if isTrackingParam(parsed.Hostname(), key) {
 			continue
 		}
 		kept = append(kept, segment)

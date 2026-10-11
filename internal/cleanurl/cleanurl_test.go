@@ -32,6 +32,16 @@ func TestCleanURL(t *testing.T) {
 			want:  "https://example.com/page",
 		},
 		{
+			name:  "aliexpress item link",
+			input: "https://he.aliexpress.com/item/1005006904744080.html?aff_fcid=1a92&tt=CPS_NORMAL&aff_fsk=_c4&aff_platform=shareComponent-detail&sk=_c4&aff_trace_key=1a92&terminal_id=201b&afSmartRedirect=y&gatewayAdapt=glo2isr&pdp_npi=4%40dis%21ILS",
+			want:  "https://he.aliexpress.com/item/1005006904744080.html?gatewayAdapt=glo2isr",
+		},
+		{
+			name:  "sk and tt are kept on other hosts",
+			input: "https://example.com/page?sk=1&tt=2",
+			want:  "https://example.com/page?sk=1&tt=2",
+		},
+		{
 			name:  "strips tracking params",
 			input: "https://example.com/page?utm_source=newsletter&id=42&fbclid=xyz",
 			want:  "https://example.com/page?id=42",
